@@ -71,4 +71,17 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+dependencies {
+    // MAVLink message definitions (standard dialects like common.xml)
+    implementation("com.divpundir.mavlink:definitions:1.2.8")
+
+
+    // TCP connection client
+    implementation("com.divpundir.mavlink:connection-tcp:1.2.8")
+
+
+    // Coroutines adapter (recommended for Android)
+    implementation("com.divpundir.mavlink:adapter-coroutines:1.2.8")
+}
+
 
