@@ -14,9 +14,10 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-object MavlinkTelemetryRepository {
-    private const val host: String = "10.0.2.2"
-    private const val port: Int = 5762
+class MavlinkTelemetryRepository(
+    private val host: String,
+    private val port: Int
+) {
     private val gcsSystemId: UByte = 200u
     private val gcsComponentId: UByte = 1u
     private val _state = MutableStateFlow(TelemetryState())
