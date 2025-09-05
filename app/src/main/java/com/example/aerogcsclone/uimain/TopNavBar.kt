@@ -9,16 +9,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusModifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.aerogcsclone.Telemetry.TelemetryState
 
 @Composable
-fun TopNavBar() {
+fun TopNavBar(telemetryState: TelemetryState) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -35,18 +35,16 @@ fun TopNavBar() {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left section
             Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
             Spacer(modifier = Modifier.width(12.dp))
             Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Title block
             Column(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
-                Spacer(modifier= Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "Pavaman Aviation",
                     color = Color.White,
@@ -63,25 +61,54 @@ fun TopNavBar() {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Right section (info blocks)
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                ConnectionStatusWidget(isConnected = telemetryState.connected)
+                DividerBlock()
                 InfoBlock(Icons.Default.Flight, "13%")
                 DividerBlock()
-                InfoBlock(Icons.Default.BatteryFull, "12.600 V")
+                InfoBlock(Icons.Default.BatteryFull, "${telemetryState.batteryPercent ?: "N/A"}%")
                 DividerBlock()
                 InfoBlock(Icons.Default.Gamepad, "100%")
                 DividerBlock()
-                InfoBlockGroup(Icons.Default.Bolt, listOf("561 mAh", "28.12 A"))
+                InfoBlockGroup(
+                    Icons.Default.Bolt,
+                    listOf(
+                        "${telemetryState.voltage ?: "N/A"} V",
+                        "${telemetryState.currentA ?: "N/A"} A"
+                    )
+                )
                 DividerBlock()
-                InfoBlockGroup(Icons.Default.SatelliteAlt, listOf("10 sats", "1.2 hdop"))
+                InfoBlockGroup(
+                    Icons.Default.SatelliteAlt,
+                    listOf(
+                        "${telemetryState.sats ?: "N/A"} sats",
+                        "${telemetryState.hdop ?: "N/A"} hdop"
+                    )
+                )
                 DividerBlock()
                 InfoBlockGroup(Icons.Default.Sync, listOf("Stabilize", "Arm"))
                 DividerBlock()
                 Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
             }
         }
+    }
+}
+
+@Composable
+fun ConnectionStatusWidget(isConnected: Boolean) {
+    val statusColor = if (isConnected) Color.Green else Color.Red
+    val statusText = if (isConnected) "Connected" else "Disconnected"
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(statusColor, shape = androidx.compose.foundation.shape.CircleShape)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(statusText, color = Color.White, fontSize = 12.sp)
     }
 }
 

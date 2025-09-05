@@ -6,85 +6,91 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.navigation.Screen
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @Composable
-fun ConnectionPage(navController: NavController) {
-    var ipAddress by remember { mutableStateOf("10.0.2.2") }
-    var port by remember { mutableStateOf("5760") }
+fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
     var isConnecting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
 
-    // Full dark background
+    LaunchedEffect(viewModel) {
+        viewModel.isConnected.collectLatest { isConnected ->
+            if (isConnected) {
+                navController.navigate(Screen.Main.route) {
+                    popUpTo(Screen.Connection.route) { inclusive = true }
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212)) // custom dark background
-            .padding(20.dp)
+            .background(Color(0xFF121212))
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "Connect to Drone",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White
-                )
+            Text(
+                "Connect to Drone",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White
+            )
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-                OutlinedTextField(
-                    value = ipAddress,
-                    onValueChange = { ipAddress = it },
-                    label = { Text("IP Address", color = Color.White) },
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = LocalTextStyle.current.copy(color = Color.White)
-                )
+            OutlinedTextField(
+                value = viewModel.ipAddress,
+                onValueChange = { viewModel.ipAddress = it },
+                label = { Text("IP Address", color = Color.White) },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(color = Color.White)
+            )
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
-                    value = port,
-                    onValueChange = { port = it },
-                    label = { Text("Port", color = Color.White) },
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = LocalTextStyle.current.copy(color = Color.White)
-                )
+            OutlinedTextField(
+                value = viewModel.port,
+                onValueChange = { viewModel.port = it },
+                label = { Text("Port", color = Color.White) },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(color = Color.White)
+            )
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-                Button(
-                    onClick = {
-                        isConnecting = true
-                        errorMessage = ""
-
-                        if (ipAddress.isNotEmpty() && port.isNotEmpty()) {
-                            navController.navigate(Screen.Main.route)
-                        } else {
-                            errorMessage = "Invalid IP or Port"
+            Button(
+                onClick = {
+                    isConnecting = true
+                    errorMessage = ""
+                    coroutineScope.launch {
+                        try {
+                            viewModel.connect()
+                        } catch (e: Exception) {
+                            errorMessage = e.message ?: "Connection failed"
+                            isConnecting = false
                         }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isConnecting
+            ) {
+                Text(if (isConnecting) "Connecting..." else "Connect")
+            }
 
-                        isConnecting = false
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isConnecting
-                ) {
-                    Text(if (isConnecting) "Connecting..." else "Connect")
-                }
-
-                if (errorMessage.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(errorMessage, color = MaterialTheme.colorScheme.error)
-                }
+            if (errorMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(errorMessage, color = MaterialTheme.colorScheme.error)
             }
         }
     }

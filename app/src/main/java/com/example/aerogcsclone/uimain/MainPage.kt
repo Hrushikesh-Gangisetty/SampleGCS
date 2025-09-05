@@ -2,48 +2,46 @@ package com.example.aerogcsclone.uimain
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
 import androidx.compose.ui.graphics.Color
-
 import androidx.compose.ui.unit.dp
-
+import com.example.aerogcsclone.Telemetry.SharedViewModel
 
 @Composable
-fun MainPage() {
+fun MainPage(telemetryViewModel: SharedViewModel) {
+    val telemetryState by telemetryViewModel.telemetryState.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 🔹 Top NavBar
-        TopNavBar()
+        TopNavBar(telemetryState)
 
-        // 🔹 Map + Overlays
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color.DarkGray), // Map placeholder
+                .background(Color.DarkGray),
             contentAlignment = Alignment.Center
         ) {
             Text("Map Placeholder", color = Color.White)
 
-            // 🔹 Bottom Left Status Panel
             StatusPanel(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(12.dp)
+                    .padding(12.dp),
+                telemetryState = telemetryState
             )
 
-            // 🔹 Floating Buttons (Right Side)
             FloatingButtons(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -53,9 +51,8 @@ fun MainPage() {
     }
 }
 
-
 @Composable
-fun StatusPanel(modifier: Modifier = Modifier) {
+fun StatusPanel(modifier: Modifier = Modifier, telemetryState: com.example.aerogcsclone.Telemetry.TelemetryState) {
     Surface(
         modifier = modifier
             .width(500.dp)
@@ -71,20 +68,20 @@ fun StatusPanel(modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Alt: 2.5 m", color = Color.White)
-                Text("Speed: 15.9 m/s", color = Color.White)
-                Text("Area: 10 acre", color = Color.White)
-                Text("Flow: 0 L/min", color = Color.White)
+                Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
+                Text("Speed: ${telemetryState.groundspeed ?: "N/A"}", color = Color.White)
+                Text("Area: N/A", color = Color.White)
+                Text("Flow: N/A", color = Color.White)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Obs Alt: 10", color = Color.White)
-                Text("Time: 00:00:00", color = Color.White)
-                Text("Distance: 20 m", color = Color.White)
-                Text("Consumed: 2.0 ml", color = Color.White)
+                Text("Obs Alt: N/A", color = Color.White)
+                Text("Time: N/A", color = Color.White)
+                Text("Distance: N/A", color = Color.White)
+                Text("Consumed: N/A", color = Color.White)
             }
         }
     }
