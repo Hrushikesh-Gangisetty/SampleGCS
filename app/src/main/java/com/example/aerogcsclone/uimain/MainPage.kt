@@ -30,10 +30,8 @@ fun MainPage(telemetryViewModel: SharedViewModel) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color.DarkGray),
-            contentAlignment = Alignment.Center
         ) {
-            Text("Map Placeholder", color = Color.White)
+            GcsMap()
 
             StatusPanel(
                 modifier = Modifier
