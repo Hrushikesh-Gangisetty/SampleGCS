@@ -5,13 +5,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.example.aerogcsclone.navigation.AppNavGraph
 import androidx.compose.ui.graphics.Color
+import com.example.aerogcsclone.viewmodel.MainViewModel
 import com.google.android.gms.maps.MapsInitializer
 
 // ✅ Dark theme setup
@@ -36,8 +41,16 @@ class MainActivity : ComponentActivity() {
         hasPermission.value = fine || coarse
     }
 
+    private val viewModel: MainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        installSplashScreen().apply {
+            setKeepOnScreenCondition {
+                viewModel.isLoading.value
+            }
+        }
 
         // ✅ Initialize Maps SDK
 //        MapsInitializer.initialize(applicationContext)
@@ -53,9 +66,15 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (hasPermission.value) {
-                        // ✅ Use your NavGraph (map can be one of the screens)
-                        AppNavGraph(navController = navController)
+                    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+                    if (isLoading) {
+                        com.example.aerogcsclone.ui.theme.SplashScreen()
+                    }
+                    else {
+                        if (hasPermission.value) {
+                            // ✅ Use your NavGraph (map can be one of the screens)
+                            AppNavGraph(navController = navController)
+                        }
                     }
                 }
             }
