@@ -43,9 +43,7 @@ dependencies {
     // Core + lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
-    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Compose BOM (manages versions automatically)
     implementation(platform(libs.androidx.compose.bom))
@@ -97,3 +95,5 @@ dependencies {
     // Coroutines adapter (recommended for Android)
     implementation("com.divpundir.mavlink:adapter-coroutines:1.2.8")
 }
+
+
