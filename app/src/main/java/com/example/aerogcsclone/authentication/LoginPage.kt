@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.aerogcsclone.navigation.Screen
 
 @Composable
 fun LoginPage(modifier: Modifier = Modifier,navController: NavController, authViewModel: AuthViewModel){
@@ -38,7 +39,7 @@ fun LoginPage(modifier: Modifier = Modifier,navController: NavController, authVi
     val context = LocalContext.current
     LaunchedEffect(authState.value) {
         when (authState.value) {
-            is AuthState.Authenticated -> navController.navigate(route = "home")
+            is AuthState.Authenticated -> navController.navigate(Screen.Connection.route)
             is AuthState.Error -> Toast.makeText(context, (authState.value as AuthState.Error).message, Toast.LENGTH_SHORT).show()
             else -> Unit
 
@@ -122,13 +123,13 @@ fun LoginPage(modifier: Modifier = Modifier,navController: NavController, authVi
 
         TextButton(onClick = {
 
-            navController.navigate(route = "signup")
+            navController.navigate(Screen.Signup.route)
 
 
 
         }) {
 
-            Text(text = "Forgot Password, Signup")
+            Text(text = "Signup")
 
         }
 
