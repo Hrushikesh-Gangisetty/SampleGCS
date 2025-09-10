@@ -13,11 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
+import com.example.aerogcsclone.auth.AuthViewModel
 
 @Composable
-fun MainPage(navController: NavController, telemetryViewModel: SharedViewModel) {
+fun MainPage(navController: NavHostController, telemetryViewModel: SharedViewModel, authViewModel: AuthViewModel) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
 
     Column(
@@ -27,8 +28,8 @@ fun MainPage(navController: NavController, telemetryViewModel: SharedViewModel) 
     ) {
         TopNavBar(
             telemetryState = telemetryState,
-            onAutomaticModeClick = { navController.navigate("automatic") },
-            onManualModeClick = { /* Do nothing, already on Main page */ }
+            authViewModel = authViewModel,
+            navController = navController
         )
 
         Box(

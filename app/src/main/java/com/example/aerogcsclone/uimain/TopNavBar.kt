@@ -17,13 +17,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
+import com.example.aerogcsclone.auth.AuthViewModel
+import com.example.aerogcsclone.navigation.Screen
 
 @Composable
 fun TopNavBar(
     telemetryState: TelemetryState,
-    onAutomaticModeClick: () -> Unit,
-    onManualModeClick: () -> Unit
+    authViewModel: AuthViewModel,
+    navController: NavHostController
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Manual") }
@@ -67,7 +70,7 @@ fun TopNavBar(
                                     .clickable {
                                         selectedMode = "Automatic"
                                         menuExpanded = false
-                                        onAutomaticModeClick()
+                                        navController.navigate(Screen.Automatic.route)
                                     }
                             )
                             Text(
@@ -78,7 +81,9 @@ fun TopNavBar(
                                     .clickable {
                                         selectedMode = "Manual"
                                         menuExpanded = false
-                                        onManualModeClick()
+                                        if (navController.currentDestination?.route != Screen.Main.route) {
+                                            navController.popBackStack()
+                                        }
                                     }
                             )
                         }
@@ -139,6 +144,16 @@ fun TopNavBar(
                 DividerBlock()
                 InfoBlockGroup(Icons.Default.Sync, listOf("Stabilize", "Arm"))
                 DividerBlock()
+                // Placeholder for auth UI
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = "User",
+                    tint = Color.White,
+                    modifier = Modifier.clickable {
+                        // authViewModel.logout()
+                        // navController.navigate(Screen.Login.route)
+                    }
+                )
                 Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
             }
         }
