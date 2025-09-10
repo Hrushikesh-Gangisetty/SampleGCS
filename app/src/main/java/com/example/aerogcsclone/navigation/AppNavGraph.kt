@@ -9,9 +9,12 @@ import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
 import com.example.aerogcsclone.uimain.MainPage
 
+import com.example.aerogcsclone.uimain.AutomaticModeScreen
+
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
     object Main : Screen("main")
+    object Automatic : Screen("automatic")
 }
 
 @Composable
@@ -26,7 +29,10 @@ fun AppNavGraph(navController: NavHostController) {
             )
         }
         composable(Screen.Main.route) {
-            MainPage(telemetryViewModel = sharedViewModel)
+            MainPage(navController = navController, telemetryViewModel = sharedViewModel)
+        }
+        composable(Screen.Automatic.route) {
+            AutomaticModeScreen(navController = navController, telemetryViewModel = sharedViewModel)
         }
     }
 }
