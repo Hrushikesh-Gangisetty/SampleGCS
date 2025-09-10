@@ -15,10 +15,14 @@ import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 
+import com.google.android.gms.maps.model.LatLng
+
 @Composable
 fun MainPage(telemetryViewModel: SharedViewModel) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
     var mapProperties by remember { mutableStateOf(MapProperties(mapType = MapType.NORMAL)) }
+    var points by remember { mutableStateOf(listOf<LatLng>()) }
+    var polygonClosed by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -32,7 +36,27 @@ fun MainPage(telemetryViewModel: SharedViewModel) {
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            GcsMap(mapProperties = mapProperties)
+            GcsMap(
+                mapProperties = mapProperties,
+                points = points,
+                onMapClick = { latLng ->
+                    if (!polygonClosed) {
+                        points = points + latLng
+                    }
+                },
+                onMarkerClick = { point ->
+                    if (points.size > 1 && !polygonClosed) {
+                        val last = points.last()
+                        if (point == points.first() && points.size > 2) {
+                            points = points + point
+                            polygonClosed = true
+                        } else if (point != last) {
+                            points = points + point
+                        }
+                    }
+                    true
+                }
+            )
 
             StatusPanel(
                 modifier = Modifier

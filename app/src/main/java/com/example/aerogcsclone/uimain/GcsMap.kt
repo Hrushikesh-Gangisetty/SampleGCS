@@ -10,44 +10,31 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 
 @Composable
-fun GcsMap(mapProperties: MapProperties) {
-    var points by remember { mutableStateOf(listOf<LatLng>()) }
-    var polygonClosed by remember { mutableStateOf(false) }
-
+fun GcsMap(
+    mapProperties: MapProperties,
+    points: List<LatLng>,
+    onMapClick: (LatLng) -> Unit,
+    onMarkerClick: (LatLng) -> Boolean
+) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(17.385, 78.486), 14f)
     }
+
+    val uiSettings = remember { MapUISettings(zoomControlsEnabled = true) }
 
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraPositionState,
         properties = mapProperties,
-        onMapClick = { latLng ->
-            if (!polygonClosed) {
-                points = points + latLng
-            }
-        }
+        uiSettings = uiSettings,
+        onMapClick = onMapClick
     ) {
         // Markers
         points.forEachIndexed { index, point ->
             Marker(
                 state = MarkerState(position = point),
                 title = "Marker ${index + 1}",
-                onClick = {
-                    if (points.size > 1 && !polygonClosed) {
-                        val last = points.last()
-
-                        // If clicked marker = first point → close polygon
-                        if (point == points.first() && points.size > 2) {
-                            points = points + point
-                            polygonClosed = true
-                        } else if (point != last) {
-                            // Otherwise connect to clicked marker
-                            points = points + point
-                        }
-                    }
-                    true
-                }
+                onClick = { onMarkerClick(point) }
             )
         }
 
