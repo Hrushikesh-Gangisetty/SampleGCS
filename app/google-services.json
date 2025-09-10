@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "207246398449",
+    "project_id": "aerogcsclone",
+    "storage_bucket": "aerogcsclone.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:207246398449:android:9466f2ed2d30e6a0a6aa50",
+        "android_client_info": {
+          "package_name": "com.example.aerogcsclone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwPoO8CkfofJ9CL128ahoPWKdlq1Ou-LU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
