@@ -162,7 +162,13 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                         )
                         DropdownMenuItem(
                             text = { Text("Logout") },
-                            onClick = { kebabMenuExpanded = false }
+                            onClick = {
+                                kebabMenuExpanded = false
+                                authViewModel.signout()
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(0)
+                                }
+                            }
                         )
                     }
                 }
