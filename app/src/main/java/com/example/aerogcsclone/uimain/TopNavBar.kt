@@ -17,10 +17,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
+import com.example.aerogcsclone.authentication.AuthViewModel
+import com.example.aerogcsclone.navigation.Screen
 
 @Composable
-fun TopNavBar(telemetryState: TelemetryState) {
+fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navController: NavHostController) {
     var menuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Manual") }
     Box(
@@ -80,7 +83,14 @@ fun TopNavBar(telemetryState: TelemetryState) {
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
+            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White, modifier = Modifier.clickable {
+                authViewModel.signout()
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(Screen.Main.route) {
+                        inclusive = true
+                    }
+                }
+            })
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(
