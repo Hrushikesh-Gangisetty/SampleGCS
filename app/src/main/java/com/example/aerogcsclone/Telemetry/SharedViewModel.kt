@@ -5,8 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class SharedViewModel : ViewModel() {
@@ -16,13 +15,12 @@ class SharedViewModel : ViewModel() {
 
     private var repo: MavlinkTelemetryRepository? = null
 
-    private val _telemetryState = mutableStateOf(TelemetryState())
-    val telemetryState: StateFlow<TelemetryState> = _telemetryState
+    private val _telemetryState = MutableStateFlow(TelemetryState())
+    val telemetryState: StateFlow<TelemetryState> = _telemetryState.asStateFlow()
 
-    val isConnected: StateFlow<Boolean> = telemetryState.combine(repo?.state) { state, repoState ->
-        state.connected || repoState?.connected == true
-    }
-
+    val isConnected: StateFlow<Boolean> = telemetryState
+        .map { it.connected }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun connect() {
         viewModelScope.launch {

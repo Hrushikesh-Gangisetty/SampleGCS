@@ -47,6 +47,14 @@ dependencies {
 
     // Compose BOM (manages versions automatically)
     implementation(platform(libs.androidx.compose.bom))
+    implementation("com.google.android.gms:play-services-maps:19.2.0")
+
+    // Core Maps SDK (version will be managed by the BOM)
+//    implementation("com.google.android.gms:play-services-maps")
+    implementation("com.google.maps.android:maps-compose:4.4.2") // You had 4.4.2, which is good.
+
+    // Maps Utils (for clustering, GeoJSON, KML, heatmaps, etc.)
+    implementation("com.google.maps.android:android-maps-utils:3.8.2")
 
     // Compose UI
     implementation(libs.androidx.ui)

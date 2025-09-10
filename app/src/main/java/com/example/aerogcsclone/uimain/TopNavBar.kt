@@ -4,9 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.ui.window.Popup
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -19,6 +21,8 @@ import com.example.aerogcsclone.Telemetry.TelemetryState
 
 @Composable
 fun TopNavBar(telemetryState: TelemetryState) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var selectedMode by remember { mutableStateOf("Manual") }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -35,7 +39,46 @@ fun TopNavBar(telemetryState: TelemetryState) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+            Box {
+                Icon(
+                    Icons.Default.Menu,
+                    contentDescription = "Menu",
+                    tint = Color.White,
+                    modifier = Modifier.clickable { menuExpanded = true }
+                )
+                if (menuExpanded) {
+                    Popup(
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.5f))
+                                .padding(vertical = 8.dp, horizontal = 16.dp)
+                        ) {
+                            Text(
+                                text = "Automatic",
+                                color = Color.White,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .clickable {
+                                        selectedMode = "Automatic"
+                                        menuExpanded = false
+                                    }
+                            )
+                            Text(
+                                text = "Manual",
+                                color = Color.White,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .clickable {
+                                        selectedMode = "Manual"
+                                        menuExpanded = false
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
             Spacer(modifier = Modifier.width(16.dp))
@@ -53,7 +96,7 @@ fun TopNavBar(telemetryState: TelemetryState) {
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Manual",
+                    text = selectedMode,
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 15.sp
                 )
