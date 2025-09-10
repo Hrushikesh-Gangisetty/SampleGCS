@@ -84,12 +84,7 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
             }
             Spacer(modifier = Modifier.width(12.dp))
             Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White, modifier = Modifier.clickable {
-                authViewModel.signout()
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(Screen.Main.route) {
-                        inclusive = true
-                    }
-                }
+                navController.navigate(Screen.Connection.route)
             })
             Spacer(modifier = Modifier.width(16.dp))
 
