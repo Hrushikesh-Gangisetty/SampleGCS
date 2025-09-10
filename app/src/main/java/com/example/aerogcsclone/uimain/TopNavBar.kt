@@ -16,16 +16,88 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.Button
+import androidx.compose.material.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.navigation.Screen
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 
 @Composable
 fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navController: NavHostController) {
     var menuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Manual") }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
+
+    if (showLogoutConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirmation = false },
+            title = { Text("Logout") },
+            text = { Text("Do you really want to logout?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        authViewModel.signout()
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Main.route) { inclusive = true }
+                        }
+                        showLogoutConfirmation = false
+                    },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF4A90E2))
+                ) {
+                    Text("Yes", color = Color.White)
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showLogoutConfirmation = false },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Gray)
+                ) {
+                    Text("No", color = Color.White)
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -83,14 +155,12 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White, modifier = Modifier.clickable {
-                authViewModel.signout()
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(Screen.Main.route) {
-                        inclusive = true
-                    }
-                }
-            })
+            Icon(
+                Icons.Default.Home,
+                contentDescription = "Home",
+                tint = Color.White,
+                modifier = Modifier.clickable { showLogoutConfirmation = true }
+            )
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(
