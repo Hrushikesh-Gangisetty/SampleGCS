@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.window.Popup
@@ -25,6 +27,7 @@ import com.example.aerogcsclone.navigation.Screen
 @Composable
 fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navController: NavHostController) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var kebabMenuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Manual") }
     Box(
         modifier = Modifier
@@ -138,7 +141,31 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                 DividerBlock()
                 InfoBlockGroup(Icons.Default.Sync, listOf("Stabilize", "Arm"))
                 DividerBlock()
-                Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
+                Box {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "More",
+                        tint = Color.White,
+                        modifier = Modifier.clickable { kebabMenuExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = kebabMenuExpanded,
+                        onDismissRequest = { kebabMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Settings") },
+                            onClick = { kebabMenuExpanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("About App") },
+                            onClick = { kebabMenuExpanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Logout") },
+                            onClick = { kebabMenuExpanded = false }
+                        )
+                    }
+                }
             }
         }
     }
