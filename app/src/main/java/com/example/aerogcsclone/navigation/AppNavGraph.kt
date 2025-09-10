@@ -45,7 +45,7 @@ fun AppNavGraph(navController: NavHostController) {
             )
         }
         composable(Screen.Main.route) {
-            MainPage(telemetryViewModel = sharedViewModel)
+            MainPage(telemetryViewModel = sharedViewModel, authViewModel = authViewModel, navController = navController)
         }
     }
 }
