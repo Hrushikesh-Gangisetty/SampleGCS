@@ -1,7 +1,6 @@
 package com.example.aerogcsclone.authentication
 
 import android.widget.Toast
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -67,15 +67,24 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = "Signup with Pavaman", fontSize = 32.sp)
-                Text(text = "Create your custom mail and password", fontSize = 12.sp)
+                Text(text = "Signup with Pavaman", fontSize = 32.sp, color = Color.Black)
+                Text(text = "Create your custom mail and password", fontSize = 12.sp, color = Color.Black)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text(text = "Email") }
+                    label = { Text(text = "Email") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -83,19 +92,28 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text(text = "Password") }
+                    label = { Text(text = "Password") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(onClick = { authViewModel.signup(email, password) }) {
-                    Text(text = "Create account")
+                    Text(text = "Create account", color = Color.Black)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(onClick = { navController.navigate(Screen.Login.route) }) {
-                    Text(text = "if already have an account, Login")
+                    Text(text = "if already have an account, Login", color = Color.Black)
                 }
             }
         }
