@@ -11,12 +11,14 @@ import com.example.aerogcsclone.authentication.LoginPage
 import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.uiconnection.ConnectionPage
 import com.example.aerogcsclone.uimain.MainPage
+import com.example.aerogcsclone.uimain.PlanScreen
 
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
     object Main : Screen("main")
     object Login : Screen("login")
     object Signup : Screen("signup")
+    object Plan : Screen("plan")
 }
 
 @Composable
@@ -46,6 +48,9 @@ fun AppNavGraph(navController: NavHostController) {
         }
         composable(Screen.Main.route) {
             MainPage(telemetryViewModel = sharedViewModel, authViewModel = authViewModel, navController = navController)
+        }
+        composable(Screen.Plan.route) {
+            PlanScreen(telemetryViewModel = sharedViewModel, authViewModel = authViewModel, navController = navController)
         }
     }
 }
