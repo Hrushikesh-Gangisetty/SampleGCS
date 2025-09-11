@@ -39,7 +39,7 @@ fun PlanScreen(
                 authViewModel = authViewModel,
                 navController = navController
             )
-            GcsMap(telemetryState)
+            GcsMap(telemetryState = telemetryState)
         }
     }
 }

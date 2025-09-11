@@ -18,6 +18,6 @@ data class TelemetryState(
     val sats : Int? = null,
     val hdop : Float? = null,
     //Latitude and Longitude
-    val latitude : Double? = null,
+    val latitude : Double?= null,
     val longitude : Double? = null
 )
