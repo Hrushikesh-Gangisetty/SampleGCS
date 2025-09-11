@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -66,15 +67,24 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = "Login with pavaman", fontSize = 32.sp)
-                Text(text = "Login with pavaman credentials", fontSize = 12.sp)
+                Text(text = "Login with pavaman", fontSize = 32.sp, color = Color.Black)
+                Text(text = "Login with pavaman credentials", fontSize = 12.sp, color = Color.Black)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text(text = "Email") }
+                    label = { Text(text = "Email") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -82,22 +92,30 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text(text = "Password") }
+                    label = { Text(text = "Password") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(onClick = { authViewModel.login(email, password) }) {
-                    Text(text = "Login")
+                    Text(text = "Login", color = Color.Black)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(onClick = { navController.navigate(Screen.Signup.route) }) {
-                    Text(text = "Signup")
+                    Text(text = "Signup", color = Color.Black)
                 }
             }
         }
     }
 }
-
