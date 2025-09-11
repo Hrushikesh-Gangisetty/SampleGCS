@@ -1,6 +1,6 @@
 package com.example.aerogcsclone.authentication
 
-import android.widget.Toast
+
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,7 +46,7 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
-            painter = painterResource(id = R.drawable.loginbag),
+            painter = painterResource(id = R.drawable.logbag),
             contentDescription = "Signup Background",
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
