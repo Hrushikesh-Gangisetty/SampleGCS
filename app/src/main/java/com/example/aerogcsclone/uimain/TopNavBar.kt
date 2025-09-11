@@ -71,6 +71,7 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                                     .clickable {
                                         selectedMode = "Automatic"
                                         menuExpanded = false
+                                        navController.navigate(Screen.Plan.route)
                                     }
                             )
                             Text(
