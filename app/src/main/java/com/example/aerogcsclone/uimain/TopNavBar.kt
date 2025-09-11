@@ -59,23 +59,27 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                         Column(
                             modifier = Modifier
                                 .background(Color.Black.copy(alpha = 0.5f))
+                                .width(180.dp) // Increased width
                                 .padding(vertical = 8.dp, horizontal = 16.dp)
                         ) {
                             Text(
                                 text = "Automatic",
                                 color = Color.White,
+                                fontSize = 22.sp, // Increased font size
                                 modifier = Modifier
-                                    .padding(8.dp)
+                                    .padding(16.dp) // Increased padding
                                     .clickable {
                                         selectedMode = "Automatic"
                                         menuExpanded = false
+                                        navController.navigate(Screen.Plan.route)
                                     }
                             )
                             Text(
                                 text = "Manual",
                                 color = Color.White,
+                                fontSize = 22.sp, // Increased font size
                                 modifier = Modifier
-                                    .padding(8.dp)
+                                    .padding(16.dp) // Increased padding
                                     .clickable {
                                         selectedMode = "Manual"
                                         menuExpanded = false

@@ -1,17 +1,21 @@
 package com.example.aerogcsclone
 
 import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.*
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.example.aerogcsclone.navigation.AppNavGraph
-import androidx.compose.ui.graphics.Color
 import com.google.android.gms.maps.MapsInitializer
 
 // ✅ Dark theme setup
@@ -37,11 +41,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Handle the splash screen transition.
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
 
-        // ✅ Initialize Maps SDK
-//        MapsInitializer.initialize(applicationContext)
-        // ✅ Initialize Maps SDK with new API
+        // Initialize Maps SDK with new API
         MapsInitializer.initialize(applicationContext, MapsInitializer.Renderer.LATEST) {
             // You can log or handle the chosen renderer here
         }
@@ -53,10 +58,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (hasPermission.value) {
-                        // ✅ Use your NavGraph (map can be one of the screens)
-                        AppNavGraph(navController = navController)
-                    }
+                    AppNavGraph(navController = navController)
                 }
             }
         }
