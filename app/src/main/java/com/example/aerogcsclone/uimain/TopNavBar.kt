@@ -1,15 +1,15 @@
 package com.example.aerogcsclone.uimain
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.ui.window.Popup
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,16 +19,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.navigation.Screen
 
 @Composable
-fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navController: NavHostController) {
+fun TopNavBar(
+    telemetryState: TelemetryState,
+    authViewModel: AuthViewModel,
+    navController: NavHostController
+) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Manual") }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -45,6 +51,7 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Hamburger menu
             Box {
                 Icon(
                     Icons.Default.Menu,
@@ -53,21 +60,19 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                     modifier = Modifier.clickable { menuExpanded = true }
                 )
                 if (menuExpanded) {
-                    Popup(
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
+                    Popup(onDismissRequest = { menuExpanded = false }) {
                         Column(
                             modifier = Modifier
                                 .background(Color.Black.copy(alpha = 0.5f))
-                                .width(180.dp) // Increased width
+                                .width(180.dp)
                                 .padding(vertical = 8.dp, horizontal = 16.dp)
                         ) {
                             Text(
                                 text = "Automatic",
                                 color = Color.White,
-                                fontSize = 22.sp, // Increased font size
+                                fontSize = 22.sp,
                                 modifier = Modifier
-                                    .padding(16.dp) // Increased padding
+                                    .padding(16.dp)
                                     .clickable {
                                         selectedMode = "Automatic"
                                         menuExpanded = false
@@ -77,9 +82,9 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                             Text(
                                 text = "Manual",
                                 color = Color.White,
-                                fontSize = 22.sp, // Increased font size
+                                fontSize = 22.sp,
                                 modifier = Modifier
-                                    .padding(16.dp) // Increased padding
+                                    .padding(16.dp)
                                     .clickable {
                                         selectedMode = "Manual"
                                         menuExpanded = false
@@ -89,12 +94,22 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                     }
                 }
             }
+
             Spacer(modifier = Modifier.width(12.dp))
-            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White, modifier = Modifier.clickable {
-                navController.navigate(Screen.Connection.route)
-            })
+
+            // Home icon
+            Icon(
+                Icons.Default.Home,
+                contentDescription = "Home",
+                tint = Color.White,
+                modifier = Modifier.clickable {
+                    navController.navigate(Screen.Connection.route)
+                }
+            )
+
             Spacer(modifier = Modifier.width(16.dp))
 
+            // Title & Mode
             Column(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
@@ -116,9 +131,8 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Status & telemetry
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 ConnectionStatusWidget(isConnected = telemetryState.connected)
                 DividerBlock()
                 InfoBlock(Icons.Default.Flight, "13%")
@@ -145,6 +159,8 @@ fun TopNavBar(telemetryState: TelemetryState, authViewModel: AuthViewModel, navC
                 DividerBlock()
                 InfoBlockGroup(Icons.Default.Sync, listOf("Stabilize", "Arm"))
                 DividerBlock()
+
+                // Kebab menu
                 Box {
                     Icon(
                         Icons.Default.MoreVert,
@@ -190,7 +206,7 @@ fun ConnectionStatusWidget(isConnected: Boolean) {
         Box(
             modifier = Modifier
                 .size(10.dp)
-                .background(statusColor, shape = androidx.compose.foundation.shape.CircleShape)
+                .background(statusColor, shape = CircleShape)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(statusText, color = Color.White, fontSize = 12.sp)
@@ -201,7 +217,7 @@ fun ConnectionStatusWidget(isConnected: Boolean) {
 fun DividerBlock() {
     Box(
         modifier = Modifier
-            .padding(horizontal = 8.dp) // spacing between items
+            .padding(horizontal = 8.dp)
             .width(1.dp)
             .height(30.dp)
             .background(Color.White.copy(alpha = 0.7f))
