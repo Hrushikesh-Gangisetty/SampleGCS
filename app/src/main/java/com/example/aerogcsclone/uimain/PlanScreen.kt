@@ -98,7 +98,7 @@ fun PlanScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     FloatingActionButton(
-                        onClick = { /* TODO: handle Arm action */ },
+                        onClick = { telemetryViewModel.arm() },
                         modifier = Modifier.size(56.dp)
                     ) {
                         Icon(Icons.Default.FlightTakeoff, contentDescription = "Arm")
