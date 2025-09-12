@@ -35,4 +35,10 @@ class SharedViewModel : ViewModel() {
             }
         }
     }
+
+    fun arm() {
+        viewModelScope.launch {
+            repo?.arm()
+        }
+    }
 }
