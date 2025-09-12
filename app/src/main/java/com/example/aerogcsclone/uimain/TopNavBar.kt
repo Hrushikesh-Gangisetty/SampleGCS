@@ -157,7 +157,7 @@ fun TopNavBar(
                     )
                 )
                 DividerBlock()
-                InfoBlockGroup(Icons.Default.Sync, listOf("Stabilize", "Arm"))
+                InfoBlockGroup(Icons.Default.Sync, listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed"))
                 DividerBlock()
 
                 // Kebab menu
