@@ -20,4 +20,8 @@ data class TelemetryState(
     //Latitude and Longitude
     val latitude : Double?= null,
     val longitude : Double? = null
+
+    val mode: String? = null,
+    val armed: Boolean = false,
+    val armable: Boolean = false,
 )
