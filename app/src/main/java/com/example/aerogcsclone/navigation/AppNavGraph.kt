@@ -9,11 +9,13 @@ import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.authentication.LoginPage
 import com.example.aerogcsclone.authentication.SignupPage
+import com.example.aerogcsclone.authentication.WelcomeScreen
 import com.example.aerogcsclone.uiconnection.ConnectionPage
 import com.example.aerogcsclone.uimain.MainPage
 import com.example.aerogcsclone.uimain.PlanScreen
 
 sealed class Screen(val route: String) {
+    object Welcome : Screen("welcome")
     object Connection : Screen("connection")
     object Main : Screen("main")
     object Login : Screen("login")
@@ -27,7 +29,10 @@ fun AppNavGraph(navController: NavHostController) {
     val authViewModel: AuthViewModel = viewModel()
 
 
-    NavHost(navController = navController, startDestination = Screen.Login.route) {
+    NavHost(navController = navController, startDestination = Screen.Welcome.route) {
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(navController = navController)
+        }
         composable(Screen.Login.route) {
             LoginPage(
                 navController = navController,
