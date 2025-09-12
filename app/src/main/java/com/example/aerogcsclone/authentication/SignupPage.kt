@@ -67,14 +67,15 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = "Signup with Pavaman", fontSize = 32.sp)
-                Text(text = "Create your custom mail and password", fontSize = 12.sp)
+                Text(text = "Signup with Pavaman", fontSize = 32.sp, color = Color.Black)
+                Text(text = "Create your custom mail and password", fontSize = 12.sp, color = Color.Black)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
+
                     label = { Text(text = "Email") }
                 )
 
@@ -83,13 +84,14 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
+
                     label = { Text(text = "Password") }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(onClick = { authViewModel.signup(email, password) }) {
-                    Text(text = "Create account")
+                    Text(text = "Create account", color = Color.Black)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
