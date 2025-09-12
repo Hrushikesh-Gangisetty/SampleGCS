@@ -19,7 +19,7 @@ data class TelemetryState(
     val hdop : Float? = null,
     //Latitude and Longitude
     val latitude : Double?= null,
-    val longitude : Double? = null
+    val longitude : Double? = null,
 
     val mode: String? = null,
     val armed: Boolean = false,
