@@ -19,5 +19,9 @@ data class TelemetryState(
     val hdop : Float? = null,
     //Latitude and Longitude
     val latitude : Double?= null,
-    val longitude : Double? = null
+    val longitude : Double? = null,
+
+    val armed : Boolean = false,
+    val armable : Boolean = false,
+    val mode : String? = null
 )
