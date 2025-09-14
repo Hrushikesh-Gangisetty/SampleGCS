@@ -24,4 +24,5 @@ data class TelemetryState(
     val mode: String? = null,
     val armed: Boolean = false,
     val armable: Boolean = false,
+    val missionLoaded: Boolean = false,
 )

@@ -9,6 +9,7 @@ import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.connection.tcp.TcpClientMavConnection
 import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.definitions.minimal.*
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -18,6 +19,7 @@ class MavlinkTelemetryRepository(
     private val host: String,
     private val port: Int
 ) {
+    private var mission by mutableStateOf<List<LatLng>>(emptyList())
     private val gcsSystemId: UByte = 200u
     private val gcsComponentId: UByte = 1u
     private val _state = MutableStateFlow(TelemetryState())
@@ -272,6 +274,52 @@ class MavlinkTelemetryRepository(
                     _state.update { it.copy(sats = sats, hdop = hdop) }
                 }
         }
+
+        // Mission handling
+        scope.launch {
+            mavFrameStream
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .collect { message ->
+                    when (message) {
+                        is MissionRequest -> {
+                            val seq = message.seq.toInt()
+                            if (seq < mission.size) {
+                                val waypoint = mission[seq]
+                                val missionItem = MissionItemInt(
+                                    targetSystem = fcuSystemId,
+                                    targetComponent = fcuComponentId,
+                                    seq = seq.toUShort(),
+                                    frame = MavFrame.GLOBAL_RELATIVE_ALT.wrap(),
+                                    command = MavCmd.NAV_WAYPOINT.wrap(),
+                                    current = if (seq == 0) 1u else 0u,
+                                    autocontinue = 1u,
+                                    param1 = 0f,
+                                    param2 = 0f,
+                                    param3 = 0f,
+                                    param4 = 0f,
+                                    x = (waypoint.latitude * 1e7).toInt(),
+                                    y = (waypoint.longitude * 1e7).toInt(),
+                                    z = 100f, // Default altitude
+                                    missionType = MavMissionType.MISSION.wrap()
+                                )
+                                try {
+                                    connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
+                                } catch (e: Exception) {
+                                    Log.e("MavlinkRepo", "Failed to send mission item", e)
+                                    _lastFailure.value = e
+                                }
+                            }
+                        }
+                        is MissionAck -> {
+                            Log.i("MavlinkRepo", "Mission upload acknowledged with result: ${message.type.value}")
+                            if (message.type == MavMissionResult.MAV_MISSION_ACCEPTED.wrap()) {
+                                _state.update { it.copy(missionLoaded = true) }
+                            }
+                        }
+                    }
+                }
+        }
     }
 
     suspend fun sendCommand(command: MavCmd, param1: Float = 0f, param2: Float = 0f, param3: Float = 0f, param4: Float = 0f, param5: Float = 0f, param6: Float = 0f, param7: Float = 0f) {
@@ -341,5 +389,23 @@ class MavlinkTelemetryRepository(
         sendCommand(MavCmd.NAV_LAND)
     }
 
+    suspend fun loadMission(waypoints: List<LatLng>) {
+        mission = waypoints
+        val missionCount = MissionCount(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId,
+            count = mission.size.toUShort(),
+            missionType = MavMissionType.MISSION.wrap()
+        )
+        try {
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Failed to send mission count", e)
+            _lastFailure.value = e
+        }
+    }
 
+    suspend fun startMission() {
+        sendCommand(MavCmd.MISSION_START)
+    }
 }
