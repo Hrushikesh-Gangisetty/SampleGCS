@@ -9,7 +9,10 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 
 @Composable
-fun GcsMap(telemetryState: TelemetryState) {
+fun GcsMap(
+    telemetryState: TelemetryState,
+    mapType: MapType
+) {
     var points by remember { mutableStateOf(listOf<LatLng>()) }
     var polygonClosed by remember { mutableStateOf(false) }
 
@@ -31,6 +34,7 @@ fun GcsMap(telemetryState: TelemetryState) {
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraPositionState,
+        properties = MapProperties(mapType = mapType), // ✅ Map type applied
         onMapClick = { latLng ->
             if (!polygonClosed) {
                 points = points + latLng

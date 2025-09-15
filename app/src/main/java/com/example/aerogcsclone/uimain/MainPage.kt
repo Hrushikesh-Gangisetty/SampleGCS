@@ -6,9 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,6 +15,7 @@ import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
+import com.google.maps.android.compose.MapType
 
 @Composable
 fun MainPage(
@@ -26,12 +25,14 @@ fun MainPage(
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
 
+    // 🔑 Map type state
+    var mapType by remember { mutableStateOf(MapType.NORMAL) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // ✅ Corrected TopNavBar call
         TopNavBar(
             telemetryState = telemetryState,
             authViewModel = authViewModel,
@@ -43,11 +44,11 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // ✅ Pass telemetryState to GcsMap
-//
-            GcsMap(telemetryState = telemetryState)
-
-
+            // ✅ Pass telemetryState and mapType to GcsMap
+            GcsMap(
+                telemetryState = telemetryState,
+                mapType = mapType
+            )
 
             StatusPanel(
                 modifier = Modifier
@@ -59,7 +60,10 @@ fun MainPage(
             FloatingButtons(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(12.dp)
+                    .padding(12.dp),
+                onToggleMapType = {
+                    mapType = if (mapType == MapType.NORMAL) MapType.SATELLITE else MapType.NORMAL
+                }
             )
         }
     }
@@ -105,7 +109,10 @@ fun StatusPanel(
 }
 
 @Composable
-fun FloatingButtons(modifier: Modifier = Modifier) {
+fun FloatingButtons(
+    modifier: Modifier = Modifier,
+    onToggleMapType: () -> Unit
+) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -120,7 +127,10 @@ fun FloatingButtons(modifier: Modifier = Modifier) {
         FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
         }
-        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+        FloatingActionButton(
+            onClick = { onToggleMapType() },
+            containerColor = Color.Black.copy(alpha = 0.7f)
+        ) {
             Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
         }
     }
