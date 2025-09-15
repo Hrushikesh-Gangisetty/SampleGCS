@@ -9,7 +9,10 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 
 @Composable
-fun GcsMap(telemetryState: TelemetryState) {
+fun GcsMap(
+    telemetryState: TelemetryState,
+    isSatellite: Boolean
+) {
     var points by remember { mutableStateOf(listOf<LatLng>()) }
     var polygonClosed by remember { mutableStateOf(false) }
 
@@ -31,10 +34,11 @@ fun GcsMap(telemetryState: TelemetryState) {
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraPositionState,
+        properties = MapProperties(
+            mapType = if (isSatellite) MapType.SATELLITE else MapType.NORMAL
+        ),
         onMapClick = { latLng ->
-            if (!polygonClosed) {
-                points = points + latLng
-            }
+            if (!polygonClosed) points = points + latLng
         }
     ) {
         // Live drone marker
@@ -55,7 +59,6 @@ fun GcsMap(telemetryState: TelemetryState) {
                 onClick = {
                     if (points.size > 1 && !polygonClosed) {
                         val last = points.last()
-
                         if (point == points.first() && points.size > 2) {
                             points = points + point
                             polygonClosed = true
