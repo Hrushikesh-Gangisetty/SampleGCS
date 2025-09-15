@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.divpundir.mavlink.definitions.common.MissionItemInt
+//import com.example.aerogcsclone.Telemetry.MissionItemInt
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -21,6 +23,9 @@ class SharedViewModel : ViewModel() {
     val isConnected: StateFlow<Boolean> = telemetryState
         .map { it.connected }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    var missionUploaded by mutableStateOf(false)
+    var lastUploadedCount by mutableStateOf(0)
 
     fun connect() {
         viewModelScope.launch {
@@ -39,6 +44,38 @@ class SharedViewModel : ViewModel() {
     fun arm() {
         viewModelScope.launch {
             repo?.arm()
+        }
+    }
+
+    fun uploadMission(missionItems: List<MissionItemInt>, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                val success = repo?.uploadMissionWithAck(missionItems) ?: false
+                missionUploaded = success
+                if (success) {
+                    lastUploadedCount = missionItems.size
+                    onResult(true, null)
+                } else {
+                    lastUploadedCount = 0
+                    onResult(false, "Mission upload failed or timed out")
+                }
+            } catch (e: Exception) {
+                missionUploaded = false
+                lastUploadedCount = 0
+                onResult(false, e.message)
+            }
+        }
+    }
+
+    fun startMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                val last = if (lastUploadedCount > 0) lastUploadedCount - 1 else 0
+                repo?.startMission(0, last)
+                onResult(true, null)
+            } catch (e: Exception) {
+                onResult(false, e.message)
+            }
         }
     }
 }

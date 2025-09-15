@@ -11,8 +11,12 @@ import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.authentication.AuthViewModel
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import com.google.maps.android.compose.MapType
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ClearAll
+import androidx.compose.material.icons.filled.Menu
 
 @Composable
 fun PlanScreen(
@@ -24,9 +28,6 @@ fun PlanScreen(
 
     // State to toggle plan action buttons
     var showPlanActions by remember { mutableStateOf(false) }
-
-    // ✅ Map type state (same as in MainPage)
-    var mapType by remember { mutableStateOf(MapType.NORMAL) }
 
     Scaffold(
         floatingActionButton = {
@@ -86,8 +87,8 @@ fun PlanScreen(
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
-                // ✅ Pass selected mapType to GcsMap
-                GcsMap(telemetryState = telemetryState, mapType = mapType)
+                // Map background
+                GcsMap(telemetryState = telemetryState)
 
                 // Left-side floating buttons (below TopNavBar)
                 Column(
@@ -96,16 +97,6 @@ fun PlanScreen(
                         .padding(start = 16.dp, top = 72.dp), // push below TopNavBar
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // ✅ Map toggle button ABOVE Arm button
-                    FloatingActionButton(
-                        onClick = {
-                            mapType = if (mapType == MapType.NORMAL) MapType.SATELLITE else MapType.NORMAL
-                        },
-                        modifier = Modifier.size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Map, contentDescription = "Toggle Map Type")
-                    }
-
                     FloatingActionButton(
                         onClick = { telemetryViewModel.arm() },
                         modifier = Modifier.size(56.dp)
