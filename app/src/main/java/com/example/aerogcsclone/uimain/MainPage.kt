@@ -17,8 +17,6 @@ import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.rememberCameraPositionState
 
 @Composable
 fun MainPage(
@@ -27,7 +25,6 @@ fun MainPage(
     navController: NavHostController
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
-    val cameraPositionState = rememberCameraPositionState()
 
     Column(
         modifier = Modifier
@@ -47,12 +44,10 @@ fun MainPage(
                 .fillMaxWidth()
         ) {
             // ✅ Pass telemetryState to GcsMap
-            GcsMap(
-                telemetryState = telemetryState,
-                cameraPositionState = cameraPositionState,
-                waypoints = telemetryViewModel.waypoints,
-                showCrosshair = false
-            )
+//
+            GcsMap(telemetryState = telemetryState)
+
+
 
             StatusPanel(
                 modifier = Modifier
@@ -64,9 +59,7 @@ fun MainPage(
             FloatingButtons(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(12.dp),
-                telemetryViewModel = telemetryViewModel,
-                telemetryState = telemetryState
+                    .padding(12.dp)
             )
         }
     }
@@ -112,25 +105,16 @@ fun StatusPanel(
 }
 
 @Composable
-fun FloatingButtons(
-    modifier: Modifier = Modifier,
-    telemetryViewModel: SharedViewModel,
-    telemetryState: TelemetryState
-) {
+fun FloatingButtons(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (telemetryState.missionLoaded) {
-            FloatingActionButton(
-                onClick = { telemetryViewModel.startMission() },
-                containerColor = Color.Black.copy(alpha = 0.7f)
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Start Mission", tint = Color.White)
-            }
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+            Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
         }
-        FloatingActionButton(onClick = { /*TODO: Implement settings*/ }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
         }
         FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {

@@ -12,10 +12,11 @@ import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.authentication.AuthViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.*
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ClearAll
+import androidx.compose.material.icons.filled.Menu
 
 @Composable
 fun PlanScreen(
@@ -27,28 +28,6 @@ fun PlanScreen(
 
     // State to toggle plan action buttons
     var showPlanActions by remember { mutableStateOf(false) }
-    val cameraPositionState = rememberCameraPositionState()
-
-    // Update camera when telemetry changes (live location)
-    LaunchedEffect(telemetryState.latitude, telemetryState.longitude) {
-        val lat = telemetryState.latitude
-        val lon = telemetryState.longitude
-        if (lat != null && lon != null) {
-            val newPosition = LatLng(lat, lon)
-            cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngZoom(newPosition, 16f),
-                durationMs = 1000
-            )
-        }
-    }
-
-    // Navigate back when mission is loaded
-    LaunchedEffect(telemetryState.missionLoaded) {
-        if (telemetryState.missionLoaded) {
-            navController.popBackStack()
-            telemetryViewModel.resetMissionLoaded()
-        }
-    }
 
     Scaffold(
         floatingActionButton = {
@@ -58,10 +37,7 @@ fun PlanScreen(
                 // Extra buttons shown above "Create Plan"
                 if (showPlanActions) {
                     FloatingActionButton(
-                        onClick = {
-                            val center = cameraPositionState.position.target
-                            telemetryViewModel.addWaypoint(center)
-                        },
+                        onClick = { /* TODO: Add Waypoints */ },
                         modifier = Modifier
                             .padding(bottom = 12.dp)
                             .size(56.dp)
@@ -70,30 +46,21 @@ fun PlanScreen(
                     }
 
                     FloatingActionButton(
-                        onClick = { telemetryViewModel.deleteLastWaypoint() },
+                        onClick = { /* TODO: Delete Waypoints */ },
                         modifier = Modifier
                             .padding(bottom = 12.dp)
                             .size(56.dp)
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Last Waypoint")
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Waypoints")
                     }
 
                     FloatingActionButton(
-                        onClick = { telemetryViewModel.clearAllWaypoints() },
+                        onClick = { /* TODO: Clear Plan */ },
                         modifier = Modifier
                             .padding(bottom = 12.dp)
                             .size(56.dp)
                     ) {
                         Icon(Icons.Default.ClearAll, contentDescription = "Clear Plan")
-                    }
-
-                    FloatingActionButton(
-                        onClick = { telemetryViewModel.loadMission() },
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Publish, contentDescription = "Load Mission")
                     }
                 }
 
@@ -121,12 +88,7 @@ fun PlanScreen(
 
             Box(modifier = Modifier.fillMaxSize()) {
                 // Map background
-                GcsMap(
-                    telemetryState = telemetryState,
-                    cameraPositionState = cameraPositionState,
-                    waypoints = telemetryViewModel.waypoints,
-                    showCrosshair = true
-                )
+                GcsMap(telemetryState = telemetryState)
 
                 // Left-side floating buttons (below TopNavBar)
                 Column(

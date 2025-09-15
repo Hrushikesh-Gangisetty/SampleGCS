@@ -1,12 +1,7 @@
 package com.example.aerogcsclone.uimain
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -14,54 +9,70 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 
 @Composable
-fun GcsMap(
-    telemetryState: TelemetryState,
-    cameraPositionState: CameraPositionState,
-    waypoints: List<LatLng>,
-    showCrosshair: Boolean = false
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-        ) {
-            // Live drone marker
-            val lat = telemetryState.latitude
-            val lon = telemetryState.longitude
-            if (lat != null && lon != null) {
-                Marker(
-                    state = MarkerState(position = LatLng(lat, lon)),
-                    title = "Drone Location"
-                )
-            }
+fun GcsMap(telemetryState: TelemetryState) {
+    var points by remember { mutableStateOf(listOf<LatLng>()) }
+    var polygonClosed by remember { mutableStateOf(false) }
 
-            // Waypoint markers
-            waypoints.forEachIndexed { index, waypoint ->
-                Marker(
-                    state = MarkerState(position = waypoint),
-                    title = "Waypoint ${index + 1}"
-                )
-            }
+    val cameraPositionState = rememberCameraPositionState()
 
-            // Draw polyline between waypoints
-            if (waypoints.size > 1) {
-                val polylinePoints = if (waypoints.size >= 3) {
-                    waypoints + waypoints.first()
-                } else {
-                    waypoints
-                }
-                Polyline(
-                    points = polylinePoints,
-                    width = 4f
-                )
+    // Update camera when telemetry changes (live location)
+    LaunchedEffect(telemetryState.latitude, telemetryState.longitude) {
+        val lat = telemetryState.latitude
+        val lon = telemetryState.longitude
+        if (lat != null && lon != null) {
+            val newPosition = LatLng(lat, lon)
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngZoom(newPosition, 16f),
+                durationMs = 1000
+            )
+        }
+    }
+
+    GoogleMap(
+        modifier = Modifier.fillMaxSize(),
+        cameraPositionState = cameraPositionState,
+        onMapClick = { latLng ->
+            if (!polygonClosed) {
+                points = points + latLng
             }
         }
+    ) {
+        // Live drone marker
+        val lat = telemetryState.latitude
+        val lon = telemetryState.longitude
+        if (lat != null && lon != null) {
+            Marker(
+                state = MarkerState(position = LatLng(lat, lon)),
+                title = "Drone Location"
+            )
+        }
 
-        if (showCrosshair) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Crosshair",
-                modifier = Modifier.align(Alignment.Center)
+        // User-drawn markers
+        points.forEachIndexed { index, point ->
+            Marker(
+                state = MarkerState(position = point),
+                title = "Marker ${index + 1}",
+                onClick = {
+                    if (points.size > 1 && !polygonClosed) {
+                        val last = points.last()
+
+                        if (point == points.first() && points.size > 2) {
+                            points = points + point
+                            polygonClosed = true
+                        } else if (point != last) {
+                            points = points + point
+                        }
+                    }
+                    true
+                }
+            )
+        }
+
+        // Draw polyline (open or closed)
+        if (points.size > 1) {
+            Polyline(
+                points = points,
+                width = 4f
             )
         }
     }
