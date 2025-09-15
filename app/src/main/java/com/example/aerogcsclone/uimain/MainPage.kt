@@ -6,7 +6,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,14 +26,12 @@ fun MainPage(
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
 
-    // Map toggle state
-    val mapToggle = remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // ✅ Corrected TopNavBar call
         TopNavBar(
             telemetryState = telemetryState,
             authViewModel = authViewModel,
@@ -43,11 +43,11 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // Pass toggle state to GcsMap
-            GcsMap(
-                telemetryState = telemetryState,
-                isSatellite = mapToggle.value
-            )
+            // ✅ Pass telemetryState to GcsMap
+//
+            GcsMap(telemetryState = telemetryState)
+
+
 
             StatusPanel(
                 modifier = Modifier
@@ -56,38 +56,11 @@ fun MainPage(
                 telemetryState = telemetryState
             )
 
-            Column(
+            FloatingButtons(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                FloatingActionButton(
-                    onClick = { /* Start logic */ },
-                    containerColor = Color.Black.copy(alpha = 0.7f)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
-                }
-                FloatingActionButton(
-                    onClick = { /* Settings logic */ },
-                    containerColor = Color.Black.copy(alpha = 0.7f)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
-                }
-                FloatingActionButton(
-                    onClick = { /* Refresh logic */ },
-                    containerColor = Color.Black.copy(alpha = 0.7f)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
-                }
-                FloatingActionButton(
-                    onClick = { mapToggle.value = !mapToggle.value }, // Toggle map type
-                    containerColor = Color.Black.copy(alpha = 0.7f)
-                ) {
-                    Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
-                }
-            }
+                    .padding(12.dp)
+            )
         }
     }
 }
@@ -127,6 +100,28 @@ fun StatusPanel(
                 Text("Distance: N/A", color = Color.White)
                 Text("Consumed: N/A", color = Color.White)
             }
+        }
+    }
+}
+
+@Composable
+fun FloatingButtons(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+            Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
+        }
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+        }
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
+        }
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+            Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
         }
     }
 }
