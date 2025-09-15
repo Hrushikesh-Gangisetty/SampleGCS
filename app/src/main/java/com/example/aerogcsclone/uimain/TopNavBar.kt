@@ -33,7 +33,7 @@ fun TopNavBar(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
-    var selectedMode by remember { mutableStateOf("Manual") }
+    var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
 
     Box(
         modifier = Modifier
@@ -122,11 +122,14 @@ fun TopNavBar(
                     fontSize = 25.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = selectedMode,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 15.sp
-                )
+                // Show selected mode only if not null
+                selectedMode?.let {
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 15.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -157,7 +160,10 @@ fun TopNavBar(
                     )
                 )
                 DividerBlock()
-                InfoBlockGroup(Icons.Default.Sync, listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed"))
+                InfoBlockGroup(
+                    Icons.Default.Sync,
+                    listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed")
+                )
                 DividerBlock()
 
                 // Kebab menu
