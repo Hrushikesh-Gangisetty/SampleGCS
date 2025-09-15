@@ -16,6 +16,8 @@ import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.google.maps.android.compose.MapType
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 
 @Composable
 fun MainPage(
@@ -24,6 +26,7 @@ fun MainPage(
     navController: NavHostController
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
+    val context = LocalContext.current
 
     // 🔑 Map type state
     var mapType by remember { mutableStateOf(MapType.SATELLITE) }
@@ -63,6 +66,15 @@ fun MainPage(
                     .padding(12.dp),
                 onToggleMapType = {
                     mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE
+                },
+                onStartMission = {
+                    telemetryViewModel.startMission { success, error ->
+                        if (success) {
+                            Toast.makeText(context, "Mission start sent", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, error ?: "Failed to start mission", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
             )
         }
@@ -111,14 +123,15 @@ fun StatusPanel(
 @Composable
 fun FloatingButtons(
     modifier: Modifier = Modifier,
-    onToggleMapType: () -> Unit
+    onToggleMapType: () -> Unit,
+    onStartMission: () -> Unit
 ) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+        FloatingActionButton(onClick = { onStartMission() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
         }
         FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
