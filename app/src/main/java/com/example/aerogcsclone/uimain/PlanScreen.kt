@@ -216,8 +216,13 @@ fun PlanScreen(
                             if (success) {
                                 Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
                                 // After upload, request a readback to confirm what the FC stored
-                                coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
-                                navController.navigate(Screen.Main.route) { popUpTo(Screen.Plan.route) { inclusive = true } }
+                                coroutineScope.launch {
+                                    telemetryViewModel.readMissionFromFcu()
+                                    // Navigate to main screen to show uploaded waypoints
+                                    navController.navigate(Screen.Main.route) {
+                                        popUpTo(Screen.Plan.route) { inclusive = true }
+                                    }
+                                }
                             } else {
                                 Toast.makeText(context, error ?: "Mission upload failed", Toast.LENGTH_SHORT).show()
                             }

@@ -26,6 +26,7 @@ fun MainPage(
     navController: NavHostController
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
+    val uploadedWaypoints by telemetryViewModel.uploadedWaypoints.collectAsState()
     val context = LocalContext.current
 
     // 🔑 Map type state
@@ -47,9 +48,10 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // ✅ Pass telemetryState and mapType to GcsMap
+            // ✅ Pass telemetryState, mapType, and uploaded waypoints to GcsMap
             GcsMap(
                 telemetryState = telemetryState,
+                points = uploadedWaypoints,
                 mapType = mapType
             )
 

@@ -15,10 +15,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.absoluteValue
 
 // MAVLink flight modes (ArduPilot values)
 object MavMode {
-    val AUTO: UInt = 3u
+    const val STABILIZE: UInt = 0u
+    const val LOITER: UInt = 5u
+    const val AUTO: UInt = 3u
     // Add other modes as needed
 }
 
@@ -167,19 +170,15 @@ class MavlinkTelemetryRepository(
                 .filterIsInstance<CommandAck>()
                 .collect { ack ->
                     try {
-
-                   Log.i(
-                       "MavlinkRepo",
-                       "COMMAND_ACK received: command=${ack.command} result=${ack.result} progress=${ack.progress}"
-                   )
-
+                        Log.i(
+                            "MavlinkRepo",
+                            "COMMAND_ACK received: command=${ack.command} result=${ack.result} progress=${ack.progress}"
+                        )
                     } catch (t: Throwable) {
                         Log.i("MavlinkRepo", "COMMAND_ACK received (unable to stringify fields)")
                     }
                 }
         }
-
-        // Collectors
 
         // VFR_HUD
         scope.launch {
@@ -231,14 +230,14 @@ class MavlinkTelemetryRepository(
                     _state.update { it.copy(currentA = currentA) }
                 }
         }
-        //HEARTBEAT for mode, armed, armable
+        // HEARTBEAT for mode, armed, armable
         scope.launch {
             mavFrameStream
-                .filter{ frame-> state.value.fcuDetected && frame.systemId == fcuSystemId }
-                .map{frame -> frame.message}
+                .filter { frame -> state.value.fcuDetected && frame.systemId == fcuSystemId }
+                .map { frame -> frame.message }
                 .filterIsInstance<Heartbeat>()
-                .collect{ hb->
-                    val armed = (hb.baseMode.value and MavModeFlag.SAFETY_ARMED.value )!= 0u
+                .collect { hb ->
+                    val armed = (hb.baseMode.value and MavModeFlag.SAFETY_ARMED.value) != 0u
                     val mode = when (hb.customMode) {
                         0u -> "Stabilize"
                         1u -> "Acro"
@@ -267,7 +266,7 @@ class MavlinkTelemetryRepository(
                         27u -> "Auto_RTL"
                         else -> "Unknown"
                     }
-                    _state.update { it.copy(armed=armed , mode = mode)}
+                    _state.update { it.copy(armed = armed, mode = mode) }
                 }
         }
         // SYS_STATUS
@@ -284,7 +283,7 @@ class MavlinkTelemetryRepository(
                     val enabled = (s.onboardControlSensorsEnabled.value and SENSOR_3D_GYRO) != 0u
                     val healthy = (s.onboardControlSensorsHealth.value and SENSOR_3D_GYRO) != 0u
                     val armable = present && enabled && healthy
-                    _state.update { it.copy(voltage = vBatt, batteryPercent = pct , armable = armable) }
+                    _state.update { it.copy(voltage = vBatt, batteryPercent = pct, armable = armable) }
                 }
         }
 
@@ -318,8 +317,9 @@ class MavlinkTelemetryRepository(
         )
         try {
             connection.trySendUnsignedV2(
-               gcsSystemId,
-                gcsComponentId, commandLong)
+                gcsSystemId,
+                gcsComponentId, commandLong
+            )
             Log.d("MavlinkRepo", "Sent COMMAND_LONG: cmd=${command} p1=$param1 p2=$param2 p3=$param3 p4=$param4 p5=$param5 p6=$param6 p7=$param7")
         } catch (e: Exception) {
             Log.e("MavlinkRepo", "Failed to send command", e)
@@ -345,12 +345,35 @@ class MavlinkTelemetryRepository(
         )
     }
 
-    suspend fun changeMode(mode: UInt) {
+    /**
+     * Change vehicle mode (ArduPilot: param1=1, param2=customMode)
+     * Waits for Heartbeat confirmation.
+     */
+    suspend fun changeMode(customMode: UInt): Boolean {
         sendCommand(
             MavCmd.DO_SET_MODE,
-            mode.toFloat(),
-            0f
+            1f,                   // param1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED (always 1 for ArduPilot)
+            customMode.toFloat(), // param2: custom mode (e.g., 3u for AUTO)
+            0f, 0f, 0f, 0f, 0f
         )
+        // Wait for Heartbeat to confirm mode change
+        val timeoutMs = 5000L
+        val start = System.currentTimeMillis()
+        val expectedMode = when (customMode) {
+            3u -> "Auto"
+            0u -> "Stabilize"
+            5u -> "Loiter"
+            else -> "Unknown"
+        }
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            if (state.value.mode?.contains(expectedMode, ignoreCase = true) == true) {
+                Log.i("MavlinkRepo", "Mode changed to ${state.value.mode}")
+                return true
+            }
+            delay(200)
+        }
+        Log.e("MavlinkRepo", "Mode change to ${customMode} not confirmed in Heartbeat")
+        return false
     }
 
     suspend fun takeoff(altitude: Float) {
@@ -415,7 +438,6 @@ class MavlinkTelemetryRepository(
             // Collector job
             val job = AppScope.launch {
                 connection.mavFrame
-                    //.filter { it.systemId == fcuSystemId }
                     .collect { frame ->
                         val senderSys = frame.systemId
                         val senderComp = frame.componentId
@@ -435,7 +457,6 @@ class MavlinkTelemetryRepository(
                                     seq = seq.toUShort()
                                 )
                                 try {
-                                    // Always send the requested item (allow retransmits)
                                     connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
                                     sentSeqs.add(seq)
                                     Log.i("MavlinkRepo", "Sent MISSION_ITEM_INT seq=$seq to sys=$senderSys comp=$senderComp")
@@ -444,8 +465,6 @@ class MavlinkTelemetryRepository(
                                 }
                             }
                             is MissionRequest -> {
-                                // Vehicle requested the float MissionRequest message (deprecated in some dialects)
-                                // Respond with MISSION_ITEM_INT (not float) for compatibility with Mission Planner
                                 Log.d("MavlinkRepo", "Received MissionRequest (float) from sys=$senderSys comp=$senderComp seq=${msg.seq}")
                                 firstRequestReceived = true
                                 val seq = msg.seq.toInt()
@@ -460,7 +479,6 @@ class MavlinkTelemetryRepository(
                                     seq = seq.toUShort()
                                 )
                                 try {
-                                    // Always resend when requested
                                     connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItemInt)
                                     sentSeqs.add(seq)
                                     Log.i("MavlinkRepo", "Sent MISSION_ITEM_INT seq=$seq to sys=$senderSys comp=$senderComp (responding to MissionRequest)")
@@ -481,15 +499,14 @@ class MavlinkTelemetryRepository(
             }
 
             // Wait a short period for first request; if none, fallback to sending all items
-            val firstRequestTimeout = 5000L // increase wait to allow FC more time to request
-             val startWait = System.currentTimeMillis()
-             while (!firstRequestReceived && !ackDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
-                 delay(100)
-             }
+            val firstRequestTimeout = 5000L
+            val startWait = System.currentTimeMillis()
+            while (!firstRequestReceived && !ackDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
+                delay(100)
+            }
 
-             if (!firstRequestReceived) {
+            if (!firstRequestReceived) {
                 Log.w("MavlinkRepo", "No MissionRequest received within $firstRequestTimeout ms; falling back to send all items")
-                // Send all items sequentially
                 for (seq in 0 until missionItems.size) {
                     if (sentSeqs.contains(seq)) continue
                     val item = missionItems[seq]
@@ -499,25 +516,21 @@ class MavlinkTelemetryRepository(
                         seq = seq.toUShort()
                     )
                     try {
-                        // log full item contents for diagnostics
                         Log.d("MavlinkRepo", "Sending fallback item seq=$seq cmd=${missionItem.command} frame=${missionItem.frame} x=${missionItem.x} y=${missionItem.y} z=${missionItem.z}")
-                         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
-                         sentSeqs.add(seq)
-                         Log.i("MavlinkRepo", "Fallback: Sent MISSION_ITEM_INT seq=$seq")
-                         // give FC a bit more time to process unsolicited item and possibly request next
-                         delay(300)
-                     } catch (e: Exception) {
-                         Log.e("MavlinkRepo", "Fallback: Failed to send mission item seq=$seq", e)
-                     }
-                 }
-             }
+                        connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
+                        sentSeqs.add(seq)
+                        Log.i("MavlinkRepo", "Fallback: Sent MISSION_ITEM_INT seq=$seq")
+                        delay(300)
+                    } catch (e: Exception) {
+                        Log.e("MavlinkRepo", "Fallback: Failed to send mission item seq=$seq", e)
+                    }
+                }
+            }
 
-            // Wait for ACK with timeout
             val ackReceived = withTimeoutOrNull(timeoutMs) {
                 ackDeferred.await()
             } ?: false
 
-            // cancel collector and resend jobs
             job.cancel()
             resendJob.cancel()
 
@@ -535,8 +548,6 @@ class MavlinkTelemetryRepository(
         }
     }
 
-    // New helper: request mission from FCU and log items for debugging
-    @Suppress("DEPRECATION")
     suspend fun requestMissionAndLog(timeoutMs: Long = 5000) {
         if (!state.value.fcuDetected) {
             Log.w("MavlinkRepo", "FCU not detected; cannot request mission")
@@ -545,11 +556,8 @@ class MavlinkTelemetryRepository(
         try {
             val received = mutableListOf<Pair<Int, String>>()
             val expectedCountDeferred = CompletableDeferred<Int?>()
-
-            // map of per-seq deferreds
             val perSeqMap = mutableMapOf<Int, CompletableDeferred<Unit>>()
 
-            // collector: listen for count and items and ack
             val job = AppScope.launch {
                 connection.mavFrame.collect { frame ->
                     when (val msg = frame.message) {
@@ -565,7 +573,6 @@ class MavlinkTelemetryRepository(
                             perSeqMap[msg.seq.toInt()]?.let { d -> if (!d.isCompleted) d.complete(Unit) }
                         }
                         is MissionItem -> {
-                            // MissionItem is deprecated; log for diagnostics
                             Log.i("MavlinkRepo", "Readback: MISSION_ITEM seq=${msg.seq} x=${msg.x} y=${msg.y} z=${msg.z}")
                             received.add(msg.seq.toInt() to "FLT: x=${msg.x} y=${msg.y} z=${msg.z}")
                             perSeqMap[msg.seq.toInt()]?.let { d -> if (!d.isCompleted) d.complete(Unit) }
@@ -578,7 +585,6 @@ class MavlinkTelemetryRepository(
                 }
             }
 
-            // send request list
             try {
                 val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
                 connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
@@ -595,7 +601,6 @@ class MavlinkTelemetryRepository(
 
             Log.i("MavlinkRepo", "Expecting $expectedCount mission items - requesting each item")
 
-            // For each seq, request the item and wait for it
             for (seq in 0 until expectedCount) {
                 val seqDeferred = CompletableDeferred<Unit>()
                 perSeqMap[seq] = seqDeferred
@@ -607,7 +612,6 @@ class MavlinkTelemetryRepository(
                     Log.e("MavlinkRepo", "Failed to send MISSION_REQUEST_INT seq=$seq", e)
                 }
 
-                // wait up to 1500ms for the item
                 val got = withTimeoutOrNull(1500L) {
                     seqDeferred.await()
                     true
@@ -620,7 +624,6 @@ class MavlinkTelemetryRepository(
                 perSeqMap.remove(seq)
             }
 
-            // give a moment for any remaining frames
             delay(200)
             job.cancel()
 
@@ -631,76 +634,64 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    /**
+     * Start the mission after uploading.
+     * Sets the current waypoint, sends MISSION_START, and falls back to mode switch if needed.
+     */
     suspend fun startMission(first: Int, last: Int): Boolean {
-        // Try sending MISSION_START multiple times and wait for COMMAND_ACK each attempt.
         if (!state.value.fcuDetected) {
             Log.w("MavlinkRepo", "Cannot start mission - FCU not detected")
             return false
         }
 
-        // First, tell FC which mission item to start from (some firmwares expect this)
+        // Set starting waypoint
         try {
             val setCurrent = MissionSetCurrent(targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = first.toUShort())
             connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, setCurrent)
-            Log.i("MavlinkRepo", "Sent MISSION_SET_CURRENT seq=$first to sys=$fcuSystemId comp=$fcuComponentId")
-            // small delay to allow FC to process
+            Log.i("MavlinkRepo", "Sent MISSION_SET_CURRENT seq=$first")
             delay(200)
         } catch (e: Exception) {
             Log.w("MavlinkRepo", "Failed to send MISSION_SET_CURRENT", e)
         }
 
+        // Try MISSION_START up to 3 times
         val maxAttempts = 3
         val perAttemptTimeout = 1500L
-
         for (attempt in 1..maxAttempts) {
             try {
-                Log.i("MavlinkRepo", "Attempt $attempt: Sending MISSION_START first=$first last=$last to sys=$fcuSystemId comp=$fcuComponentId")
+                Log.i("MavlinkRepo", "Attempt $attempt: Sending MISSION_START first=$first last=$last")
                 sendCommand(MavCmd.MISSION_START, first.toFloat(), last.toFloat())
             } catch (e: Exception) {
                 Log.e("MavlinkRepo", "Failed to send MISSION_START on attempt $attempt", e)
             }
 
-            // wait for COMMAND_ACK for MISSION_START
+            // Wait for COMMAND_ACK
             val ackDeferred = CompletableDeferred<UInt?>()
             val job = AppScope.launch {
                 connection.mavFrame.collect { frame ->
                     val msg = frame.message
-                    if (msg is CommandAck) {
-                        try {
-                            if (msg.command == MavCmd.MISSION_START.wrap()) {
-                                val resultVal = msg.result.value
-                                Log.i("MavlinkRepo", "Observed COMMAND_ACK for MISSION_START result=$resultVal on attempt $attempt")
-                                if (!ackDeferred.isCompleted) ackDeferred.complete(resultVal)
-                            }
-                        } catch (t: Throwable) {
-                            Log.w("MavlinkRepo", "Error while processing COMMAND_ACK", t)
-                        }
+                    if (msg is CommandAck && msg.command == MavCmd.MISSION_START.wrap()) {
+                        if (!ackDeferred.isCompleted) ackDeferred.complete(msg.result.value)
                     }
                 }
             }
-
             val result = withTimeoutOrNull(perAttemptTimeout) { ackDeferred.await() }
             job.cancel()
 
-            if (result != null) {
-                if (result == 0u) {
-                    Log.i("MavlinkRepo", "Mission start acknowledged by FCU on attempt $attempt")
-                    return true
-                } else {
-                    Log.e("MavlinkRepo", "Mission start rejected by FCU on attempt $attempt with result=$result")
-                    // Don't retry on a negative ACK; break and return failure
-                    return false
-                }
+            if (result == 0u) { // MAV_RESULT_ACCEPTED
+                Log.i("MavlinkRepo", "Mission start acknowledged by FCU")
+                return true
+            } else if (result != null) {
+                Log.e("MavlinkRepo", "Mission start rejected by FCU with result=$result")
+                return false
             } else {
-                Log.w("MavlinkRepo", "No COMMAND_ACK for MISSION_START on attempt $attempt (timeout)")
-                // try again after short delay
-                delay(500L)
+                Log.w("MavlinkRepo", "No COMMAND_ACK for MISSION_START on attempt $attempt")
+                delay(500)
             }
         }
 
-        Log.e("MavlinkRepo", "MISSION_START not acknowledged after $maxAttempts attempts - trying fallback start (set current + change mode to AUTO)")
-
-        // Fallback approach: set mission current and change mode to AUTO (many FCs start mission when switched to AUTO)
+        // Fallback: set current + change mode to AUTO
+        Log.e("MavlinkRepo", "MISSION_START not acknowledged, attempting fallback: set current + mode AUTO")
         try {
             val setCurrent = MissionSetCurrent(targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = first.toUShort())
             connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, setCurrent)
@@ -708,29 +699,13 @@ class MavlinkTelemetryRepository(
         } catch (e: Exception) {
             Log.w("MavlinkRepo", "Fallback: Failed to send MISSION_SET_CURRENT", e)
         }
-
-        // Request mode change to AUTO using DO_SET_MODE
-        try {
-            Log.i("MavlinkRepo", "Fallback: Requesting mode change to AUTO via DO_SET_MODE")
-            sendCommand(MavCmd.DO_SET_MODE, MavMode.AUTO.toFloat(), 0f)
-        } catch (e: Exception) {
-            Log.w("MavlinkRepo", "Fallback: Failed to send DO_SET_MODE", e)
+        val modeChanged = changeMode(3u) // 3u = AUTO
+        if (modeChanged) {
+            Log.i("MavlinkRepo", "Fallback: Vehicle switched to AUTO mode")
+            delay(500)
+            return true
         }
-
-        // Wait for telemetry mode to reflect AUTO for a short period
-        val modeWaitMs = 5000L
-        val startWaitMode = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startWaitMode < modeWaitMs) {
-            if (state.value.mode?.contains("Auto", ignoreCase = true) == true) {
-                Log.i("MavlinkRepo", "Fallback: Vehicle switched to AUTO mode")
-                // Give FC a moment to start the mission
-                delay(500)
-                return true
-            }
-            delay(200)
-        }
-
-        Log.e("MavlinkRepo", "Fallback start failed: vehicle did not switch to AUTO mode")
+        Log.e("MavlinkRepo", "Fallback failed: vehicle did not switch to AUTO mode")
         return false
     }
 }
