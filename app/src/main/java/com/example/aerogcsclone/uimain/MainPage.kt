@@ -48,37 +48,44 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // ✅ Pass telemetryState, mapType, and uploaded waypoints to GcsMap
-            GcsMap(
-                telemetryState = telemetryState,
-                points = uploadedWaypoints,
-                mapType = mapType
-            )
+            if (!telemetryState.connected) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                    Text("Waiting for connection to drone...", modifier = Modifier.padding(top = 16.dp))
+                }
+            } else {
+                // ✅ Pass telemetryState, mapType, and uploaded waypoints to GcsMap
+                GcsMap(
+                    telemetryState = telemetryState,
+                    points = uploadedWaypoints,
+                    mapType = mapType
+                )
 
-            StatusPanel(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp),
-                telemetryState = telemetryState
-            )
+                StatusPanel(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp),
+                    telemetryState = telemetryState
+                )
 
-            FloatingButtons(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(12.dp),
-                onToggleMapType = {
-                    mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE
-                },
-                onStartMission = {
-                    telemetryViewModel.startMission { success, error ->
-                        if (success) {
-                            Toast.makeText(context, "Mission start sent", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, error ?: "Failed to start mission", Toast.LENGTH_SHORT).show()
+                FloatingButtons(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(12.dp),
+                    onToggleMapType = {
+                        mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE
+                    },
+                    onStartMission = {
+                        telemetryViewModel.startMission { success, error ->
+                            if (success) {
+                                Toast.makeText(context, "Mission start sent", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, error ?: "Failed to start mission", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }

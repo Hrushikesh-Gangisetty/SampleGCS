@@ -98,160 +98,209 @@ fun PlanScreen(
 
     Scaffold(
         floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                // Extra buttons shown above "Create Plan"
-                if (showPlanActions) {
-                    // Add at crosshair
-                    FloatingActionButton(
-                        onClick = {
-                            // get map center
-                            val center = cameraPositionState.position.target
-                            val seq = waypoints.size
-                            val isTakeoff = seq == 0
-                            val item = buildMissionItemFromLatLng(center, seq, isTakeoff)
-                            points.add(center)
-                            waypoints.add(item)
-                        },
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Waypoint at Crosshair")
-                    }
-
-                    FloatingActionButton(
-                        onClick = {
-                            if (waypoints.isNotEmpty()) {
-                                waypoints.removeAt(waypoints.lastIndex)
-                                points.removeAt(points.lastIndex)
-                            }
-                        },
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Waypoints")
-                    }
-
-                    FloatingActionButton(
-                        onClick = { waypoints.clear(); points.clear() },
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .size(56.dp)
-                    ) {
-                        Icon(Icons.Default.ClearAll, contentDescription = "Clear Plan")
-                    }
-                }
-
-                // Main Create Plan button
-                FloatingActionButton(
-                    onClick = { showPlanActions = !showPlanActions },
-                    modifier = Modifier.size(56.dp)
+            if (telemetryState.connected) {
+                Column(
+                    horizontalAlignment = Alignment.End
                 ) {
-                    Icon(Icons.Default.Menu, contentDescription = "Create Plan")
+                    // Extra buttons shown above "Create Plan"
+                    if (showPlanActions) {
+                        // Add at crosshair
+                        FloatingActionButton(
+                            onClick = {
+                                // get map center
+                                val center = cameraPositionState.position.target
+                                val seq = waypoints.size
+                                val isTakeoff = seq == 0
+                                val item = buildMissionItemFromLatLng(center, seq, isTakeoff)
+                                points.add(center)
+                                waypoints.add(item)
+                            },
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(56.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Waypoint at Crosshair")
+                        }
+
+                        FloatingActionButton(
+                            onClick = {
+                                if (waypoints.isNotEmpty()) {
+                                    waypoints.removeAt(waypoints.lastIndex)
+                                    points.removeAt(points.lastIndex)
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(56.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Waypoints")
+                        }
+
+                        FloatingActionButton(
+                            onClick = { waypoints.clear(); points.clear() },
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(56.dp)
+                        ) {
+                            Icon(Icons.Default.ClearAll, contentDescription = "Clear Plan")
+                        }
+                    }
+
+                    // Main Create Plan button
+                    FloatingActionButton(
+                        onClick = { showPlanActions = !showPlanActions },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(Icons.Default.Menu, contentDescription = "Create Plan")
+                    }
                 }
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Map background - pass points and onMapClick callback, camera state, and mapType
-            GcsMap(
-                telemetryState = telemetryState,
-                points = points,
-                onMapClick = onMapClick,
-                cameraPositionState = cameraPositionState,
-                mapType = mapType,
-                autoCenter = false // do not force camera while planning
-            )
-
-            // Small connection / FCU status indicator to help debugging
-            Column(modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)) {
-                Text("Connected: ${telemetryState.connected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                Text("FCU detected: ${telemetryState.fcuDetected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+        if (!telemetryState.connected) {
+            // Show loading indicator if not connected
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+                Text("Waiting for connection to drone...", modifier = Modifier.padding(top = 16.dp))
             }
+        } else {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                // Map background - pass points and onMapClick callback, camera state, and mapType
+                GcsMap(
+                    telemetryState = telemetryState,
+                    points = points,
+                    onMapClick = onMapClick,
+                    cameraPositionState = cameraPositionState,
+                    mapType = mapType,
+                    autoCenter = false // do not force camera while planning
+                )
 
-            // Crosshair overlay at center (small so it doesn't cover the whole map)
-            Box(modifier = Modifier.size(36.dp).align(Alignment.Center), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Add, contentDescription = "Crosshair", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-            }
-
-            // Left-side floating buttons (below TopNavBar)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 72.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { telemetryViewModel.arm() },
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(Icons.Default.FlightTakeoff, contentDescription = "Arm")
+                // Small connection / FCU status indicator to help debugging
+                Column(modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)) {
+                    Text("Connected: ${telemetryState.connected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text("FCU detected: ${telemetryState.fcuDetected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                 }
 
-                FloatingActionButton(
-                    onClick = { mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE },
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(Icons.Default.Map, contentDescription = "Toggle Map Type")
+                // Crosshair overlay at center (small so it doesn't cover the whole map)
+                Box(modifier = Modifier.size(36.dp).align(Alignment.Center), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Add, contentDescription = "Crosshair", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                 }
 
-                FloatingActionButton(
-                    onClick = { /* TODO: handle Change Mode action */ },
-                    modifier = Modifier.size(56.dp)
+                // Left-side floating buttons (below TopNavBar)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(Icons.Default.Build, contentDescription = "Change Mode")
-                }
-            }
+                    FloatingActionButton(
+                        onClick = { telemetryViewModel.arm() },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(Icons.Default.FlightTakeoff, contentDescription = "Arm")
+                    }
 
-            // Bottom panel: upload and list
-            Column(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
-                Button(
-                    onClick = {
-                        telemetryViewModel.uploadMission(waypoints) { success, error ->
-                            if (success) {
-                                Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
-                                // After upload, request a readback to confirm what the FC stored
-                                coroutineScope.launch {
-                                    telemetryViewModel.readMissionFromFcu()
-                                    // Navigate to main screen to show uploaded waypoints
-                                    navController.navigate(Screen.Main.route) {
-                                        popUpTo(Screen.Plan.route) { inclusive = true }
-                                    }
-                                }
-                            } else {
-                                Toast.makeText(context, error ?: "Mission upload failed", Toast.LENGTH_SHORT).show()
+                    FloatingActionButton(
+                        onClick = { mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(Icons.Default.Map, contentDescription = "Toggle Map Type")
+                    }
+
+                    FloatingActionButton(
+                        onClick = { /* TODO: handle Change Mode action */ },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(Icons.Default.Build, contentDescription = "Change Mode")
+                    }
+                }
+
+                // Bottom panel: upload and list
+                Column(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
+                    Button(
+                        onClick = {
+                            // Build home position and takeoff waypoints
+                            val homeLat = telemetryState.latitude ?: 0.0
+                            val homeLon = telemetryState.longitude ?: 0.0
+                            val homeAlt = telemetryState.altitudeMsl ?: 0f
+                            val homePosition = MissionItemInt(
+                                targetSystem = 0u,
+                                targetComponent = 0u,
+                                seq = 0u,
+                                frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                current = 1u, // home is current
+                                autocontinue = 1u,
+                                param1 = 0f,
+                                param2 = 0f,
+                                param3 = 0f,
+                                param4 = 0f,
+                                x = (homeLat * 1E7).toInt(),
+                                y = (homeLon * 1E7).toInt(),
+                                z = homeAlt
+                            )
+                            val takeoff = MissionItemInt(
+                                targetSystem = 0u,
+                                targetComponent = 0u,
+                                seq = 1u,
+                                frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
+                                current = 0u,
+                                autocontinue = 1u,
+                                param1 = 0f,
+                                param2 = 0f,
+                                param3 = 0f,
+                                param4 = 0f,
+                                x = (homeLat * 1E7).toInt(),
+                                y = (homeLon * 1E7).toInt(),
+                                z = 10f
+                            )
+                            // Shift user waypoints sequence numbers by +2
+                            val userWaypoints = waypoints.mapIndexed { idx, wp ->
+                                wp.copy(seq = (idx + 2).toUShort())
                             }
+                            val fullMission = listOf(homePosition, takeoff) + userWaypoints
+                            telemetryViewModel.uploadMission(fullMission) { success, error ->
+                                if (success) {
+                                    Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch {
+                                        telemetryViewModel.readMissionFromFcu()
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Plan.route) { inclusive = true }
+                                        }
+                                    }
+                                } else {
+                                    Toast.makeText(context, error ?: "Mission upload failed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = waypoints.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Upload Mission (${waypoints.size})")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { telemetryViewModel.readMissionFromFcu(); Toast.makeText(context, "Requested mission readback (check logs)", Toast.LENGTH_SHORT).show() }) {
+                            Text("Read Mission (debug)")
                         }
-                    },
-                    enabled = waypoints.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Upload Mission (${waypoints.size})")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { telemetryViewModel.readMissionFromFcu(); Toast.makeText(context, "Requested mission readback (check logs)", Toast.LENGTH_SHORT).show() }) {
-                        Text("Read Mission (debug)")
+                        Button(onClick = { telemetryViewModel.startMission { s, e -> Toast.makeText(context, if (s) "Start sent" else (e ?: "Start failed"), Toast.LENGTH_SHORT).show() } }) {
+                            Text("Start Mission")
+                        }
                     }
-                    Button(onClick = { telemetryViewModel.startMission { s, e -> Toast.makeText(context, if (s) "Start sent" else (e ?: "Start failed"), Toast.LENGTH_SHORT).show() } }) {
-                        Text("Start Mission")
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Waypoint list
-                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
-                    Text("Waypoints:", style = MaterialTheme.typography.titleSmall)
-                    waypoints.forEachIndexed { idx, wp ->
-                        Text("#${idx + 1}: Lat=${wp.x / 1e7}, Lon=${wp.y / 1e7}, Alt=${wp.z}")
+                    // Waypoint list
+                    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
+                        Text("Waypoints:", style = MaterialTheme.typography.titleSmall)
+                        waypoints.forEachIndexed { idx, wp ->
+                            Text("#${idx + 1}: Lat=${wp.x / 1e7}, Lon=${wp.y / 1e7}, Alt=${wp.z}")
+                        }
                     }
                 }
             }
