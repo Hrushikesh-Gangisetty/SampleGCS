@@ -34,6 +34,10 @@ class SharedViewModel : ViewModel() {
     private val _uploadedWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val uploadedWaypoints: StateFlow<List<LatLng>> = _uploadedWaypoints.asStateFlow()
 
+    // Store drone path for display on main screen
+    private val _dronePath = MutableStateFlow<List<LatLng>>(emptyList())
+    val dronePath: StateFlow<List<LatLng>> = _dronePath.asStateFlow()
+
     fun connect() {
         viewModelScope.launch {
             val portInt = port.toIntOrNull()
@@ -43,6 +47,12 @@ class SharedViewModel : ViewModel() {
                 newRepo.start()
                 newRepo.state.collect {
                     _telemetryState.value = it
+                    // Add the new location to the drone path
+                    it.latitude?.let { lat ->
+                        it.longitude?.let { lon ->
+                            _dronePath.value = _dronePath.value + LatLng(lat, lon)
+                        }
+                    }
                 }
             }
         }

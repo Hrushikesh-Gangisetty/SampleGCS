@@ -26,6 +26,7 @@ fun MainPage(
     navController: NavHostController
 ) {
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
+    val dronePath by telemetryViewModel.dronePath.collectAsState()
     val context = LocalContext.current
 
     // 🔑 Map type state
@@ -50,7 +51,8 @@ fun MainPage(
             // ✅ Pass telemetryState and mapType to GcsMap
             GcsMap(
                 telemetryState = telemetryState,
-                mapType = mapType
+                mapType = mapType,
+                dronePath = dronePath
             )
 
             StatusPanel(
