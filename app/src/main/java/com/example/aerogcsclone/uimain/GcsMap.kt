@@ -23,7 +23,7 @@ fun GcsMap(
 
     // Update camera when telemetry changes (live location) only if autoCenter is true
     val lat = telemetryState.latitude
-     val lon = telemetryState.longitude
+    val lon = telemetryState.longitude
     if (autoCenter && lat != null && lon != null) {
         // animate only when autoCenter is requested
         cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))

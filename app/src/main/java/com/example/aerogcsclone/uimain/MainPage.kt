@@ -1,4 +1,3 @@
-// Kotlin
 package com.example.aerogcsclone.uimain
 
 import androidx.compose.foundation.background
@@ -19,9 +18,6 @@ import com.example.aerogcsclone.authentication.AuthViewModel
 import com.google.maps.android.compose.MapType
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
-import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.LatLng
 
 @Composable
 fun MainPage(
@@ -32,10 +28,7 @@ fun MainPage(
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
     val context = LocalContext.current
 
-    // Map camera state controlled from parent so refresh can move it
-    val cameraPositionState = rememberCameraPositionState()
-
-    // Map type state
+    // 🔑 Map type state
     var mapType by remember { mutableStateOf(MapType.SATELLITE) }
 
     Column(
@@ -54,12 +47,10 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // Pass cameraPositionState and disable autoCenter so user can pan freely
+            // ✅ Pass telemetryState and mapType to GcsMap
             GcsMap(
                 telemetryState = telemetryState,
-                mapType = mapType,
-                cameraPositionState = cameraPositionState,
-                autoCenter = false
+                mapType = mapType
             )
 
             StatusPanel(
@@ -83,15 +74,6 @@ fun MainPage(
                         } else {
                             Toast.makeText(context, error ?: "Failed to start mission", Toast.LENGTH_SHORT).show()
                         }
-                    }
-                },
-                onRefresh = {
-                    val lat = telemetryState.latitude
-                    val lon = telemetryState.longitude
-                    if (lat != null && lon != null) {
-                        cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))
-                    } else {
-                        Toast.makeText(context, "No GPS location available", Toast.LENGTH_SHORT).show()
                     }
                 }
             )
@@ -142,8 +124,7 @@ fun StatusPanel(
 fun FloatingButtons(
     modifier: Modifier = Modifier,
     onToggleMapType: () -> Unit,
-    onStartMission: () -> Unit,
-    onRefresh: () -> Unit
+    onStartMission: () -> Unit
 ) {
     Column(
         modifier = modifier,
@@ -156,7 +137,7 @@ fun FloatingButtons(
         FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
         }
-        FloatingActionButton(onClick = { onRefresh() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
         }
         FloatingActionButton(
