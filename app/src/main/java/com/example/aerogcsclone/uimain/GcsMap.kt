@@ -1,14 +1,20 @@
+
 package com.example.aerogcsclone.uimain
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.example.aerogcsclone.R
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.maps.android.compose.*
-import com.google.maps.android.compose.MapType
 
 @Composable
 fun GcsMap(
@@ -17,16 +23,42 @@ fun GcsMap(
     onMapClick: (LatLng) -> Unit = {},
     cameraPositionState: CameraPositionState? = null,
     mapType: MapType = MapType.NORMAL,
-    autoCenter: Boolean = true // new flag to control automatic recentering
+    autoCenter: Boolean = true
 ) {
+    val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
 
-    // Update camera when telemetry changes (live location) only if autoCenter is true
+    val visitedPositions = remember { mutableStateListOf<LatLng>() }
+
+    // Load quadcopter drawable from res/drawable/ic_quadcopter.png and scale to dp-based size
+    val droneIcon = remember {
+        runCatching {
+            val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.d_image_prev_ui)
+            val sizeDp = 64f
+            val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(24)
+            val scaled = Bitmap.createScaledBitmap(bmp, sizePx, sizePx, true)
+            BitmapDescriptorFactory.fromBitmap(scaled)
+        }.getOrNull()
+    }
+
     val lat = telemetryState.latitude
     val lon = telemetryState.longitude
     if (autoCenter && lat != null && lon != null) {
-        // animate only when autoCenter is requested
         cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))
+    }
+
+    LaunchedEffect(lat, lon) {
+        if (lat != null && lon != null) {
+            val pos = LatLng(lat, lon)
+            if (visitedPositions.isEmpty() || visitedPositions.last() != pos) {
+                visitedPositions.add(pos)
+                val maxLen = 2000
+                if (visitedPositions.size > maxLen) {
+                    val removeCount = visitedPositions.size - maxLen
+                    repeat(removeCount) { visitedPositions.removeAt(0) }
+                }
+            }
+        }
     }
 
     GoogleMap(
@@ -35,22 +67,30 @@ fun GcsMap(
         properties = MapProperties(mapType = mapType),
         onMapClick = { latLng -> onMapClick(latLng) }
     ) {
-        // Live drone marker
+        // Drone marker using quadcopter image; centered via anchor Offset(0.5f, 0.5f)
         if (lat != null && lon != null) {
-            Marker(state = MarkerState(position = LatLng(lat, lon)), title = "Drone Location")
+            Marker(
+                state = MarkerState(position = LatLng(lat, lon)),
+                title = "Drone",
+                icon = droneIcon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
+                anchor = Offset(0.5f, 0.5f)
+            )
         }
 
-        // User-drawn markers
+        // Waypoint markers and planned route (blue)
         points.forEachIndexed { index, point ->
             Marker(state = MarkerState(position = point), title = "WP ${index + 1}")
         }
-
-        // Draw polyline connecting waypoints
         if (points.size > 1) {
-            Polyline(points = points, width = 4f)
+            Polyline(points = points, width = 4f, color = Color.Blue)
         }
 
-        // If 4 or more points, draw a simple grid over bounding box
+        // Red polyline showing the drone's traveled path
+        if (visitedPositions.size > 1) {
+            Polyline(points = visitedPositions.toList(), width = 6f, color = Color.Red)
+        }
+
+        // Optional grid overlay
         if (points.size >= 4) {
             val lats = points.map { it.latitude }
             val lons = points.map { it.longitude }
@@ -59,16 +99,13 @@ fun GcsMap(
             val minLon = lons.minOrNull() ?: 0.0
             val maxLon = lons.maxOrNull() ?: 0.0
 
-            // draw two vertical and two horizontal lines (3x3 grid)
             val latSteps = listOf(minLat, (minLat + maxLat) / 2.0, maxLat)
             val lonSteps = listOf(minLon, (minLon + maxLon) / 2.0, maxLon)
 
-            // vertical lines
             lonSteps.forEach { lonVal ->
                 val line = listOf(LatLng(minLat, lonVal), LatLng(maxLat, lonVal))
                 Polyline(points = line, width = 2f, color = Color.Gray)
             }
-            // horizontal lines
             latSteps.forEach { latVal ->
                 val line = listOf(LatLng(latVal, minLon), LatLng(latVal, maxLon))
                 Polyline(points = line, width = 2f, color = Color.Gray)
