@@ -34,10 +34,6 @@ class SharedViewModel : ViewModel() {
     private val _uploadedWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val uploadedWaypoints: StateFlow<List<LatLng>> = _uploadedWaypoints.asStateFlow()
 
-    // Store drone path for display on main screen
-    private val _dronePath = MutableStateFlow<List<LatLng>>(emptyList())
-    val dronePath: StateFlow<List<LatLng>> = _dronePath.asStateFlow()
-
     fun connect() {
         viewModelScope.launch {
             val portInt = port.toIntOrNull()
@@ -47,12 +43,6 @@ class SharedViewModel : ViewModel() {
                 newRepo.start()
                 newRepo.state.collect {
                     _telemetryState.value = it
-                    // Add the new location to the drone path
-                    it.latitude?.let { lat ->
-                        it.longitude?.let { lon ->
-                            _dronePath.value = _dronePath.value + LatLng(lat, lon)
-                        }
-                    }
                 }
             }
         }
@@ -157,7 +147,7 @@ class SharedViewModel : ViewModel() {
                 // Step 2: See if the drone is either in Stabilize or Loiter to arm the drone
                 val currentMode = _telemetryState.value.mode
                 val isInArmableMode = currentMode?.equals("Stabilize", ignoreCase = true) == true ||
-                                     currentMode?.equals("Loiter", ignoreCase = true) == true
+                        currentMode?.equals("Loiter", ignoreCase = true) == true
 
                 if (!isInArmableMode) {
                     Log.i("SharedVM", "Current mode '$currentMode' not suitable for arming, switching to Stabilize")
@@ -215,7 +205,7 @@ class SharedViewModel : ViewModel() {
                     val autoModeTimeout = 8000L
                     val autoModeStart = System.currentTimeMillis()
                     while (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true &&
-                           System.currentTimeMillis() - autoModeStart < autoModeTimeout) {
+                        System.currentTimeMillis() - autoModeStart < autoModeTimeout) {
                         delay(500)
                     }
 
@@ -233,11 +223,9 @@ class SharedViewModel : ViewModel() {
                 delay(1000)
 
                 // Step 5: Start the mission
-                // Mission items: [0]=home waypoint, [1]=takeoff, [2...N]=user waypoints, [last]=land
-                val first = 0 // Always start from home waypoint
                 val last = if (lastUploadedCount > 0) lastUploadedCount - 1 else 0
-                Log.i("SharedVM", "Sending start mission command with first=$first last=$last")
-                val result = repo?.startMission(first, last) ?: false
+                Log.i("SharedVM", "Sending start mission command with first=0 last=$last")
+                val result = repo?.startMission(0, last) ?: false
 
                 if (result) {
                     Log.i("SharedVM", "✓ Mission start acknowledged by FCU")

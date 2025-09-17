@@ -1,3 +1,4 @@
+// Kotlin
 package com.example.aerogcsclone.uimain
 
 import android.widget.Toast
@@ -24,6 +25,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.MapType
 import com.example.aerogcsclone.navigation.Screen
 import kotlinx.coroutines.launch
+import com.google.android.gms.maps.CameraUpdateFactory
 
 @Composable
 fun PlanScreen(
@@ -56,7 +58,7 @@ fun PlanScreen(
         val lat = telemetryState.latitude
         val lon = telemetryState.longitude
         if (!centeredOnce && lat != null && lon != null) {
-            cameraPositionState.move(com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))
+            cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))
             centeredOnce = true
         }
     }
@@ -66,14 +68,21 @@ fun PlanScreen(
     val waypoints = remember { mutableStateListOf<MissionItemInt>() }
 
     // Helper to build MissionItemInt from LatLng
-    fun buildMissionItemFromLatLng(latLng: LatLng, seq: Int, command: MavEnumValue<MavCmd>, alt: Float = 10f): MissionItemInt {
+    fun buildMissionItemFromLatLng(
+        latLng: LatLng,
+        seq: Int,
+        isTakeoff: Boolean = false,
+        alt: Float = 10f
+    ): MissionItemInt {
         return MissionItemInt(
             targetSystem = 0u,
             targetComponent = 0u,
             seq = seq.toUShort(),
             frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
-            command = command,
-            current = 0u,
+            command = if (isTakeoff) MavEnumValue.of(MavCmd.NAV_TAKEOFF) else MavEnumValue.of(
+                MavCmd.NAV_WAYPOINT
+            ),
+            current = 0u, // ensure 0 for compatibility
             autocontinue = 1u,
             param1 = 0f,
             param2 = 0f,
@@ -85,9 +94,13 @@ fun PlanScreen(
         )
     }
 
-    // Handler when user taps on map: add marker only
+    // Handler when user taps on map: add marker and mission item
     val onMapClick: (LatLng) -> Unit = { latLng ->
+        val seq = waypoints.size
+        val isTakeoff = seq == 0
+        val item = buildMissionItemFromLatLng(latLng, seq, isTakeoff)
         points.add(latLng)
+        waypoints.add(item)
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -106,7 +119,7 @@ fun PlanScreen(
                             val center = cameraPositionState.position.target
                             val seq = waypoints.size
                             val isTakeoff = seq == 0
-                            val item = buildMissionItemFromLatLng(center, seq, MavEnumValue.of(MavCmd.NAV_WAYPOINT))
+                            val item = buildMissionItemFromLatLng(center, seq, isTakeoff)
                             points.add(center)
                             waypoints.add(item)
                         },
@@ -152,27 +165,47 @@ fun PlanScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Map background - pass points and onMapClick callback, camera state, and mapType
+            // Map background
             GcsMap(
                 telemetryState = telemetryState,
                 points = points,
                 onMapClick = onMapClick,
                 cameraPositionState = cameraPositionState,
                 mapType = mapType,
-                autoCenter = false // do not force camera while planning
+                autoCenter = false // do not force camera while planning (user pans)
             )
 
-            // Small connection / FCU status indicator to help debugging
-            Column(modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)) {
-                Text("Connected: ${telemetryState.connected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                Text("FCU detected: ${telemetryState.fcuDetected}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+            // Small connection / FCU status indicator
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Text(
+                    "Connected: ${telemetryState.connected}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "FCU detected: ${telemetryState.fcuDetected}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
 
-            // Crosshair overlay at center (small so it doesn't cover the whole map)
-            Box(modifier = Modifier.size(36.dp).align(Alignment.Center), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Add, contentDescription = "Crosshair", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            // Crosshair overlay
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .align(Alignment.Center),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Crosshair",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
             // Left-side floating buttons (below TopNavBar)
@@ -182,6 +215,32 @@ fun PlanScreen(
                     .padding(start = 16.dp, top = 72.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Refresh button (moved here above Arm)
+                FloatingActionButton(
+                    onClick = {
+                        val lat = telemetryState.latitude
+                        val lon = telemetryState.longitude
+                        if (lat != null && lon != null) {
+                            cameraPositionState.move(
+                                CameraUpdateFactory.newLatLngZoom(
+                                    LatLng(lat, lon),
+                                    16f
+                                )
+                            )
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "No GPS location available",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Recenter Map")
+                }
+
+                // Arm button
                 FloatingActionButton(
                     onClick = { telemetryViewModel.arm() },
                     modifier = Modifier.size(56.dp)
@@ -190,7 +249,10 @@ fun PlanScreen(
                 }
 
                 FloatingActionButton(
-                    onClick = { mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE },
+                    onClick = {
+                        mapType =
+                            if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE
+                    },
                     modifier = Modifier.size(56.dp)
                 ) {
                     Icon(Icons.Default.Map, contentDescription = "Toggle Map Type")
@@ -205,70 +267,58 @@ fun PlanScreen(
             }
 
             // Bottom panel: upload and list
-            Column(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp)
+            ) {
                 Button(
                     onClick = {
-                        // Build mission item list: home (waypoint), takeoff, user waypoints (last is LAND)
-                        val missionItems = mutableListOf<MissionItemInt>()
-                        val userPoints = points.toList()
-                        val homeLat = telemetryState.latitude ?: 0.0
-                        val homeLon = telemetryState.longitude ?: 0.0
-                        val homeAlt = telemetryState.altitudeRelative ?: 10f
-                        val takeoffAlt = 10f // Default takeoff altitude
-                        // Sequence 0: Home waypoint
-                        missionItems.add(
-                            buildMissionItemFromLatLng(
-                                LatLng(homeLat, homeLon),
-                                0,
-                                MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-                                homeAlt
-                            ).copy(current = 1u) // current=true for first item
-                        )
-                        // Sequence 1: Takeoff
-                        missionItems.add(
-                            buildMissionItemFromLatLng(
-                                LatLng(homeLat, homeLon),
-                                1,
-                                MavEnumValue.of(MavCmd.NAV_TAKEOFF),
-                                takeoffAlt
-                            ).copy(current = 0u) // current=false
-                        )
-                        // Sequence 2+: User waypoints (last is LAND)
-                        for (i in userPoints.indices) {
-                            val isLast = i == userPoints.lastIndex
-                            val cmd = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT)
-                            missionItems.add(
-                                buildMissionItemFromLatLng(
-                                    userPoints[i],
-                                    i + 2,
-                                    cmd,
-                                    homeAlt // Use homeAlt for all waypoints
-                                ).copy(current = 0u) // current=false
-                            )
-                        }
-                        telemetryViewModel.uploadMission(missionItems) { success, error ->
+                        telemetryViewModel.uploadMission(waypoints) { success, error ->
                             if (success) {
-                                Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT)
+                                    .show()
                                 coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
-                                navController.navigate(Screen.Main.route) { popUpTo(Screen.Plan.route) { inclusive = true } }
+                                navController.navigate(Screen.Main.route) {
+                                    popUpTo(Screen.Plan.route) { inclusive = true }
+                                }
                             } else {
-                                Toast.makeText(context, error ?: "Mission upload failed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    error ?: "Mission upload failed",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     },
-                    enabled = points.isNotEmpty(),
+                    enabled = waypoints.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Upload Mission (${points.size})")
+                    Text("Upload Mission (${waypoints.size})")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { telemetryViewModel.readMissionFromFcu(); Toast.makeText(context, "Requested mission readback (check logs)", Toast.LENGTH_SHORT).show() }) {
+                    Button(onClick = {
+                        telemetryViewModel.readMissionFromFcu()
+                        Toast.makeText(
+                            context,
+                            "Requested mission readback (check logs)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }) {
                         Text("Read Mission (debug)")
                     }
-                    Button(onClick = { telemetryViewModel.startMission { s, e -> Toast.makeText(context, if (s) "Start sent" else (e ?: "Start failed"), Toast.LENGTH_SHORT).show() } }) {
+                    Button(onClick = {
+                        telemetryViewModel.startMission { s, e ->
+                            Toast.makeText(
+                                context,
+                                if (s) "Start sent" else (e ?: "Start failed"),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }) {
                         Text("Start Mission")
                     }
                 }
@@ -276,10 +326,15 @@ fun PlanScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Waypoint list
-                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(8.dp)
+                ) {
                     Text("Waypoints:", style = MaterialTheme.typography.titleSmall)
-                    points.forEachIndexed { idx, wp ->
-                        Text("#${idx + 1}: Lat=${wp.latitude}, Lon=${wp.longitude}")
+                    waypoints.forEachIndexed { idx, wp ->
+                        Text("#${idx + 1}: Lat=${wp.x / 1e7}, Lon=${wp.y / 1e7}, Alt=${wp.z}")
                     }
                 }
             }
