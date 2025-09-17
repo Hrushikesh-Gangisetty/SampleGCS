@@ -66,14 +66,14 @@ fun PlanScreen(
     val waypoints = remember { mutableStateListOf<MissionItemInt>() }
 
     // Helper to build MissionItemInt from LatLng
-    fun buildMissionItemFromLatLng(latLng: LatLng, seq: Int, isTakeoff: Boolean = false, alt: Float = 10f): MissionItemInt {
+    fun buildMissionItemFromLatLng(latLng: LatLng, seq: Int, command: MavEnumValue<MavCmd>, alt: Float = 10f): MissionItemInt {
         return MissionItemInt(
             targetSystem = 0u,
             targetComponent = 0u,
             seq = seq.toUShort(),
             frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
-            command = if (isTakeoff) MavEnumValue.of(MavCmd.NAV_TAKEOFF) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-            current = 0u, // ensure 0 for compatibility
+            command = command,
+            current = 0u,
             autocontinue = 1u,
             param1 = 0f,
             param2 = 0f,
@@ -85,13 +85,9 @@ fun PlanScreen(
         )
     }
 
-    // Handler when user taps on map: add marker and mission item
+    // Handler when user taps on map: add marker only
     val onMapClick: (LatLng) -> Unit = { latLng ->
-        val seq = waypoints.size
-        val isTakeoff = seq == 0
-        val item = buildMissionItemFromLatLng(latLng, seq, isTakeoff)
         points.add(latLng)
-        waypoints.add(item)
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -110,7 +106,7 @@ fun PlanScreen(
                             val center = cameraPositionState.position.target
                             val seq = waypoints.size
                             val isTakeoff = seq == 0
-                            val item = buildMissionItemFromLatLng(center, seq, isTakeoff)
+                            val item = buildMissionItemFromLatLng(center, seq, MavEnumValue.of(MavCmd.NAV_WAYPOINT))
                             points.add(center)
                             waypoints.add(item)
                         },
@@ -212,10 +208,47 @@ fun PlanScreen(
             Column(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                 Button(
                     onClick = {
-                        telemetryViewModel.uploadMission(waypoints) { success, error ->
+                        // Build mission item list: home (waypoint), takeoff, user waypoints (last is LAND)
+                        val missionItems = mutableListOf<MissionItemInt>()
+                        val userPoints = points.toList()
+                        val homeLat = telemetryState.latitude ?: 0.0
+                        val homeLon = telemetryState.longitude ?: 0.0
+                        val homeAlt = telemetryState.altitudeRelative ?: 10f
+                        val takeoffAlt = 10f // Default takeoff altitude
+                        // Sequence 0: Home waypoint
+                        missionItems.add(
+                            buildMissionItemFromLatLng(
+                                LatLng(homeLat, homeLon),
+                                0,
+                                MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                homeAlt
+                            ).copy(current = 1u) // current=true for first item
+                        )
+                        // Sequence 1: Takeoff
+                        missionItems.add(
+                            buildMissionItemFromLatLng(
+                                LatLng(homeLat, homeLon),
+                                1,
+                                MavEnumValue.of(MavCmd.NAV_TAKEOFF),
+                                takeoffAlt
+                            ).copy(current = 0u) // current=false
+                        )
+                        // Sequence 2+: User waypoints (last is LAND)
+                        for (i in userPoints.indices) {
+                            val isLast = i == userPoints.lastIndex
+                            val cmd = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT)
+                            missionItems.add(
+                                buildMissionItemFromLatLng(
+                                    userPoints[i],
+                                    i + 2,
+                                    cmd,
+                                    homeAlt // Use homeAlt for all waypoints
+                                ).copy(current = 0u) // current=false
+                            )
+                        }
+                        telemetryViewModel.uploadMission(missionItems) { success, error ->
                             if (success) {
                                 Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
-                                // After upload, request a readback to confirm what the FC stored
                                 coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
                                 navController.navigate(Screen.Main.route) { popUpTo(Screen.Plan.route) { inclusive = true } }
                             } else {
@@ -223,10 +256,10 @@ fun PlanScreen(
                             }
                         }
                     },
-                    enabled = waypoints.isNotEmpty(),
+                    enabled = points.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Upload Mission (${waypoints.size})")
+                    Text("Upload Mission (${points.size})")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -245,8 +278,8 @@ fun PlanScreen(
                 // Waypoint list
                 Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
                     Text("Waypoints:", style = MaterialTheme.typography.titleSmall)
-                    waypoints.forEachIndexed { idx, wp ->
-                        Text("#${idx + 1}: Lat=${wp.x / 1e7}, Lon=${wp.y / 1e7}, Alt=${wp.z}")
+                    points.forEachIndexed { idx, wp ->
+                        Text("#${idx + 1}: Lat=${wp.latitude}, Lon=${wp.longitude}")
                     }
                 }
             }

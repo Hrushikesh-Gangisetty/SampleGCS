@@ -223,9 +223,11 @@ class SharedViewModel : ViewModel() {
                 delay(1000)
 
                 // Step 5: Start the mission
+                // Mission items: [0]=home waypoint, [1]=takeoff, [2...N]=user waypoints, [last]=land
+                val first = 0 // Always start from home waypoint
                 val last = if (lastUploadedCount > 0) lastUploadedCount - 1 else 0
-                Log.i("SharedVM", "Sending start mission command with first=0 last=$last")
-                val result = repo?.startMission(0, last) ?: false
+                Log.i("SharedVM", "Sending start mission command with first=$first last=$last")
+                val result = repo?.startMission(first, last) ?: false
 
                 if (result) {
                     Log.i("SharedVM", "✓ Mission start acknowledged by FCU")
