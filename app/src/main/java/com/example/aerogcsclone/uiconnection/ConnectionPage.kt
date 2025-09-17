@@ -30,113 +30,68 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF2E2E2E))
-            .padding(16.dp)
+            .background(Color(0xFF121212))
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "Connect to Drone",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.Start)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = viewModel.ipAddress,
-                    onValueChange = { viewModel.ipAddress = it },
-                    label = { Text("IP Address", color = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.Gray,
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = viewModel.port,
-                    onValueChange = { viewModel.port = it },
-                    label = { Text("Port", color = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.Gray,
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Button(
-                    onClick = { /* Dummy action */ },
-                    modifier = Modifier
-                        .width(120.dp)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF555555),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("Scan")
-                }
-
-                Button(
-                    onClick = {
-                        isConnecting = true
-                        errorMessage = ""
-                        coroutineScope.launch {
-                            try {
-                                viewModel.connect()
-                            } catch (e: Exception) {
-                                errorMessage = e.message ?: "Connection failed"
-                            } finally {
-                                isConnecting = false
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .width(120.dp)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
-                    ),
-                    enabled = !isConnecting
-                ) {
-                    Text(if (isConnecting) "Connecting..." else "Connect")
-                }
-            }
-        }
-
-        if (errorMessage.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                "Connect to Drone",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            OutlinedTextField(
+                value = viewModel.ipAddress,
+                onValueChange = { viewModel.ipAddress = it },
+                label = { Text("IP Address", color = Color.White) },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(color = Color.White)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = viewModel.port,
+                onValueChange = { viewModel.port = it },
+                label = { Text("Port", color = Color.White) },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(color = Color.White)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    isConnecting = true
+                    errorMessage = ""
+                    coroutineScope.launch {
+                        try {
+                            viewModel.connect()
+                        } catch (e: Exception) {
+                            errorMessage = e.message ?: "Connection failed"
+                            isConnecting = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isConnecting
+            ) {
+                Text(if (isConnecting) "Connecting..." else "Connect")
+            }
+
+            if (errorMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(errorMessage, color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
