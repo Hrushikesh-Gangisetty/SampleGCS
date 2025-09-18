@@ -223,9 +223,8 @@ class SharedViewModel : ViewModel() {
                 delay(1000)
 
                 // Step 5: Start the mission
-                val last = if (lastUploadedCount > 0) lastUploadedCount - 1 else 0
-                Log.i("SharedVM", "Sending start mission command with first=0 last=$last")
-                val result = repo?.startMission(0, last) ?: false
+                Log.i("SharedVM", "Sending start mission command")
+                val result = repo?.startMission() ?: false
 
                 if (result) {
                     Log.i("SharedVM", "✓ Mission start acknowledged by FCU")
