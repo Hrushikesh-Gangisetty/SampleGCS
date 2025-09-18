@@ -51,8 +51,8 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             Spacer(modifier = Modifier.height(20.dp))
 
             OutlinedTextField(
-                value = viewModel.ipAddress,
-                onValueChange = { viewModel.ipAddress = it },
+                value = viewModel.ipAddress.value,
+                onValueChange = viewModel::onIpAddressChange,
                 label = { Text("IP Address", color = Color.White) },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = LocalTextStyle.current.copy(color = Color.White)
@@ -61,8 +61,8 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = viewModel.port,
-                onValueChange = { viewModel.port = it },
+                value = viewModel.port.value,
+                onValueChange = viewModel::onPortChange,
                 label = { Text("Port", color = Color.White) },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = LocalTextStyle.current.copy(color = Color.White)

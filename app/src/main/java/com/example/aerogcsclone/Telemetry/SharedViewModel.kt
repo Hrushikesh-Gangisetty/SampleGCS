@@ -2,6 +2,7 @@ package com.example.aerogcsclone.Telemetry
 
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -15,8 +16,19 @@ import kotlinx.coroutines.delay
 
 class SharedViewModel : ViewModel() {
 
-    var ipAddress by mutableStateOf("10.0.2.2")
-    var port by mutableStateOf("5762")
+    private val _ipAddress = mutableStateOf("10.0.2.2")
+    val ipAddress: State<String> = _ipAddress
+
+    private val _port = mutableStateOf("5762")
+    val port: State<String> = _port
+
+    fun onIpAddressChange(newIp: String) {
+        _ipAddress.value = newIp
+    }
+
+    fun onPortChange(newPort: String) {
+        _port.value = newPort
+    }
 
     private var repo: MavlinkTelemetryRepository? = null
 
@@ -36,9 +48,9 @@ class SharedViewModel : ViewModel() {
 
     fun connect() {
         viewModelScope.launch {
-            val portInt = port.toIntOrNull()
+            val portInt = port.value.toIntOrNull()
             if (portInt != null) {
-                val newRepo = MavlinkTelemetryRepository(ipAddress, portInt)
+                val newRepo = MavlinkTelemetryRepository(ipAddress.value, portInt)
                 repo = newRepo
                 newRepo.start()
                 newRepo.state.collect {
