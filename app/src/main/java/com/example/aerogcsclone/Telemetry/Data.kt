@@ -24,4 +24,7 @@ data class TelemetryState(
     val mode: String? = null,
     val armed: Boolean = false,
     val armable: Boolean = false,
+    // Mission timer (seconds elapsed since mission start, null if not running)
+    val missionElapsedSec: Long? = null,
+    val missionCompleted: Boolean = false,
 )

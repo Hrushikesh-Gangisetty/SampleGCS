@@ -130,7 +130,14 @@ fun StatusPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Obs Alt: N/A", color = Color.White)
-                Text("Time: N/A", color = Color.White)
+                // Format mission timer
+                val timeStr = telemetryState.missionElapsedSec?.let { sec ->
+                    val h = sec / 3600
+                    val m = (sec % 3600) / 60
+                    val s = sec % 60
+                    if (h > 0) "%02d:%02d".format(h, m) else "%02d:%02d".format(m, s)
+                } ?: "N/A"
+                Text("Time: $timeStr", color = Color.White)
                 Text("Distance: N/A", color = Color.White)
                 Text("Consumed: N/A", color = Color.White)
             }

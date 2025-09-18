@@ -235,6 +235,9 @@ class MavlinkTelemetryRepository(
                 }
         }
         // HEARTBEAT for mode, armed, armable
+        var missionTimerJob: kotlinx.coroutines.Job? = null
+        var lastMode: String? = null
+        var lastArmed: Boolean? = null
         scope.launch {
             mavFrameStream
                 .filter { frame -> state.value.fcuDetected && frame.systemId == fcuSystemId }
@@ -271,6 +274,48 @@ class MavlinkTelemetryRepository(
                         else -> "Unknown"
                     }
                     _state.update { it.copy(armed = armed, mode = mode) }
+
+                    // Mission timer logic
+                    if (lastMode != mode || lastArmed != armed) {
+                        if (mode.equals("Auto", ignoreCase = true) && armed && (lastMode != mode || lastArmed != armed)) {
+                            missionTimerJob?.cancel()
+                            missionTimerJob = scope.launch {
+                                var elapsed = 0L
+                                _state.update { it.copy(missionElapsedSec = 0L, missionCompleted = false) }
+                                while (isActive && state.value.mode?.equals("Auto", ignoreCase = true) == true && state.value.armed) {
+                                    delay(1000)
+                                    elapsed += 1
+                                    _state.update { it.copy(missionElapsedSec = elapsed) }
+                                }
+                                // Mission ended
+                                _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
+                                // Clear mission from FCU
+                                val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                                try {
+                                    connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
+                                    Log.i("MavlinkRepo", "Sent MISSION_CLEAR_ALL after mission completion")
+                                } catch (e: Exception) {
+                                    Log.e("MavlinkRepo", "Failed to send MISSION_CLEAR_ALL after mission completion", e)
+                                }
+                            }
+                        } else if ((lastMode?.equals("Auto", ignoreCase = true) == true && mode != "Auto") ||
+                                   (lastArmed == true && armed == false && mode.equals("Auto", ignoreCase = true))) {
+                            // Mission ended (either mode changed from Auto, or drone disarmed in Auto)
+                            missionTimerJob?.cancel()
+                            missionTimerJob = null
+                            _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
+                            // Clear mission from FCU
+                            val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                            try {
+                                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
+                                Log.i("MavlinkRepo", "Sent MISSION_CLEAR_ALL after mission completion")
+                            } catch (e: Exception) {
+                                Log.e("MavlinkRepo", "Failed to send MISSION_CLEAR_ALL after mission completion", e)
+                            }
+                        }
+                        lastMode = mode
+                        lastArmed = armed
+                    }
                 }
         }
         // SYS_STATUS
