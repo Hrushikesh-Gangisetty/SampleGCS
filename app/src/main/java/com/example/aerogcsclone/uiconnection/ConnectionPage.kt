@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
@@ -33,7 +34,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color(0xFF535350))
             .padding(20.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -66,6 +67,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = LocalTextStyle.current.copy(color = Color.White)
             )
+
 
             Spacer(modifier = Modifier.height(20.dp))
 
