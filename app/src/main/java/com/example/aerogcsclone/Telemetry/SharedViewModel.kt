@@ -13,10 +13,23 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
+import androidx.compose.runtime.State
+
 class SharedViewModel : ViewModel() {
 
-    var ipAddress by mutableStateOf("10.0.2.2")
-    var port by mutableStateOf("5762")
+    private val _ipAddress = mutableStateOf("10.0.2.2")
+    val ipAddress: State<String> = _ipAddress
+
+    private val _port = mutableStateOf("5762")
+    val port: State<String> = _port
+
+    fun onIpAddressChange(newValue: String) {
+        _ipAddress.value = newValue
+    }
+
+    fun onPortChange(newValue: String) {
+        _port.value = newValue
+    }
 
     private var repo: MavlinkTelemetryRepository? = null
 
@@ -36,9 +49,9 @@ class SharedViewModel : ViewModel() {
 
     fun connect() {
         viewModelScope.launch {
-            val portInt = port.toIntOrNull()
+            val portInt = port.value.toIntOrNull()
             if (portInt != null) {
-                val newRepo = MavlinkTelemetryRepository(ipAddress, portInt)
+                val newRepo = MavlinkTelemetryRepository(ipAddress.value, portInt)
                 repo = newRepo
                 newRepo.start()
                 newRepo.state.collect {
