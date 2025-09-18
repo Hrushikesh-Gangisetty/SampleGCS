@@ -370,44 +370,10 @@ fun PlanScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        telemetryViewModel.readMissionFromFcu()
-                        Toast.makeText(
-                            context,
-                            "Requested mission readback (check logs)",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }) {
-                        Text("Read Mission (debug)")
-                    }
-                    Button(onClick = {
-                        telemetryViewModel.startMission { s, e ->
-                            Toast.makeText(
-                                context,
-                                if (s) "Start sent" else (e ?: "Start failed"),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }) {
-                        Text("Start Mission")
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Waypoint list
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(8.dp)
-                ) {
-                    Text("Waypoints:", style = MaterialTheme.typography.titleSmall)
-                    waypoints.forEachIndexed { idx, wp ->
-                        Text("#${idx + 1}: Lat=${wp.x / 1e7}, Lon=${wp.y / 1e7}, Alt=${wp.z}")
-                    }
-                }
             }
         }
     }

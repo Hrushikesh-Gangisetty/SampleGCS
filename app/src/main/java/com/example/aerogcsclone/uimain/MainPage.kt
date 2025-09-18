@@ -32,6 +32,9 @@ fun MainPage(
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
     val context = LocalContext.current
 
+    // Collect uploaded waypoints for display
+    val uploadedWaypoints by telemetryViewModel.uploadedWaypoints.collectAsState()
+
     // Map camera state controlled from parent so refresh can move it
     val cameraPositionState = rememberCameraPositionState()
 
@@ -54,9 +57,10 @@ fun MainPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // Pass cameraPositionState and disable autoCenter so user can pan freely
+            // Pass uploadedWaypoints to GcsMap for blue markers/lines
             GcsMap(
                 telemetryState = telemetryState,
+                waypoints = uploadedWaypoints,
                 mapType = mapType,
                 cameraPositionState = cameraPositionState,
                 autoCenter = false
