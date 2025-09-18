@@ -48,6 +48,11 @@ class MavlinkTelemetryRepository(
     // MAVLink command value for MISSION_CLEAR_ALL
     private val MISSION_CLEAR_ALL_CMD: UInt = 45u
 
+    // For total distance tracking
+    private val positionHistory = mutableListOf<Pair<Double, Double>>()
+    private var totalDistanceMeters: Float = 0f
+    private var lastMissionRunning = false
+
     fun start() {
         val scope = AppScope
 
@@ -212,14 +217,42 @@ class MavlinkTelemetryRepository(
                     val relAltM = gp.relativeAlt / 1000f
                     val lat = gp.lat.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
                     val lon = gp.lon.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
-                    _state.update {
-                        it.copy(
-                            altitudeMsl = altAMSLm,
-                            altitudeRelative = relAltM,
-                            latitude = lat,
-                            longitude = lon
-                        )
+
+                    val missionRunning = state.value.mode?.equals("Auto", ignoreCase = true) == true && state.value.armed
+                    if (missionRunning) {
+                        if (!lastMissionRunning) {
+                            positionHistory.clear()
+                            totalDistanceMeters = 0f
+                        }
+                        if (lat != null && lon != null) {
+                            if (positionHistory.isNotEmpty()) {
+                                val (prevLat, prevLon) = positionHistory.last()
+                                val dist = haversine(prevLat, prevLon, lat, lon)
+                                totalDistanceMeters += dist
+                            }
+                            positionHistory.add(lat to lon)
+                        }
+                        _state.update {
+                            it.copy(
+                                altitudeMsl = altAMSLm,
+                                altitudeRelative = relAltM,
+                                latitude = lat,
+                                longitude = lon,
+                                totalDistanceMeters = totalDistanceMeters
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                altitudeMsl = altAMSLm,
+                                altitudeRelative = relAltM,
+                                latitude = lat,
+                                longitude = lon,
+                                totalDistanceMeters = if (positionHistory.isNotEmpty()) totalDistanceMeters else null
+                            )
+                        }
                     }
+                    lastMissionRunning = missionRunning
                 }
         }
 
@@ -796,5 +829,17 @@ class MavlinkTelemetryRepository(
             param7 = 0f
         )
         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, cmd)
+    }
+
+    // Haversine formula for distance in meters
+    private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val R = 6371000.0 // Earth radius in meters
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        return (R * c).toFloat()
     }
 }

@@ -138,7 +138,12 @@ fun StatusPanel(
                     if (h > 0) "%02d:%02d".format(h, m) else "%02d:%02d".format(m, s)
                 } ?: "N/A"
                 Text("Time: $timeStr", color = Color.White)
-                Text("Distance: N/A", color = Color.White)
+                // Format total distance
+                val distStr = telemetryState.totalDistanceMeters?.let { dist ->
+                    if (dist < 1000f) "%.0f m".format(dist)
+                    else "%.2f km".format(dist / 1000f)
+                } ?: "N/A"
+                Text("Distance: $distStr", color = Color.White)
                 Text("Consumed: N/A", color = Color.White)
             }
         }
