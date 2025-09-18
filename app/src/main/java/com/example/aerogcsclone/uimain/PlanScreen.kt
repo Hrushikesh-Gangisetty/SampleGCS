@@ -274,7 +274,78 @@ fun PlanScreen(
             ) {
                 Button(
                     onClick = {
-                        telemetryViewModel.uploadMission(waypoints) { success, error ->
+                        // Build correct MAVLink mission plan
+                        val builtMission = mutableListOf<MissionItemInt>()
+                        val homeLat = telemetryState.latitude ?: 0.0
+                        val homeLon = telemetryState.longitude ?: 0.0
+                        val homeAlt = telemetryState.altitudeMsl ?: 10f
+
+                        // Sequence 0: Home position as NAV_WAYPOINT
+                        builtMission.add(
+                            MissionItemInt(
+                                targetSystem = 0u,
+                                targetComponent = 0u,
+                                seq = 0u,
+                                frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                current = 1u, // True for first item
+                                autocontinue = 1u,
+                                param1 = 0f,
+                                param2 = 0f,
+                                param3 = 0f,
+                                param4 = 0f,
+                                x = (homeLat * 1E7).toInt(),
+                                y = (homeLon * 1E7).toInt(),
+                                z = homeAlt
+                            )
+                        )
+
+                        // Sequence 1: Takeoff at home position
+                        builtMission.add(
+                            MissionItemInt(
+                                targetSystem = 0u,
+                                targetComponent = 0u,
+                                seq = 1u,
+                                frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
+                                current = 0u,
+                                autocontinue = 1u,
+                                param1 = 0f,
+                                param2 = 0f,
+                                param3 = 0f,
+                                param4 = 0f,
+                                x = (homeLat * 1E7).toInt(),
+                                y = (homeLon * 1E7).toInt(),
+                                z = 10f // Takeoff altitude
+                            )
+                        )
+
+                        // Sequence 2+: User waypoints
+                        points.forEachIndexed { idx, latLng ->
+                            val seq = idx + 2
+                            val isLast = idx == points.lastIndex
+                            val altitude = 10f // You may want to allow user to set this per waypoint
+                            builtMission.add(
+                                MissionItemInt(
+                                    targetSystem = 0u,
+                                    targetComponent = 0u,
+                                    seq = seq.toUShort(),
+                                    frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                    command = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                    current = 0u,
+                                    autocontinue = 1u,
+                                    param1 = 0f,
+                                    param2 = 0f,
+                                    param3 = 0f,
+                                    param4 = 0f,
+                                    x = (latLng.latitude * 1E7).toInt(),
+                                    y = (latLng.longitude * 1E7).toInt(),
+                                    z = altitude
+                                )
+                            )
+                        }
+
+                        telemetryViewModel.uploadMission(builtMission) { success, error ->
                             if (success) {
                                 Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT)
                                     .show()
@@ -291,10 +362,10 @@ fun PlanScreen(
                             }
                         }
                     },
-                    enabled = waypoints.isNotEmpty(),
+                    enabled = points.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Upload Mission (${waypoints.size})")
+                    Text("Upload Mission (${points.size})")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
