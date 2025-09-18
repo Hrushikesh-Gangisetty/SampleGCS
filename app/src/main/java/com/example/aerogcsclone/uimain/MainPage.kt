@@ -60,7 +60,6 @@ fun MainPage(
             // Pass uploadedWaypoints to GcsMap for blue markers/lines
             GcsMap(
                 telemetryState = telemetryState,
-                waypoints = uploadedWaypoints,
                 mapType = mapType,
                 cameraPositionState = cameraPositionState,
                 autoCenter = false
