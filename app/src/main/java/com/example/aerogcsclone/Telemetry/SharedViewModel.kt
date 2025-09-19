@@ -80,14 +80,6 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                if (_telemetryState.value.missionCompleted) {
-                    Log.w("SharedVM", "Mission already completed, cannot upload new mission until reset")
-                    missionUploaded = false
-                    lastUploadedCount = 0
-                    onResult(false, "Mission already completed. Please reset or reconnect before uploading a new mission.")
-                    return@launch
-                }
-
                 if (!_telemetryState.value.fcuDetected) {
                     Log.w("SharedVM", "FCU not detected, aborting mission upload")
                     missionUploaded = false
@@ -96,6 +88,7 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
+                // Always clear previous mission in FCU before uploading new one (handled in repo)
                 Log.i("SharedVM", "Starting mission upload to FCU...")
                 val success = repo?.uploadMissionWithAck(missionItems) ?: false
                 missionUploaded = success

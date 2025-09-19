@@ -322,14 +322,7 @@ class MavlinkTelemetryRepository(
                                 }
                                 // Mission ended
                                 _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
-                                // Clear mission from FCU
-                                val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
-                                try {
-                                    connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
-                                    Log.i("MavlinkRepo", "Sent MISSION_CLEAR_ALL after mission completion")
-                                } catch (e: Exception) {
-                                    Log.e("MavlinkRepo", "Failed to send MISSION_CLEAR_ALL after mission completion", e)
-                                }
+                                // Do NOT clear mission from FCU here
                             }
                         } else if ((lastMode?.equals("Auto", ignoreCase = true) == true && mode != "Auto") ||
                                    (lastArmed == true && armed == false && mode.equals("Auto", ignoreCase = true))) {
@@ -337,14 +330,7 @@ class MavlinkTelemetryRepository(
                             missionTimerJob?.cancel()
                             missionTimerJob = null
                             _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
-                            // Clear mission from FCU
-                            val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
-                            try {
-                                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
-                                Log.i("MavlinkRepo", "Sent MISSION_CLEAR_ALL after mission completion")
-                            } catch (e: Exception) {
-                                Log.e("MavlinkRepo", "Failed to send MISSION_CLEAR_ALL after mission completion", e)
-                            }
+                            // Do NOT clear mission from FCU here
                         }
                         lastMode = mode
                         lastArmed = armed
