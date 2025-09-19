@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.math.absoluteValue
 
 // MAVLink flight modes (ArduPilot values)
 object MavMode {
@@ -815,6 +814,15 @@ class MavlinkTelemetryRepository(
             param7 = 0f
         )
         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, cmd)
+    }
+
+    suspend fun closeConnection() {
+        try {
+            // Attempt to close the TCP connection gracefully
+            connection.close()
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Error closing TCP connection", e)
+        }
     }
 
     // Haversine formula for distance in meters

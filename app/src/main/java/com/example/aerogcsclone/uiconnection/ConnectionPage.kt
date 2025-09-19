@@ -7,11 +7,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.navigation.Screen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -20,14 +22,52 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
     var isConnecting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
+    var connectionJob by remember { mutableStateOf<Job?>(null) }
+    var showPopup by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.isConnected.collectLatest { isConnected ->
             if (isConnected) {
+                isConnecting = false
+                connectionJob?.cancel()
                 navController.navigate(Screen.Main.route) {
                     popUpTo(Screen.Connection.route) { inclusive = true }
                 }
             }
+        }
+    }
+
+    fun startConnection(autoRetry: Boolean = false) {
+        isConnecting = true
+        errorMessage = ""
+        connectionJob?.cancel()
+        connectionJob = coroutineScope.launch {
+            var attempts = 0
+            val maxAttempts = if (autoRetry) 3 else 1
+            while (attempts < maxAttempts && !viewModel.isConnected.value) {
+                try {
+                    viewModel.connect()
+                } catch (e: Exception) {
+                    errorMessage = e.message ?: "Connection failed"
+                }
+                attempts++
+                if (!viewModel.isConnected.value && autoRetry && attempts < maxAttempts) {
+                    delay(5000)
+                }
+            }
+            if (!viewModel.isConnected.value) {
+                isConnecting = false
+                showPopup = true
+            }
+        }
+    }
+
+    fun cancelConnection() {
+        connectionJob?.cancel()
+        isConnecting = false
+        errorMessage = ""
+        coroutineScope.launch {
+            viewModel.cancelConnection()
         }
     }
 
@@ -71,32 +111,52 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                 textStyle = LocalTextStyle.current.copy(color = Color.White)
             )
 
-
             Spacer(modifier = Modifier.height(20.dp))
 
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Button(
+                    onClick = { startConnection(autoRetry = true) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isConnecting
+                ) {
+                    Text(if (isConnecting) "Connecting..." else "Connect")
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = { startConnection(autoRetry = false) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isConnecting
+                ) {
+                    Text("Retry")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Button(
-                onClick = {
-                    isConnecting = true
-                    errorMessage = ""
-                    coroutineScope.launch {
-                        try {
-                            viewModel.connect()
-                        } catch (e: Exception) {
-                            errorMessage = e.message ?: "Connection failed"
-                            isConnecting = false
-                        }
-                    }
-                },
+                onClick = { cancelConnection() },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isConnecting
+                enabled = isConnecting
             ) {
-                Text(if (isConnecting) "Connecting..." else "Connect")
+                Text("Cancel")
             }
 
             if (errorMessage.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(errorMessage, color = MaterialTheme.colorScheme.error)
             }
+        }
+        if (showPopup) {
+            AlertDialog(
+                onDismissRequest = { showPopup = false },
+                title = { Text("Connection Failed") },
+                text = { Text("Unable to connect to the drone after multiple attempts.") },
+                confirmButton = {
+                    Button(onClick = { showPopup = false }) {
+                        Text("OK")
+                    }
+                }
+            )
         }
     }
 }

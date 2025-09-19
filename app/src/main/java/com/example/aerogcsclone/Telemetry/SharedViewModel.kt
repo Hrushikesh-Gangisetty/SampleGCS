@@ -269,4 +269,18 @@ class SharedViewModel : ViewModel() {
             }
         }
     }
+
+    suspend fun cancelConnection() {
+        // Cancel any ongoing connection coroutine (handled by ConnectionPage)
+        // Attempt to close/flush the repo's socket/connection if possible
+        repo?.let {
+            try {
+                it.closeConnection()
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Error closing connection", e)
+            }
+        }
+        repo = null
+        _telemetryState.value = TelemetryState() // Reset state
+    }
 }
