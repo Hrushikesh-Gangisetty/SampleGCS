@@ -41,6 +41,17 @@ fun MainPage(
     // Map type state
     var mapType by remember { mutableStateOf(MapType.SATELLITE) }
 
+    // Ensure we center the map once when MainPage opens if we have telemetry
+    var centeredOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(telemetryState.latitude, telemetryState.longitude) {
+        val lat = telemetryState.latitude
+        val lon = telemetryState.longitude
+        if (!centeredOnce && lat != null && lon != null) {
+            cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16f))
+            centeredOnce = true
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
