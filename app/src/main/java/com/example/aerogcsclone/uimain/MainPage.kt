@@ -22,6 +22,7 @@ import android.widget.Toast
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
+import com.example.aerogcsclone.utils.formatSpeed
 
 @Composable
 fun MainPage(
@@ -134,7 +135,7 @@ fun StatusPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
-                Text("Speed: ${telemetryState.groundspeed}", color = Color.White)
+                Text("Speed: ${formatSpeed(telemetryState.groundspeed)}", color = Color.White)
                 Text("Area: N/A", color = Color.White)
                 Text("Flow: N/A", color = Color.White)
             }
