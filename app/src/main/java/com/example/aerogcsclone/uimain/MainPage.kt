@@ -134,7 +134,7 @@ fun StatusPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
-                Text("Speed: ${telemetryState.groundspeed ?: "N/A"}", color = Color.White)
+                Text("Speed: ${telemetryState.groundspeed}", color = Color.White)
                 Text("Area: N/A", color = Color.White)
                 Text("Flow: N/A", color = Color.White)
             }

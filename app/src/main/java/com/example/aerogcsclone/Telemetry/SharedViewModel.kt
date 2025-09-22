@@ -283,4 +283,6 @@ class SharedViewModel : ViewModel() {
         repo = null
         _telemetryState.value = TelemetryState() // Reset state
     }
+
+
 }
