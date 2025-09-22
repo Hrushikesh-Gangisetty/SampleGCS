@@ -134,7 +134,7 @@ fun StatusPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
-                Text("Speed: ${telemetryState.groundspeed ?: "N/A"}", color = Color.White)
+                Text("Speed: ${formatSpeed(telemetryState.groundspeed)}", color = Color.White)
                 Text("Area: N/A", color = Color.White)
                 Text("Flow: N/A", color = Color.White)
             }
@@ -161,6 +161,16 @@ fun StatusPanel(
                 Text("Consumed: N/A", color = Color.White)
             }
         }
+    }
+}
+
+private fun formatSpeed(speed: Float?): String {
+    if (speed == null) return "N/A"
+    return when {
+        speed < 0.01f -> "%.2f mm/s".format(speed * 1000)
+        speed < 1f -> "%.2f cm/s".format(speed * 100)
+        speed < 1000f -> "%.2f m/s".format(speed)
+        else -> "%.2f km/s".format(speed / 1000)
     }
 }
 
