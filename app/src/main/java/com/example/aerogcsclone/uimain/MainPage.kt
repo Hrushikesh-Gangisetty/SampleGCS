@@ -19,6 +19,7 @@ import com.example.aerogcsclone.authentication.AuthViewModel
 import com.google.maps.android.compose.MapType
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.compose.ui.unit.sp
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
@@ -128,30 +129,30 @@ fun StatusPanel(
 ) {
     Surface(
         modifier = modifier
-            .width(500.dp)
-            .height(120.dp),
+            .width(340.dp)
+            .height(64.dp),
         color = Color.Black.copy(alpha = 0.6f),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
-                Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White)
-                Text("Area: N/A", color = Color.White)
-                Text("Flow: N/A", color = Color.White)
+                Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White, fontSize = 13.sp)
+                Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White, fontSize = 13.sp)
+                Text("Area: N/A", color = Color.White, fontSize = 13.sp)
+                Text("Flow: N/A", color = Color.White, fontSize = 13.sp)
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Obs Alt: N/A", color = Color.White)
+                Text("Obs Alt: N/A", color = Color.White, fontSize = 13.sp)
                 // Format mission timer
                 val timeStr = telemetryState.missionElapsedSec?.let { sec ->
                     val h = sec / 3600
@@ -159,14 +160,14 @@ fun StatusPanel(
                     val s = sec % 60
                     if (h > 0) "%02d:%02d".format(h, m) else "%02d:%02d".format(m, s)
                 } ?: "N/A"
-                Text("Time: $timeStr", color = Color.White)
+                Text("Time: $timeStr", color = Color.White, fontSize = 13.sp)
                 // Format total distance
                 val distStr = telemetryState.totalDistanceMeters?.let { dist ->
                     if (dist < 1000f) "%.0f m".format(dist)
                     else "%.2f km".format(dist / 1000f)
                 } ?: "N/A"
-                Text("Distance: $distStr", color = Color.White)
-                Text("Consumed: N/A", color = Color.White)
+                Text("Distance: $distStr", color = Color.White, fontSize = 13.sp)
+                Text("Consumed: N/A", color = Color.White, fontSize = 13.sp)
             }
         }
     }
