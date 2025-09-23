@@ -120,55 +120,47 @@ fun StatusPanel(
 ) {
     Surface(
         modifier = modifier
-            .width(380.dp)
-            .height(100.dp),
+            .width(500.dp)
+            .height(120.dp),
         color = Color.Black.copy(alpha = 0.6f),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                InfoItem("Alt", "${telemetryState.altitudeRelative ?: "N/A"}")
-                InfoItem("Speed", "${telemetryState.formattedGroundspeed ?: "N/A"}")
-                InfoItem("Area", "N/A")
-                InfoItem("Flow", "N/A")
+                Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
+                Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White)
+                Text("Area: N/A", color = Color.White)
+                Text("Flow: N/A", color = Color.White)
             }
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                InfoItem("Obs Alt", "N/A")
+                Text("Obs Alt: N/A", color = Color.White)
+                // Format mission timer
                 val timeStr = telemetryState.missionElapsedSec?.let { sec ->
                     val h = sec / 3600
                     val m = (sec % 3600) / 60
                     val s = sec % 60
                     if (h > 0) "%02d:%02d".format(h, m) else "%02d:%02d".format(m, s)
                 } ?: "N/A"
-                InfoItem("Time", timeStr)
+                Text("Time: $timeStr", color = Color.White)
+                // Format total distance
                 val distStr = telemetryState.totalDistanceMeters?.let { dist ->
                     if (dist < 1000f) "%.0f m".format(dist)
                     else "%.2f km".format(dist / 1000f)
                 } ?: "N/A"
-                InfoItem("Distance", distStr)
-                InfoItem("Consumed", "N/A")
+                Text("Distance: $distStr", color = Color.White)
+                Text("Consumed: N/A", color = Color.White)
             }
         }
-    }
-}
-
-@Composable
-fun RowScope.InfoItem(label: String, value: String) {
-    Column(
-        modifier = Modifier.weight(1f),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = label, color = Color.White, style = MaterialTheme.typography.labelSmall)
-        Text(text = value, color = Color.White, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -184,18 +176,18 @@ fun FloatingButtons(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        FloatingActionButton(onClick = { onStartMission() }, containerColor = Color.Blue.copy(alpha = 0.6f)) {
+        FloatingActionButton(onClick = { onStartMission() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
         }
-        FloatingActionButton(onClick = { }, containerColor = Color.Blue.copy(alpha = 0.6f)) {
+        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
         }
-        FloatingActionButton(onClick = { onRefresh() }, containerColor = Color.Blue.copy(alpha = 0.6f)) {
+        FloatingActionButton(onClick = { onRefresh() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
             Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
         }
         FloatingActionButton(
             onClick = { onToggleMapType() },
-            containerColor = Color.Blue.copy(alpha = 0.6f)
+            containerColor = Color.Black.copy(alpha = 0.7f)
         ) {
             Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
         }
