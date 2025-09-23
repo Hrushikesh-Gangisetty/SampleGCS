@@ -30,5 +30,6 @@ data class TelemetryState(
     val totalDistanceMeters: Float? = null,
     // Formatted speed values for UI
     val formattedAirspeed: String? = null,
-    val formattedGroundspeed: String? = null
+    val formattedGroundspeed: String? = null,
+    val heading: Float? = null
 )

@@ -201,7 +201,8 @@ class MavlinkTelemetryRepository(
                             airspeed = hud.airspeed.takeIf { v -> v > 0f },
                             groundspeed = hud.groundspeed.takeIf { v -> v > 0f },
                             formattedAirspeed = formatSpeed(hud.airspeed.takeIf { v -> v > 0f }),
-                            formattedGroundspeed = formatSpeed(hud.groundspeed.takeIf { v -> v > 0f })
+                            formattedGroundspeed = formatSpeed(hud.groundspeed.takeIf { v -> v > 0f }),
+                            heading = hud.heading.toFloat()
                         )
                     }
                 }
@@ -853,3 +854,4 @@ class MavlinkTelemetryRepository(
 
 
 }
+

@@ -80,7 +80,8 @@ fun MainPage(
                 gridWaypoints = gridWaypoints,
                 mapType = mapType,
                 cameraPositionState = cameraPositionState,
-                autoCenter = false
+                autoCenter = false,
+                heading = telemetryState.heading
             )
 
             StatusPanel(

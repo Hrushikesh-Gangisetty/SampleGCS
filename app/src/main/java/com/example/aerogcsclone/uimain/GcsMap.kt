@@ -26,7 +26,8 @@ fun GcsMap(
     // Grid survey parameters
     surveyPolygon: List<LatLng> = emptyList(),
     gridLines: List<Pair<LatLng, LatLng>> = emptyList(),
-    gridWaypoints: List<LatLng> = emptyList()
+    gridWaypoints: List<LatLng> = emptyList(),
+    heading: Float? = null
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -76,7 +77,8 @@ fun GcsMap(
                 state = MarkerState(position = LatLng(lat, lon)),
                 title = "Drone",
                 icon = droneIcon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                anchor = Offset(0.5f, 0.5f)
+                anchor = Offset(0.5f, 0.5f),
+                rotation = heading ?: 0f
             )
         }
 
