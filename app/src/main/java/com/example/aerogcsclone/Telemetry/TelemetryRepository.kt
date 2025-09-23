@@ -199,7 +199,9 @@ class MavlinkTelemetryRepository(
                         it.copy(
                             altitudeMsl = hud.alt,
                             airspeed = hud.airspeed.takeIf { v -> v > 0f },
-                            groundspeed = hud.groundspeed.takeIf { v -> v > 0f }
+                            groundspeed = hud.groundspeed.takeIf { v -> v > 0f },
+                            formattedAirspeed = formatSpeed(hud.airspeed.takeIf { v -> v > 0f }),
+                            formattedGroundspeed = formatSpeed(hud.groundspeed.takeIf { v -> v > 0f })
                         )
                     }
                 }
@@ -835,6 +837,18 @@ class MavlinkTelemetryRepository(
                 Math.sin(dLon / 2) * Math.sin(dLon / 2)
         val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
         return (R * c).toFloat()
+    }
+
+    // Format speed for human-readable display
+    private fun formatSpeed(speed: Float?): String? {
+        if (speed == null) return null
+        return when {
+//            speed >= 1000f -> String.format("%.2f km/s", speed / 1000f)
+            speed >= 1f -> String.format("%.2f m/s", speed)
+//            speed >= 0.01f -> String.format("%.1f cm/s", speed * 100f)
+//            speed > 0f -> String.format("%.1f mm/s", speed * 1000f)
+            else -> "0 m/s"
+        }
     }
 
 

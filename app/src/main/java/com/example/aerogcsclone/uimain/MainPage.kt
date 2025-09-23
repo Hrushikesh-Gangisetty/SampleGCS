@@ -134,7 +134,7 @@ fun StatusPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White)
-                Text("Speed: ${telemetryState.groundspeed}", color = Color.White)
+                Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White)
                 Text("Area: N/A", color = Color.White)
                 Text("Flow: N/A", color = Color.White)
             }
@@ -191,5 +191,16 @@ fun FloatingButtons(
         ) {
             Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
         }
+    }
+}
+
+// Add this helper at the bottom of the file (or near the composable)
+private fun formatSpeedHumanReadable(speed: Float?): String {
+    if (speed == null || speed < 0f) return "--"
+    return when {
+        speed < 0.01f -> String.format("%.0f mm/s", speed * 1000)
+        speed < 1f -> String.format("%.1f cm/s", speed * 100)
+        speed < 100f -> String.format("%.2f m/s", speed)
+        else -> String.format("%.2f km/h", speed * 3.6f)
     }
 }
