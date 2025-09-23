@@ -1,4 +1,3 @@
-
 package com.example.aerogcsclone.uimain
 
 import android.graphics.Bitmap
@@ -23,14 +22,18 @@ fun GcsMap(
     onMapClick: (LatLng) -> Unit = {},
     cameraPositionState: CameraPositionState? = null,
     mapType: MapType = MapType.NORMAL,
-    autoCenter: Boolean = true
+    autoCenter: Boolean = true,
+    // Grid survey parameters
+    surveyPolygon: List<LatLng> = emptyList(),
+    gridLines: List<Pair<LatLng, LatLng>> = emptyList(),
+    gridWaypoints: List<LatLng> = emptyList()
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
 
     val visitedPositions = remember { mutableStateListOf<LatLng>() }
 
-    // Load quadcopter drawable from res/drawable/ic_quadcopter.png and scale to dp-based size
+    // Load quadcopter drawable from res/drawable and scale to dp-based size
     val droneIcon = remember {
         runCatching {
             val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.d_image_prev_ui)
@@ -77,12 +80,52 @@ fun GcsMap(
             )
         }
 
-        // Waypoint markers and planned route (blue)
-        points.forEachIndexed { index, point ->
-            Marker(state = MarkerState(position = point), title = "WP ${index + 1}")
+        // Regular waypoint markers and planned route (blue)
+        if (points.isNotEmpty() && surveyPolygon.isEmpty()) {
+            points.forEachIndexed { index, point ->
+                Marker(state = MarkerState(position = point), title = "WP ${index + 1}")
+            }
+            if (points.size > 1) {
+                Polyline(points = points, width = 4f, color = Color.Blue)
+            }
         }
-        if (points.size > 1) {
-            Polyline(points = points, width = 4f, color = Color.Blue)
+
+        // Survey polygon outline (purple)
+        if (surveyPolygon.isNotEmpty()) {
+            surveyPolygon.forEachIndexed { index, point ->
+                Marker(
+                    state = MarkerState(position = point),
+                    title = "P${index + 1}",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)
+                )
+            }
+
+            if (surveyPolygon.size > 2) {
+                // Close the polygon by connecting last point to first
+                val closedPolygon = surveyPolygon + surveyPolygon.first()
+                Polyline(points = closedPolygon, width = 3f, color = Color.Magenta)
+            } else if (surveyPolygon.size == 2) {
+                Polyline(points = surveyPolygon, width = 3f, color = Color.Magenta)
+            }
+        }
+
+        // Grid lines (green)
+        gridLines.forEach { (start, end) ->
+            Polyline(
+                points = listOf(start, end),
+                width = 2f,
+                color = Color.Green
+            )
+        }
+
+        // Grid waypoints (small orange markers)
+        gridWaypoints.forEachIndexed { index, waypoint ->
+            Marker(
+                state = MarkerState(position = waypoint),
+                title = "G${index + 1}",
+                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE),
+                anchor = Offset(0.5f, 0.5f)
+            )
         }
 
         // Red polyline showing the drone's traveled path
@@ -90,8 +133,8 @@ fun GcsMap(
             Polyline(points = visitedPositions.toList(), width = 6f, color = Color.Red)
         }
 
-        // Optional grid overlay
-        if (points.size >= 4) {
+        // Optional grid overlay for regular waypoints
+        if (points.size >= 4 && surveyPolygon.isEmpty()) {
             val lats = points.map { it.latitude }
             val lons = points.map { it.longitude }
             val minLat = lats.minOrNull() ?: 0.0

@@ -4,4 +4,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-object AppScope : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO)
+/**
+ * Application-level coroutine scope for background operations
+ * Used by TelemetryRepository and other long-running operations
+ */
+object AppScope : CoroutineScope {
+    override val coroutineContext = SupervisorJob() + Dispatchers.IO
+}
