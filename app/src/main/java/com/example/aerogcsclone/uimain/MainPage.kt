@@ -138,7 +138,7 @@ fun StatusPanel(
                 Text("Area: N/A", color = Color.White)
                 Text("Flow: N/A", color = Color.White)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
