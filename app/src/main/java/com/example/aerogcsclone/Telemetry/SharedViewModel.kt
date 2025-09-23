@@ -47,6 +47,23 @@ class SharedViewModel : ViewModel() {
     private val _uploadedWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val uploadedWaypoints: StateFlow<List<LatLng>> = _uploadedWaypoints.asStateFlow()
 
+    // Store survey polygon for grid missions
+    private val _surveyPolygon = MutableStateFlow<List<LatLng>>(emptyList())
+    val surveyPolygon: StateFlow<List<LatLng>> = _surveyPolygon.asStateFlow()
+
+    // Store grid lines for grid missions
+    private val _gridLines = MutableStateFlow<List<Pair<LatLng, LatLng>>>(emptyList())
+    val gridLines: StateFlow<List<Pair<LatLng, LatLng>>> = _gridLines.asStateFlow()
+
+    // Store grid waypoints for grid missions
+    private val _gridWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
+    val gridWaypoints: StateFlow<List<LatLng>> = _gridWaypoints.asStateFlow()
+
+    // Setters for plan screen to update these
+    fun setSurveyPolygon(polygon: List<LatLng>) { _surveyPolygon.value = polygon }
+    fun setGridLines(lines: List<Pair<LatLng, LatLng>>) { _gridLines.value = lines }
+    fun setGridWaypoints(waypoints: List<LatLng>) { _gridWaypoints.value = waypoints }
+
     fun connect() {
         viewModelScope.launch {
             val portInt = port.value.toIntOrNull()

@@ -34,6 +34,9 @@ fun MainPage(
 
     // Collect uploaded waypoints for display
     val uploadedWaypoints by telemetryViewModel.uploadedWaypoints.collectAsState()
+    val surveyPolygon by telemetryViewModel.surveyPolygon.collectAsState()
+    val gridLines by telemetryViewModel.gridLines.collectAsState()
+    val gridWaypoints by telemetryViewModel.gridWaypoints.collectAsState()
 
     // Map camera state controlled from parent so refresh can move it
     val cameraPositionState = rememberCameraPositionState()
@@ -71,6 +74,10 @@ fun MainPage(
             // Pass uploadedWaypoints to GcsMap for blue markers/lines
             GcsMap(
                 telemetryState = telemetryState,
+                points = uploadedWaypoints,
+                surveyPolygon = surveyPolygon,
+                gridLines = gridLines,
+                gridWaypoints = gridWaypoints,
                 mapType = mapType,
                 cameraPositionState = cameraPositionState,
                 autoCenter = false
