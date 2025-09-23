@@ -452,7 +452,7 @@ fun PlanScreen(
                             }
                         },
                         enabled = gridResult?.waypoints?.isNotEmpty() == true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.widthIn(min = 180.dp, max = 340.dp).align(Alignment.CenterHorizontally)
                     ) {
                         val count = gridResult?.waypoints?.size ?: 0
                         Text("Upload Grid Survey ($count waypoints)")
@@ -516,7 +516,7 @@ fun PlanScreen(
                             }
                         },
                         enabled = points.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.widthIn(min = 180.dp, max = 340.dp).align(Alignment.CenterHorizontally)
                     ) {
                         Text("Upload Mission (${points.size})")
                     }
