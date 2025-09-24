@@ -316,23 +316,23 @@ class MavlinkTelemetryRepository(
                             missionTimerJob?.cancel()
                             missionTimerJob = scope.launch {
                                 var elapsed = 0L
-                                _state.update { it.copy(missionElapsedSec = 0L, missionCompleted = false) }
+                                _state.update { it.copy(missionElapsedSec = 0L, missionCompleted = false, lastMissionElapsedSec = null) }
                                 while (isActive && state.value.mode?.equals("Auto", ignoreCase = true) == true && state.value.armed) {
                                     delay(1000)
                                     elapsed += 1
                                     _state.update { it.copy(missionElapsedSec = elapsed) }
                                 }
-                                // Mission ended
-                                _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
-                                // Do NOT clear mission from FCU here
+                                // Mission ended: store last elapsed time
+                                val lastElapsed = state.value.missionElapsedSec
+                                _state.update { it.copy(missionElapsedSec = null, missionCompleted = true, lastMissionElapsedSec = lastElapsed) }
                             }
                         } else if ((lastMode?.equals("Auto", ignoreCase = true) == true && mode != "Auto") ||
                                    (lastArmed == true && armed == false && mode.equals("Auto", ignoreCase = true))) {
                             // Mission ended (either mode changed from Auto, or drone disarmed in Auto)
                             missionTimerJob?.cancel()
                             missionTimerJob = null
-                            _state.update { it.copy(missionElapsedSec = null, missionCompleted = true) }
-                            // Do NOT clear mission from FCU here
+                            val lastElapsed = state.value.missionElapsedSec
+                            _state.update { it.copy(missionElapsedSec = null, missionCompleted = true, lastMissionElapsedSec = lastElapsed) }
                         }
                         lastMode = mode
                         lastArmed = armed

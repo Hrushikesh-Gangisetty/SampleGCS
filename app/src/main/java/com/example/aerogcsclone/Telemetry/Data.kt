@@ -26,6 +26,7 @@ data class TelemetryState(
     val armable: Boolean = false,
     // Mission timer (seconds elapsed since mission start, null if not running)
     val missionElapsedSec: Long? = null,
+    val lastMissionElapsedSec: Long? = null,
     val missionCompleted: Boolean = false,
     val totalDistanceMeters: Float? = null,
     // Formatted speed values for UI

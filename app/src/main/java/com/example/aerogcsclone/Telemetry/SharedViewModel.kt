@@ -114,9 +114,8 @@ class SharedViewModel : ViewModel() {
 
                     // Convert MissionItemInt to LatLng for display
                     val waypoints = missionItems.filter { item ->
-                        // Only show real waypoints (exclude RTL, x=0/y=0, and non-NAV_WAYPOINT/NAV_TAKEOFF)
-                        (item.command.value == 16u || item.command.value == 22u) && // NAV_WAYPOINT or NAV_TAKEOFF
-                        !(item.x == 0 && item.y == 0)
+                        // Show all waypoints except RTL (command 20u) and points with x=0/y=0
+                        item.command.value != 20u && !(item.x == 0 && item.y == 0)
                     }.map { item ->
                         LatLng(item.x / 1E7, item.y / 1E7)
                     }
@@ -142,6 +141,8 @@ class SharedViewModel : ViewModel() {
 
     fun startMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
+            // Reset missionCompleted and missionElapsedSec before starting a new mission
+            _telemetryState.value = _telemetryState.value.copy(missionCompleted = false, missionElapsedSec = null)
             try {
                 Log.i("SharedVM", "Starting mission start sequence...")
 

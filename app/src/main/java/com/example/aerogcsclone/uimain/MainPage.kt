@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
+import androidx.compose.ui.text.font.FontWeight
+
 
 @Composable
 fun MainPage(
@@ -116,11 +118,69 @@ fun MainPage(
                     } else {
                         Toast.makeText(context, "No GPS location available", Toast.LENGTH_SHORT).show()
                     }
+                })
+        }
+
+        // Mission Complete Popup (must be inside the composable)
+        var showMissionCompleteDialog by remember { mutableStateOf(false) }
+        var lastMissionTime by remember { mutableStateOf<Long?>(null) }
+        var lastMissionDistance by remember { mutableStateOf<Float?>(null) }
+        var prevMissionCompleted by remember { mutableStateOf(false) }
+        var prevMissionElapsedSec by remember { mutableStateOf<Long?>(null) }
+        var missionJustCompleted by remember { mutableStateOf(false) }
+        LaunchedEffect(telemetryState.missionCompleted, telemetryState.missionElapsedSec) {
+            // Only show dialog if missionCompleted just transitioned to true AND timer is not running (i.e., mission just ended)
+            val completedNow = !prevMissionCompleted && telemetryState.missionCompleted && telemetryState.missionElapsedSec == null && prevMissionElapsedSec != null
+            if (completedNow) {
+                lastMissionTime = telemetryState.lastMissionElapsedSec
+                lastMissionDistance = telemetryState.totalDistanceMeters
+                missionJustCompleted = true
+            }
+            prevMissionCompleted = telemetryState.missionCompleted
+            prevMissionElapsedSec = telemetryState.missionElapsedSec
+        }
+        if (missionJustCompleted) {
+            AlertDialog(
+                onDismissRequest = {
+                    missionJustCompleted = false
+                    showMissionCompleteDialog = false
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            missionJustCompleted = false
+                            showMissionCompleteDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("OK", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                },
+                title = {
+                    Text("Mission completed!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val timeStr = lastMissionTime?.let { sec ->
+                            val h = sec / 3600
+                            val m = (sec % 3600) / 60
+                            val s = sec % 60
+                            if (h > 0) "%02d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+                        } ?: "N/A"
+                        val distStr = lastMissionDistance?.let { dist ->
+                            if (dist < 1000f) "%.0f m".format(dist)
+                            else "%.2f km".format(dist / 1000f)
+                        } ?: "N/A"
+                        Text("Total time taken: $timeStr", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Total distance covered: $distStr", style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             )
         }
     }
 }
+
 
 @Composable
 fun StatusPanel(
@@ -155,10 +215,9 @@ fun StatusPanel(
                 Text("Obs Alt: N/A", color = Color.White, fontSize = 13.sp)
                 // Format mission timer
                 val timeStr = telemetryState.missionElapsedSec?.let { sec ->
-                    val h = sec / 3600
                     val m = (sec % 3600) / 60
                     val s = sec % 60
-                    if (h > 0) "%02d:%02d".format(h, m) else "%02d:%02d".format(m, s)
+                    "%02d:%02d".format(m, s)
                 } ?: "N/A"
                 Text("Time: $timeStr", color = Color.White, fontSize = 13.sp)
                 // Format total distance
@@ -204,12 +263,12 @@ fun FloatingButtons(
 }
 
 // Add this helper at the bottom of the file (or near the composable)
-private fun formatSpeedHumanReadable(speed: Float?): String {
+fun formatSpeedHumanReadable(speed: Float?): String {
     if (speed == null || speed < 0f) return "--"
     return when {
-        speed < 0.01f -> String.format("%.0f mm/s", speed * 1000)
-        speed < 1f -> String.format("%.1f cm/s", speed * 100)
-        speed < 100f -> String.format("%.2f m/s", speed)
-        else -> String.format("%.2f km/h", speed * 3.6f)
+        speed < 0.01f -> String.format(java.util.Locale.US, "%.0f mm/s", speed * 1000)
+        speed < 1f -> String.format(java.util.Locale.US, "%.1f cm/s", speed * 100)
+        speed < 100f -> String.format(java.util.Locale.US, "%.2f m/s", speed)
+        else -> String.format(java.util.Locale.US, "%.2f km/h", speed * 3.6f)
     }
 }
