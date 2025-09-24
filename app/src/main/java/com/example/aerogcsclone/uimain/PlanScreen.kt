@@ -3,7 +3,9 @@ package com.example.aerogcsclone.uimain
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -329,8 +331,10 @@ fun PlanScreen(
                     color = Color.Black.copy(alpha = 0.8f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(18.dp) // More spacing for clarity
                     ) {
                         Text(
                             "Grid Survey Parameters",
@@ -339,43 +343,83 @@ fun PlanScreen(
                             fontWeight = FontWeight.Bold
                         )
 
-                        Column {
-                            Text("Line Spacing: ${lineSpacing.toInt()}m", color = Color.White)
+                        // Line Spacing
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Line Spacing", color = Color.White, modifier = Modifier.weight(1f))
+                                Text("${lineSpacing.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                             Slider(
                                 value = lineSpacing,
                                 onValueChange = { lineSpacing = it },
                                 valueRange = 10f..100f,
-                                steps = 17
+                                steps = 17,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.Gray
+                                )
                             )
                         }
 
-                        Column {
-                            Text("Grid Angle: ${gridAngle.toInt()}°", color = Color.White)
+                        // Grid Angle
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Grid Angle", color = Color.White, modifier = Modifier.weight(1f))
+                                Text("${gridAngle.toInt()}°", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                             Slider(
                                 value = gridAngle,
                                 onValueChange = { gridAngle = it },
                                 valueRange = 0f..180f,
-                                steps = 35
+                                steps = 35,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.Gray
+                                )
                             )
                         }
 
-                        Column {
-                            Text("Speed: ${surveySpeed.toInt()}m/s", color = Color.White)
+                        // Survey Speed
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Speed", color = Color.White, modifier = Modifier.weight(1f))
+                                Text("${surveySpeed.toInt()} m/s", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                             Slider(
                                 value = surveySpeed,
                                 onValueChange = { surveySpeed = it },
                                 valueRange = 1f..20f,
-                                steps = 18
+                                steps = 18,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.Gray
+                                )
                             )
                         }
 
-                        Column {
-                            Text("Altitude: ${surveyAltitude.toInt()}m", color = Color.White)
+                        // Survey Altitude
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Altitude", color = Color.White, modifier = Modifier.weight(1f))
+                                Text("${surveyAltitude.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                             Slider(
                                 value = surveyAltitude,
                                 onValueChange = { surveyAltitude = it },
                                 valueRange = 10f..120f,
-                                steps = 21
+                                steps = 21,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.Gray
+                                )
                             )
                         }
 
@@ -413,7 +457,9 @@ fun PlanScreen(
                             Button(
                                 onClick = {
                                     if (surveyPolygon.size >= 3) {
-                                        gridAngle = gridGenerator.calculateOptimalGridAngle(surveyPolygon)
+                                        // Set grid angle perpendicular to longest side for agricultural spraying
+                                        val longestSideAngle = gridGenerator.calculateOptimalGridAngle(surveyPolygon)
+                                        gridAngle = (longestSideAngle + 90f) % 360f
                                     }
                                 },
                                 modifier = Modifier.weight(1f),

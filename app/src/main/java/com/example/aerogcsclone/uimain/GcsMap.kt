@@ -122,14 +122,23 @@ fun GcsMap(
             )
         }
 
-        // Grid waypoints (small orange markers)
-        gridWaypoints.forEachIndexed { index, waypoint ->
-            Marker(
-                state = MarkerState(position = waypoint),
-                title = "G${index + 1}",
-                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE),
-                anchor = Offset(0.5f, 0.5f)
-            )
+        // Grid waypoints (first: S/green, last: E/red, others: orange)
+        if (gridWaypoints.isNotEmpty()) {
+            gridWaypoints.forEachIndexed { index, waypoint ->
+                val isFirst = index == 0
+                val isLast = index == gridWaypoints.lastIndex
+                val (title, color) = when {
+                    isFirst -> "S" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                    isLast -> "E" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                    else -> "G${index + 1}" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                }
+                Marker(
+                    state = MarkerState(position = waypoint),
+                    title = title,
+                    icon = color,
+                    anchor = Offset(0.5f, 0.5f)
+                )
+            }
         }
 
         // Red polyline showing the drone's traveled path
