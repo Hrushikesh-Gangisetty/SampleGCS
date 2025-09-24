@@ -88,7 +88,9 @@ fun GcsMap(
                 Marker(state = MarkerState(position = point), title = "WP ${index + 1}")
             }
             if (points.size > 1) {
-                Polyline(points = points, width = 4f, color = Color.Blue)
+                key(points) {
+                    Polyline(points = points, width = 4f, color = Color.Blue)
+                }
             }
         }
 

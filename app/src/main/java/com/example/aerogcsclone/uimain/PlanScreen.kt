@@ -129,6 +129,7 @@ fun PlanScreen(
             val item = buildMissionItemFromLatLng(latLng, seq, isTakeoff)
             points.add(latLng)
             waypoints.add(item)
+            Toast.makeText(context, "Waypoints: ${points.joinToString { "(${it.latitude},${it.longitude})" }}", Toast.LENGTH_SHORT).show()
         }
     }
 
