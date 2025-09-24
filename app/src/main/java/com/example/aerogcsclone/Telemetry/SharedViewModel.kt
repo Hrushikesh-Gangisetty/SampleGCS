@@ -113,7 +113,11 @@ class SharedViewModel : ViewModel() {
                     lastUploadedCount = missionItems.size
 
                     // Convert MissionItemInt to LatLng for display
-                    val waypoints = missionItems.map { item ->
+                    val waypoints = missionItems.filter { item ->
+                        // Only show real waypoints (exclude RTL, x=0/y=0, and non-NAV_WAYPOINT/NAV_TAKEOFF)
+                        (item.command.value == 16u || item.command.value == 22u) && // NAV_WAYPOINT or NAV_TAKEOFF
+                        !(item.x == 0 && item.y == 0)
+                    }.map { item ->
                         LatLng(item.x / 1E7, item.y / 1E7)
                     }
                     _uploadedWaypoints.value = waypoints
