@@ -28,7 +28,9 @@ import com.example.aerogcsclone.navigation.Screen
 import kotlinx.coroutines.launch
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.example.aerogcsclone.grid.*
+import java.util.Locale
 
+@Suppress("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun PlanScreen(
     telemetryViewModel: SharedViewModel,
@@ -202,8 +204,8 @@ fun PlanScreen(
                 }
             }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+    ) { _ ->
+        Box(modifier = Modifier.fillMaxSize()) {
             // Map
             GcsMap(
                 telemetryState = telemetryState,
@@ -377,13 +379,13 @@ fun PlanScreen(
                         }
 
                         gridResult?.let { result ->
-                            Divider(color = Color.Gray, thickness = 1.dp)
+                            HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Grid Statistics:", color = Color.White, fontWeight = FontWeight.Bold)
                                 Text("Waypoints: ${result.waypoints.size}", color = Color.White, style = MaterialTheme.typography.bodySmall)
                                 Text("Lines: ${result.numLines}", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                Text("Distance: ${String.format("%.1f", result.totalDistance / 1000)}km", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                Text("Time: ${String.format("%.1f", result.estimatedTime / 60)}min", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                Text("Distance: ${String.format(Locale.US, "%.1f", result.totalDistance / 1000)}km", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                Text("Time: ${String.format(Locale.US, "%.1f", result.estimatedTime / 60)}min", color = Color.White, style = MaterialTheme.typography.bodySmall)
                             }
                         }
 
