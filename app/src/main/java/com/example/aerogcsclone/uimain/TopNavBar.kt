@@ -35,13 +35,20 @@ fun TopNavBar(
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
 
+    // Set nav bar gradient colors based on connection status
+    val navBarColors = if (telemetryState.connected) {
+        listOf(Color(0xFF87CEEB), Color(0xFF4A90E2))
+    } else {
+        listOf(Color(0xFFfd5c63), Color(0xFFFF320A))
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(70.dp)
             .background(
                 brush = Brush.horizontalGradient(
-                    colors = listOf(Color(0xFF87CEEB), Color(0xFF4A90E2))
+                    colors = navBarColors
                 )
             )
             .padding(horizontal = 12.dp),
