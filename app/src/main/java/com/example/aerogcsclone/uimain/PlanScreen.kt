@@ -1,4 +1,3 @@
-// Kotlin
 package com.example.aerogcsclone.uimain
 
 import android.widget.Toast
@@ -334,14 +333,34 @@ fun PlanScreen(
                         modifier = Modifier
                             .padding(16.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(18.dp) // More spacing for clarity
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
                     ) {
-                        Text(
-                            "Grid Survey Parameters",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // Header with title and close button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Grid Survey Parameters",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            IconButton(
+                                onClick = { showGridControls = false },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Close Panel",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
 
                         // Line Spacing
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
