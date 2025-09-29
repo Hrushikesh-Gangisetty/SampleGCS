@@ -33,5 +33,6 @@ data class GridSurveyResult(
     val gridLines: List<Pair<LatLng, LatLng>>, // For visualization
     val totalDistance: Double, // meters
     val estimatedTime: Double, // seconds
-    val numLines: Int
+    val numLines: Int,
+    val polygonArea: String
 )

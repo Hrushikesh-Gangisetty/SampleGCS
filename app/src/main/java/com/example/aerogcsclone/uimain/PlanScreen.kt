@@ -450,6 +450,7 @@ fun PlanScreen(
                                 Text("Lines: ${result.numLines}", color = Color.White, style = MaterialTheme.typography.bodySmall)
                                 Text("Distance: ${String.format(Locale.US, "%.1f", result.totalDistance / 1000)}km", color = Color.White, style = MaterialTheme.typography.bodySmall)
                                 Text("Time: ${String.format(Locale.US, "%.1f", result.estimatedTime / 60)}min", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                Text("Area: ${result.polygonArea}", color = Color.White, style = MaterialTheme.typography.bodySmall)
                             }
                         }
 

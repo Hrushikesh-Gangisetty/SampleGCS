@@ -25,7 +25,8 @@ class GridGenerator {
                 gridLines = emptyList(),
                 totalDistance = 0.0,
                 estimatedTime = 0.0,
-                numLines = 0
+                numLines = 0,
+                polygonArea = "0 ft²"
             )
         }
 
@@ -119,13 +120,15 @@ class GridGenerator {
         // Calculate total distance and time
         val totalDistance = calculateTotalDistance(waypoints)
         val estimatedTime = if (params.speed > 0) totalDistance / params.speed else 0.0
+        val polygonArea = GridUtils.calculateAndFormatPolygonArea(polygon)
 
         return GridSurveyResult(
             waypoints = waypoints,
             gridLines = gridLines,
             totalDistance = totalDistance,
             estimatedTime = estimatedTime,
-            numLines = gridLines.size
+            numLines = gridLines.size,
+            polygonArea = polygonArea
         )
     }
 
