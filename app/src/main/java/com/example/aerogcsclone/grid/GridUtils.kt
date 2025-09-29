@@ -1,6 +1,8 @@
 package com.example.aerogcsclone.grid
 
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.SphericalUtil
+import java.util.Locale
 import kotlin.math.*
 
 /**
@@ -147,23 +149,47 @@ object GridUtils {
     }
 
     /**
-     * Calculate the area of a polygon in square meters
+     * Calculate the area of a polygon in square meters using SphericalUtil.
      * @param polygon List of points
      * @return Area in square meters
      */
     fun calculatePolygonArea(polygon: List<LatLng>): Double {
         if (polygon.size < 3) return 0.0
+        return SphericalUtil.computeArea(polygon)
+    }
 
-        var area = 0.0
-        for (i in polygon.indices) {
-            val j = (i + 1) % polygon.size
-            area += polygon[i].longitude * polygon[j].latitude
-            area -= polygon[j].longitude * polygon[i].latitude
+    /**
+     * Calculates and formats the area of a polygon into ft², acres, or mi².
+     * @param polygon The list of LatLng points defining the polygon.
+     * @return A formatted string representing the area.
+     */
+    fun calculateAndFormatPolygonArea(polygon: List<LatLng>): String {
+        if (polygon.size < 3) return "0 ft²"
+
+        val areaInSqMeters = SphericalUtil.computeArea(polygon)
+        val areaInSqFeet = areaInSqMeters * 10.7639
+
+        // Conversion constants
+        val ft2PerAcre = 43560.0
+        val acresPerSqMi = 640.0
+
+        // Thresholds
+        val ft2Threshold = 21780.0 // ft²
+        val acreThreshold = 640.0   // acres
+
+        return when {
+            areaInSqFeet < ft2Threshold -> {
+                String.format(Locale.US, "%,.0f ft²", areaInSqFeet)
+            }
+            else -> {
+                val areaInAcres = areaInSqFeet / ft2PerAcre
+                if (areaInAcres < acreThreshold) {
+                    String.format(Locale.US, "%.1f acres", areaInAcres)
+                } else {
+                    val areaInSqMiles = areaInAcres / acresPerSqMi
+                    String.format(Locale.US, "%.1f mi²", areaInSqMiles)
+                }
+            }
         }
-        area = abs(area) / 2.0
-
-        // Convert from degrees to square meters (approximate)
-        val metersPerDegree = 111111.0
-        return area * metersPerDegree * metersPerDegree
     }
 }
