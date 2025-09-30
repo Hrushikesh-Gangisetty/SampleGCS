@@ -87,6 +87,18 @@ fun TopNavBar(
                                     }
                             )
                             Text(
+                                text = "Plot Templates",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .clickable {
+                                        selectedMode = "Templates"
+                                        menuExpanded = false
+                                        navController.navigate(Screen.PlotTemplates.route)
+                                    }
+                            )
+                            Text(
                                 text = "Manual",
                                 color = Color.White,
                                 fontSize = 22.sp,
