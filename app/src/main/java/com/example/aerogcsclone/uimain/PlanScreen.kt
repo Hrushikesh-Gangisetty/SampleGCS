@@ -256,7 +256,9 @@ fun PlanScreen(
                 autoCenter = false,
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
                 gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
-                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList()
+                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
+                fenceCenter = fenceCenter,
+                fenceRadius = fenceRadius
             )
 
             // Status indicator
