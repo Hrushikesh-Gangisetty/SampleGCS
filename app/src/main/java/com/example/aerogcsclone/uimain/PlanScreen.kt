@@ -48,6 +48,7 @@ fun PlanScreen(
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
     val missionTemplateUiState by missionTemplateViewModel.uiState.collectAsState()
     val templates by missionTemplateViewModel.templates.collectAsState(initial = emptyList())
+    val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
     val context = LocalContext.current
 
     // Top navigation bar
@@ -79,6 +80,15 @@ fun PlanScreen(
     var surveyPolygon by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var gridResult by remember { mutableStateOf<GridSurveyResult?>(null) }
     val gridGenerator = remember { GridGenerator() }
+
+    // Calculate fence center (centroid of surveyPolygon)
+    val fenceCenter = remember(surveyPolygon) {
+        if (surveyPolygon.isNotEmpty()) {
+            val lat = surveyPolygon.map { it.latitude }.average()
+            val lon = surveyPolygon.map { it.longitude }.average()
+            LatLng(lat, lon)
+        } else null
+    }
 
     // Camera and waypoint state
     val cameraPositionState = rememberCameraPositionState()
@@ -296,8 +306,10 @@ fun PlanScreen(
                 mapType = mapType,
                 autoCenter = false,
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
-                gridLines = gridResult?.gridLines ?: emptyList(),
-                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList()
+                gridLines = gridResult?.gridLines?.map { listOf(it.first, it.second) } ?: emptyList(),
+                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
+                fenceCenter = fenceCenter,
+                fenceRadius = fenceRadius
             )
 
             // Status indicator
@@ -520,7 +532,26 @@ fun PlanScreen(
                             )
                         }
 
-                        // Grid Statistics
+                        // Fence Radius
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Fence Radius", color = Color.White, modifier = Modifier.weight(1f))
+                                Text("${fenceRadius.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Slider(
+                                value = fenceRadius,
+                                onValueChange = { telemetryViewModel.setFenceRadius(it) },
+                                valueRange = 50f..2000f,
+                                steps = 39,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.Red,
+                                    activeTrackColor = Color.Red,
+                                    inactiveTrackColor = Color.Gray
+                                )
+                            )
+                        }
+
                         gridResult?.let { result ->
                             HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -618,6 +649,11 @@ fun PlanScreen(
                                             y = (latLng.longitude * 1E7).toInt(), z = 10f
                                         )
                                     )
+                                }
+
+                                // Save survey polygon to SharedViewModel before upload
+                                if (surveyPolygon.isNotEmpty()) {
+                                    telemetryViewModel.setSurveyPolygon(surveyPolygon)
                                 }
 
                                 telemetryViewModel.uploadMission(builtMission) { success, error ->

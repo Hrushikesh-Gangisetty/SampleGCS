@@ -25,9 +25,12 @@ fun GcsMap(
     autoCenter: Boolean = true,
     // Grid survey parameters
     surveyPolygon: List<LatLng> = emptyList(),
-    gridLines: List<Pair<LatLng, LatLng>> = emptyList(),
+    gridLines: List<List<LatLng>> = emptyList(),
     gridWaypoints: List<LatLng> = emptyList(),
-    heading: Float? = null
+    heading: Float? = null,
+    // Fence parameters
+    fenceCenter: LatLng? = null,
+    fenceRadius: Float = 500f
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -71,6 +74,17 @@ fun GcsMap(
         properties = MapProperties(mapType = mapType),
         onMapClick = { latLng -> onMapClick(latLng) }
     ) {
+        // Fence boundary circle overlay
+        fenceCenter?.let { center ->
+            Circle(
+                center = center,
+                radius = fenceRadius.toDouble(),
+                strokeColor = Color.Red,
+                strokeWidth = 4f,
+                fillColor = Color.Red.copy(alpha = 0.2f)
+            )
+        }
+
         // Drone marker using quadcopter image; centered via anchor Offset(0.5f, 0.5f)
         if (lat != null && lon != null) {
             Marker(
@@ -114,12 +128,14 @@ fun GcsMap(
         }
 
         // Grid lines (green)
-        gridLines.forEach { (start, end) ->
-            Polyline(
-                points = listOf(start, end),
-                width = 2f,
-                color = Color.Green
-            )
+        gridLines.forEach { line ->
+            if (line.size >= 2) {
+                Polyline(
+                    points = line,
+                    width = 2f,
+                    color = Color.Green
+                )
+            }
         }
 
         // Grid waypoints (first: S/green, last: E/red, others: orange)

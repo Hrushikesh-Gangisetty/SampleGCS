@@ -40,6 +40,24 @@ fun MainPage(
     val surveyPolygon by telemetryViewModel.surveyPolygon.collectAsState()
     val gridLines by telemetryViewModel.gridLines.collectAsState()
     val gridWaypoints by telemetryViewModel.gridWaypoints.collectAsState()
+    val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
+
+    // Calculate fence center (centroid of surveyPolygon or uploadedWaypoints)
+    val fenceCenter = remember(surveyPolygon, uploadedWaypoints) {
+        when {
+            surveyPolygon.isNotEmpty() -> {
+                val lat = surveyPolygon.map { it.latitude }.average()
+                val lon = surveyPolygon.map { it.longitude }.average()
+                LatLng(lat, lon)
+            }
+            uploadedWaypoints.isNotEmpty() -> {
+                val lat = uploadedWaypoints.map { it.latitude }.average()
+                val lon = uploadedWaypoints.map { it.longitude }.average()
+                LatLng(lat, lon)
+            }
+            else -> null
+        }
+    }
 
     // Map camera state controlled from parent so refresh can move it
     val cameraPositionState = rememberCameraPositionState()
@@ -79,19 +97,22 @@ fun MainPage(
                 telemetryState = telemetryState,
                 points = uploadedWaypoints,
                 surveyPolygon = surveyPolygon,
-                gridLines = gridLines,
+                gridLines = gridLines.map { listOf(it.first, it.second) },
                 gridWaypoints = gridWaypoints,
                 mapType = mapType,
                 cameraPositionState = cameraPositionState,
                 autoCenter = false,
-                heading = telemetryState.heading
+                heading = telemetryState.heading,
+                fenceCenter = fenceCenter,
+                fenceRadius = fenceRadius
             )
 
             StatusPanel(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(12.dp),
-                telemetryState = telemetryState
+                telemetryState = telemetryState,
+                fenceRadius = fenceRadius
             )
 
             FloatingButtons(
@@ -185,7 +206,8 @@ fun MainPage(
 @Composable
 fun StatusPanel(
     modifier: Modifier = Modifier,
-    telemetryState: TelemetryState
+    telemetryState: TelemetryState,
+    fenceRadius: Float?
 ) {
     Surface(
         modifier = modifier
@@ -204,7 +226,7 @@ fun StatusPanel(
             ) {
                 Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White, fontSize = 13.sp)
                 Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White, fontSize = 13.sp)
-                Text("Area: N/A", color = Color.White, fontSize = 13.sp)
+                Text("Area: ${fenceRadius?.let { "${it.toInt()} m" } ?: "N/A"}", color = Color.White, fontSize = 13.sp)
                 Text("Flow: N/A", color = Color.White, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.height(2.dp))
