@@ -222,76 +222,25 @@ fun PlanScreen(
 
     Scaffold(
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (showPlanActions && hasStartedPlanning) {
-
-                    // Save Mission button
-                    FloatingActionButton(
-                        onClick = { showSaveMissionDialog = true },
-                        modifier = Modifier.padding(bottom = 12.dp).size(56.dp),
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    ) {
-                        Icon(Icons.Default.Save, contentDescription = "Save Mission Template")
-                    }
-
-                    FloatingActionButton(
-                        onClick = {
-                            val center = cameraPositionState.position.target
-                            if (isGridSurveyMode) {
-                                surveyPolygon = surveyPolygon + center
-                                if (surveyPolygon.size >= 3) regenerateGrid()
-                            } else {
-                                val seq = waypoints.size
-                                val item = buildMissionItemFromLatLng(center, seq, seq == 0)
-                                points.add(center)
-                                waypoints.add(item)
-                            }
-                        },
-                        modifier = Modifier.padding(bottom = 12.dp).size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add at Crosshair")
-                    }
-
-                    FloatingActionButton(
-                        onClick = {
-                            if (isGridSurveyMode) {
-                                if (surveyPolygon.isNotEmpty()) {
-                                    surveyPolygon = surveyPolygon.dropLast(1)
-                                    if (surveyPolygon.size >= 3) regenerateGrid() else gridResult = null
-                                }
-                            } else {
-                                if (waypoints.isNotEmpty()) {
-                                    waypoints.removeAt(waypoints.lastIndex)
-                                    points.removeAt(points.lastIndex)
-                                }
-                            }
-                        },
-                        modifier = Modifier.padding(bottom = 12.dp).size(56.dp)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Last")
-                    }
-
-                    FloatingActionButton(
-                        onClick = {
-                            if (isGridSurveyMode) {
-                                surveyPolygon = emptyList()
-                                gridResult = null
-                            } else {
-                                waypoints.clear()
-                                points.clear()
-                            }
-                        },
-                        modifier = Modifier.padding(bottom = 12.dp).size(56.dp)
-                    ) {
-                        Icon(Icons.Default.ClearAll, contentDescription = "Clear All")
-                    }
-                }
-
+            // Bottom right - Delete waypoint button only
+            if (hasStartedPlanning) {
                 FloatingActionButton(
-                    onClick = { showPlanActions = !showPlanActions },
+                    onClick = {
+                        if (isGridSurveyMode) {
+                            if (surveyPolygon.isNotEmpty()) {
+                                surveyPolygon = surveyPolygon.dropLast(1)
+                                if (surveyPolygon.size >= 3) regenerateGrid() else gridResult = null
+                            }
+                        } else {
+                            if (waypoints.isNotEmpty()) {
+                                waypoints.removeAt(waypoints.lastIndex)
+                                points.removeAt(points.lastIndex)
+                            }
+                        }
+                    },
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(Icons.Default.Menu, contentDescription = "Plan Menu")
+                    Icon(Icons.Default.Delete, contentDescription = "Delete Last Waypoint")
                 }
             }
         }
@@ -306,10 +255,8 @@ fun PlanScreen(
                 mapType = mapType,
                 autoCenter = false,
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
-                gridLines = gridResult?.gridLines?.map { listOf(it.first, it.second) } ?: emptyList(),
-                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
-                fenceCenter = fenceCenter,
-                fenceRadius = fenceRadius
+                gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
+                gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList()
             )
 
             // Status indicator
@@ -334,6 +281,172 @@ fun PlanScreen(
                     color = if (isGridSurveyMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (isGridSurveyMode) FontWeight.Bold else FontWeight.Normal
                 )
+            }
+
+            // Top right button column - new organized layout
+            if (hasStartedPlanning) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 16.dp, top = 90.dp), // Moved up from 120dp to 90dp
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Add Point button with text and transparent background
+                    ElevatedButton(
+                        onClick = {
+                            val center = cameraPositionState.position.target
+                            if (isGridSurveyMode) {
+                                surveyPolygon = surveyPolygon + center
+                                if (surveyPolygon.size >= 3) regenerateGrid()
+                            } else {
+                                val seq = waypoints.size
+                                val item = buildMissionItemFromLatLng(center, seq, seq == 0)
+                                points.add(center)
+                                waypoints.add(item)
+                            }
+                        },
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.7f), // Keep transparent
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.elevatedButtonElevation(
+                            defaultElevation = 6.dp
+                        ),
+                        modifier = Modifier.widthIn(min = 120.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Point")
+                    }
+
+                    // Save Mission button - now dark
+                    ElevatedButton(
+                        onClick = { showSaveMissionDialog = true },
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = Color(0xFF2E2E2E), // Dark gray background
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.elevatedButtonElevation(
+                            defaultElevation = 6.dp
+                        ),
+                        modifier = Modifier.widthIn(min = 120.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Save Mission")
+                    }
+
+                    // Upload Mission button - now dark
+                    ElevatedButton(
+                        onClick = {
+                            if (isGridSurveyMode && gridResult != null) {
+                                // Grid survey mission upload
+                                val homeLat = telemetryState.latitude ?: 0.0
+                                val homeLon = telemetryState.longitude ?: 0.0
+                                val homePosition = LatLng(homeLat, homeLon)
+                                val builtMission = GridMissionConverter.convertToMissionItems(gridResult!!, homePosition)
+
+                                telemetryViewModel.uploadMission(builtMission) { success, error ->
+                                    if (success) {
+                                        Toast.makeText(context, "Grid mission uploaded", Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Plan.route) { inclusive = true }
+                                        }
+                                    } else {
+                                        Toast.makeText(context, error ?: "Failed to upload grid mission", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else if (points.isNotEmpty()) {
+                                // Regular waypoint mission upload
+                                val builtMission = mutableListOf<MissionItemInt>()
+                                val homeLat = telemetryState.latitude ?: 0.0
+                                val homeLon = telemetryState.longitude ?: 0.0
+                                val homeAlt = telemetryState.altitudeMsl ?: 10f
+
+                                // Add home location as first waypoint
+                                builtMission.add(
+                                    MissionItemInt(
+                                        targetSystem = 0u, targetComponent = 0u, seq = 0u,
+                                        frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                        command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                        current = 1u, autocontinue = 1u,
+                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
+                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = homeAlt
+                                    )
+                                )
+
+                                // Add takeoff command as second waypoint
+                                builtMission.add(
+                                    MissionItemInt(
+                                        targetSystem = 0u, targetComponent = 0u, seq = 1u,
+                                        frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                        command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
+                                        current = 0u, autocontinue = 1u,
+                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
+                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = 10f
+                                    )
+                                )
+
+                                // Add user-defined waypoints
+                                points.forEachIndexed { idx, latLng ->
+                                    val seq = idx + 2
+                                    val isLast = idx == points.lastIndex
+                                    builtMission.add(
+                                        MissionItemInt(
+                                            targetSystem = 0u, targetComponent = 0u, seq = seq.toUShort(),
+                                            frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
+                                            command = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
+                                            current = 0u, autocontinue = 1u,
+                                            param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
+                                            x = (latLng.latitude * 1E7).toInt(),
+                                            y = (latLng.longitude * 1E7).toInt(), z = 10f
+                                        )
+                                    )
+                                }
+
+                                telemetryViewModel.uploadMission(builtMission) { success, error ->
+                                    if (success) {
+                                        Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Plan.route) { inclusive = true }
+                                        }
+                                    } else {
+                                        Toast.makeText(context, error ?: "Failed to upload mission", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(context, "No waypoints to upload", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = if (isGridSurveyMode) gridResult?.waypoints?.isNotEmpty() == true else points.isNotEmpty(),
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = Color(0xFF1A1A1A), // Darker background
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.elevatedButtonElevation(
+                            defaultElevation = 6.dp
+                        ),
+                        modifier = Modifier.widthIn(min = 120.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CloudUpload,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Upload Mission")
+                    }
+                }
             }
 
             // Crosshair
@@ -567,114 +680,85 @@ fun PlanScreen(
                 }
             }
 
-            // Upload button - restored to bottom center position
-            if (hasStartedPlanning) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(12.dp)
-                ) {
-                    if (isGridSurveyMode) {
-                        Button(
-                            onClick = {
-                                gridResult?.let { result ->
-                                    val homeLat = telemetryState.latitude ?: 0.0
-                                    val homeLon = telemetryState.longitude ?: 0.0
-                                    val homePosition = LatLng(homeLat, homeLon)
-                                    val builtMission = GridMissionConverter.convertToMissionItems(result, homePosition)
+            // Dialogs
+            if (showMissionChoiceDialog && !hasStartedPlanning) {
+                MissionChoiceDialog(
+                    onDismiss = {
+                        showMissionChoiceDialog = false
+                        hasStartedPlanning = true
+                    },
+                    onLoadExisting = {
+                        showMissionChoiceDialog = false
+                        showTemplateSelectionDialog = true
+                    },
+                    onCreateNew = {
+                        showMissionChoiceDialog = false
+                        hasStartedPlanning = true
+                    },
+                    hasTemplates = templates.isNotEmpty()
+                )
+            }
 
-                                    telemetryViewModel.uploadMission(builtMission) { success, error ->
-                                        if (success) {
-                                            Toast.makeText(context, "Grid survey uploaded", Toast.LENGTH_SHORT).show()
-                                            coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
-                                            navController.navigate(Screen.Main.route) {
-                                                popUpTo(Screen.Plan.route) { inclusive = true }
-                                            }
-                                        } else {
-                                            Toast.makeText(context, error ?: "Upload failed", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            },
-                            enabled = gridResult?.waypoints?.isNotEmpty() == true,
-                            modifier = Modifier.widthIn(min = 180.dp, max = 340.dp).align(Alignment.CenterHorizontally)
-                        ) {
-                            val count = gridResult?.waypoints?.size ?: 0
-                            Text("Upload Grid Survey ($count waypoints)")
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                val builtMission = mutableListOf<MissionItemInt>()
-                                val homeLat = telemetryState.latitude ?: 0.0
-                                val homeLon = telemetryState.longitude ?: 0.0
-                                val homeAlt = telemetryState.altitudeMsl ?: 10f
+            if (showTemplateSelectionDialog) {
+                TemplateSelectionDialog(
+                    templates = templates,
+                    onDismiss = {
+                        showTemplateSelectionDialog = false
+                        hasStartedPlanning = true
+                    },
+                    onSelectTemplate = { template ->
+                        showTemplateSelectionDialog = false
+                        hasStartedPlanning = true
+                        missionTemplateViewModel.loadTemplate(template.id)
+                    },
+                    isLoading = missionTemplateUiState.isLoading
+                )
+            }
 
-                                // Add home location as first waypoint
-                                builtMission.add(
-                                    MissionItemInt(
-                                        targetSystem = 0u, targetComponent = 0u, seq = 0u,
-                                        frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
-                                        command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-                                        current = 1u, autocontinue = 1u,
-                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
-                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = homeAlt
-                                    )
+            if (showSaveMissionDialog) {
+                SaveMissionDialog(
+                    onDismiss = { showSaveMissionDialog = false },
+                    onSave = { projectName, plotName ->
+                        val currentGridParams = if (isGridSurveyMode) {
+                            GridParameters(
+                                lineSpacing = lineSpacing,
+                                gridAngle = gridAngle,
+                                surveySpeed = surveySpeed,
+                                surveyAltitude = surveyAltitude,
+                                surveyPolygon = surveyPolygon
+                            )
+                        } else null
+
+                        val waypointsToSave = if (isGridSurveyMode && gridResult != null) {
+                            gridResult!!.waypoints.mapIndexed { index, gridWaypoint ->
+                                buildMissionItemFromLatLng(
+                                    gridWaypoint.position,
+                                    index,
+                                    index == 0,
+                                    gridWaypoint.altitude
                                 )
-
-                                // Add takeoff command as second waypoint
-                                builtMission.add(
-                                    MissionItemInt(
-                                        targetSystem = 0u, targetComponent = 0u, seq = 1u,
-                                        frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
-                                        command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
-                                        current = 0u, autocontinue = 1u,
-                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
-                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = 10f
-                                    )
-                                )
-
-                                // Add user-defined waypoints
-                                points.forEachIndexed { idx, latLng ->
-                                    val seq = idx + 2
-                                    val isLast = idx == points.lastIndex
-                                    builtMission.add(
-                                        MissionItemInt(
-                                            targetSystem = 0u, targetComponent = 0u, seq = seq.toUShort(),
-                                            frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
-                                            command = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-                                            current = 0u, autocontinue = 1u,
-                                            param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
-                                            x = (latLng.latitude * 1E7).toInt(),
-                                            y = (latLng.longitude * 1E7).toInt(), z = 10f
-                                        )
-                                    )
-                                }
-
-                                // Save survey polygon to SharedViewModel before upload
-                                if (surveyPolygon.isNotEmpty()) {
-                                    telemetryViewModel.setSurveyPolygon(surveyPolygon)
-                                }
-
-                                telemetryViewModel.uploadMission(builtMission) { success, error ->
-                                    if (success) {
-                                        Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
-                                        coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
-                                        navController.navigate(Screen.Main.route) {
-                                            popUpTo(Screen.Plan.route) { inclusive = true }
-                                        }
-                                    } else {
-                                        Toast.makeText(context, error ?: "Upload failed", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            enabled = points.isNotEmpty(),
-                            modifier = Modifier.widthIn(min = 180.dp, max = 340.dp).align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("Upload Mission (${points.size})")
+                            }
+                        } else {
+                            waypoints.toList()
                         }
-                    }
-                }
+
+                        val positionsToSave = if (isGridSurveyMode && gridResult != null) {
+                            gridResult!!.waypoints.map { it.position }
+                        } else {
+                            points.toList()
+                        }
+
+                        missionTemplateViewModel.saveTemplate(
+                            projectName = projectName,
+                            plotName = plotName,
+                            waypoints = waypointsToSave,
+                            waypointPositions = positionsToSave,
+                            isGridSurvey = isGridSurveyMode,
+                            gridParameters = currentGridParams
+                        )
+                    },
+                    isLoading = missionTemplateUiState.isLoading
+                )
             }
         }
     }
