@@ -5,19 +5,30 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import android.content.Context
+import com.example.aerogcsclone.database.tlog.*
 
 /**
- * Room database for Mission Plan Templates
+ * Room database for Mission Plan Templates and Flight Logs
  */
 @Database(
-    entities = [MissionTemplateEntity::class],
-    version = 1,
+    entities = [
+        MissionTemplateEntity::class,
+        FlightEntity::class,
+        TelemetryEntity::class,
+        EventEntity::class,
+        MapDataEntity::class
+    ],
+    version = 2,
     exportSchema = false
 )
-@TypeConverters(MissionTemplateTypeConverters::class)
+@TypeConverters(MissionTemplateTypeConverters::class, TlogTypeConverters::class)
 abstract class MissionTemplateDatabase : RoomDatabase() {
 
     abstract fun missionTemplateDao(): MissionTemplateDao
+    abstract fun flightDao(): FlightDao
+    abstract fun telemetryDao(): TelemetryDao
+    abstract fun eventDao(): EventDao
+    abstract fun mapDataDao(): MapDataDao
 
     companion object {
         @Volatile
@@ -29,7 +40,9 @@ abstract class MissionTemplateDatabase : RoomDatabase() {
                     context.applicationContext,
                     MissionTemplateDatabase::class.java,
                     "mission_template_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // For now, will recreate on schema change
+                .build()
                 INSTANCE = instance
                 instance
             }

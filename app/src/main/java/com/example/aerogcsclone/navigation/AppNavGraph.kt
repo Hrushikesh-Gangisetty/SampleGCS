@@ -1,8 +1,11 @@
 package com.example.aerogcsclone.navigation
 
+import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -12,12 +15,15 @@ import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.authentication.LoginPage
 import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.authentication.WelcomeScreen
+import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.uiconnection.ConnectionPage
 import com.example.aerogcsclone.uimain.MainPage
 import com.example.aerogcsclone.uimain.PlanScreen
 import com.example.aerogcsclone.uimain.TopNavBar
 import com.example.aerogcsclone.ui.components.PlotTemplatesScreen
+import com.example.aerogcsclone.ui.logs.LogsScreen
 import com.example.aerogcsclone.viewmodel.MissionTemplateViewModel
+import com.example.aerogcsclone.viewmodel.TlogViewModel
 
 sealed class Screen(val route: String) {
     object Welcome : Screen("welcome")
@@ -27,6 +33,7 @@ sealed class Screen(val route: String) {
     object Signup : Screen("signup")
     object Plan : Screen("plan")
     object PlotTemplates : Screen("plot_templates")
+    object Logs : Screen("logs")
 }
 
 @Composable
@@ -34,6 +41,18 @@ fun AppNavGraph(navController: NavHostController) {
     val sharedViewModel: SharedViewModel = viewModel()
     val authViewModel: AuthViewModel = viewModel()
     val missionTemplateViewModel: MissionTemplateViewModel = viewModel()
+
+    // Initialize TlogIntegration with the SharedViewModel
+    val context = LocalContext.current
+    val activity = context as ComponentActivity
+
+    LaunchedEffect(sharedViewModel) {
+        TlogIntegration.initialize(
+            application = activity.application,
+            viewModelStoreOwner = activity,
+            telemetryViewModel = sharedViewModel
+        )
+    }
 
     NavHost(navController = navController, startDestination = Screen.Welcome.route) {
         composable(Screen.Welcome.route) {
@@ -80,6 +99,13 @@ fun AppNavGraph(navController: NavHostController) {
                 missionTemplateViewModel = missionTemplateViewModel
             )
         }
+        composable(Screen.Logs.route) {
+            LogsScreenWrapper(
+                navController = navController,
+                authViewModel = authViewModel,
+                telemetryViewModel = sharedViewModel
+            )
+        }
     }
 }
 
@@ -112,4 +138,23 @@ private fun PlotTemplatesScreenWrapper(
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+@Composable
+private fun LogsScreenWrapper(
+    navController: NavHostController,
+    authViewModel: AuthViewModel,
+    telemetryViewModel: SharedViewModel
+) {
+    val context = LocalContext.current
+    val tlogViewModel: TlogViewModel = viewModel {
+        TlogViewModel(context.applicationContext as Application)
+    }
+
+    LogsScreen(
+        navController = navController,
+        authViewModel = authViewModel,
+        telemetryViewModel = telemetryViewModel,
+        tlogViewModel = tlogViewModel
+    )
 }

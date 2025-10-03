@@ -198,6 +198,13 @@ fun TopNavBar(
                         onDismissRequest = { kebabMenuExpanded = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Logs") },
+                            onClick = {
+                                kebabMenuExpanded = false
+                                navController.navigate(Screen.Logs.route)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Settings") },
                             onClick = { kebabMenuExpanded = false }
                         )

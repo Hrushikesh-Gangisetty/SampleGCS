@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.example.aerogcsclone.navigation.AppNavGraph
+import com.example.aerogcsclone.integration.TlogIntegration
+import com.example.aerogcsclone.Telemetry.SharedViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.MapsInitializer
 
 // ✅ Dark theme setup
@@ -67,6 +70,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         askLocationPermissions()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Cleanup TlogIntegration when activity is destroyed
+        TlogIntegration.destroy()
     }
 
     private fun askLocationPermissions() {
