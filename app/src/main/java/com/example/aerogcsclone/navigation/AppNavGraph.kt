@@ -23,6 +23,7 @@ import com.example.aerogcsclone.uimain.PlanScreen
 import com.example.aerogcsclone.uimain.TopNavBar
 import com.example.aerogcsclone.ui.components.PlotTemplatesScreen
 import com.example.aerogcsclone.ui.logs.LogsScreen
+import com.example.aerogcsclone.uiflyingmethod.SelectFlyingMethodScreen
 import com.example.aerogcsclone.viewmodel.MissionTemplateViewModel
 import com.example.aerogcsclone.viewmodel.TlogViewModel
 
@@ -35,6 +36,7 @@ sealed class Screen(val route: String) {
     object Plan : Screen("plan")
     object PlotTemplates : Screen("plot_templates")
     object Logs : Screen("logs")
+    object SelectMethod : Screen("select_method")
 }
 
 @Composable
@@ -106,6 +108,9 @@ fun AppNavGraph(navController: NavHostController) {
                 authViewModel = authViewModel,
                 telemetryViewModel = sharedViewModel
             )
+        }
+        composable(Screen.SelectMethod.route) {
+            SelectFlyingMethodScreen(navController = navController)
         }
     }
 }

@@ -57,7 +57,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             if (isConnected) {
                 isConnecting = false
                 connectionJob?.cancel()
-                navController.navigate(Screen.Main.route) {
+                navController.navigate(Screen.SelectMethod.route) {
                     popUpTo(Screen.Connection.route) { inclusive = true }
                 }
             }
