@@ -10,12 +10,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.authentication.LoginPage
 import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.authentication.WelcomeScreen
 import com.example.aerogcsclone.integration.TlogIntegration
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
 import com.example.aerogcsclone.uimain.MainPage
 import com.example.aerogcsclone.uimain.PlanScreen

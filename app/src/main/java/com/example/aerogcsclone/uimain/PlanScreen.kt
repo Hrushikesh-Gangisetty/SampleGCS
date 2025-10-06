@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.database.GridParameters
 import com.example.aerogcsclone.ui.components.SaveMissionDialog
@@ -35,6 +35,7 @@ import com.example.aerogcsclone.navigation.Screen
 import kotlinx.coroutines.launch
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.example.aerogcsclone.grid.*
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import java.util.Locale
 
 @Suppress("UnusedMaterial3ScaffoldPaddingParameter")

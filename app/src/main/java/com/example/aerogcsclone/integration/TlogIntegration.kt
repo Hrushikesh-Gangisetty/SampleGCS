@@ -3,8 +3,9 @@ package com.example.aerogcsclone.integration
 import android.app.Application
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.manager.FlightManager
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.viewmodel.TlogViewModel
 
 /**
