@@ -1,4 +1,4 @@
-package com.example.aerogcsclone.Telemetry
+package com.example.aerogcsclone.telemetry
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -10,9 +10,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MissionItemInt
-import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
-import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
-import com.example.aerogcsclone.Telemetry.connections.TcpConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
 import com.example.aerogcsclone.utils.GeofenceUtils
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
@@ -407,37 +407,5 @@ class SharedViewModel : ViewModel() {
         }
         repo = null
         _telemetryState.value = TelemetryState()
-    }
-
-    // --- Geofence breach RTL logic ---
-    private var geofenceBreachHandled = false
-
-    init {
-        // Monitor telemetry for geofence breach
-        viewModelScope.launch {
-            telemetryState.collect { state ->
-                val geofenceOn = geofenceEnabled.value
-                val polygon = geofencePolygon.value
-                val lat = state.latitude
-                val lon = state.longitude
-                if (geofenceOn && polygon.isNotEmpty() && lat != null && lon != null) {
-                    val pos = LatLng(lat, lon)
-                    val inside = GeofenceUtils.isPointInPolygon(pos, polygon)
-                    if (!inside && !geofenceBreachHandled) {
-                        geofenceBreachHandled = true
-                        // Trigger RTL immediately
-                        // Use launch to call suspend function from non-suspend context
-                        viewModelScope.launch {
-                            repo?.changeMode(MavMode.RTL)
-                        }
-                        Log.w("SharedVM", "Geofence breach detected! Switching to RTL.")
-                    } else if (inside) {
-                        geofenceBreachHandled = false // Reset if drone returns inside
-                    }
-                } else {
-                    geofenceBreachHandled = false // Reset if geofence off or no fix
-                }
-            }
-        }
     }
 }

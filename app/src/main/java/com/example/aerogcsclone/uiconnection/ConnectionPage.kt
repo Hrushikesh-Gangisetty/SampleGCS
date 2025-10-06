@@ -17,10 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.aerogcsclone.Telemetry.ConnectionType
-import com.example.aerogcsclone.Telemetry.PairedDevice
-import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.navigation.Screen
+import com.example.aerogcsclone.telemetry.ConnectionType
+import com.example.aerogcsclone.telemetry.PairedDevice
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -57,7 +57,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             if (isConnected) {
                 isConnecting = false
                 connectionJob?.cancel()
-                navController.navigate(Screen.SelectFlyingMethod.route) {
+                navController.navigate(Screen.Main.route) {
                     popUpTo(Screen.Connection.route) { inclusive = true }
                 }
             }
