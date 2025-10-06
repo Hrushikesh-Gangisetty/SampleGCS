@@ -227,49 +227,6 @@ fun PlanScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-//        // Plan Screen Header - clearly identify current screen
-//        Surface(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .padding(horizontal = 16.dp, vertical = 8.dp),
-//            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-//            shape = RoundedCornerShape(8.dp)
-//        ) {
-//            Row(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .padding(vertical = 12.dp, horizontal = 16.dp),
-//                horizontalArrangement = Arrangement.SpaceBetween,
-//                verticalAlignment = Alignment.CenterVertically
-//            ) {
-//                Row(
-//                    verticalAlignment = Alignment.CenterVertically
-//                ) {
-//                    Icon(
-//                        Icons.Default.Edit,
-//                        contentDescription = "Plan Screen",
-//                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-//                        modifier = Modifier.size(24.dp)
-//                    )
-//                    Spacer(modifier = Modifier.width(8.dp))
-//                    Text(
-//                        text = "Plan Screen",
-//                        style = MaterialTheme.typography.titleLarge,
-//                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-//                        fontWeight = FontWeight.Bold
-//                    )
-//                }
-//
-//                // Mission mode indicator
-//                Text(
-//                    text = if (isGridSurveyMode) "Grid Survey Mode" else "Waypoint Mode",
-//                    style = MaterialTheme.typography.bodyMedium,
-//                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-//                    fontWeight = if (isGridSurveyMode) FontWeight.Bold else FontWeight.Normal
-//                )
-//            }
-//        }
-
         // Main content with Scaffold
         Scaffold(
             floatingActionButton = {
