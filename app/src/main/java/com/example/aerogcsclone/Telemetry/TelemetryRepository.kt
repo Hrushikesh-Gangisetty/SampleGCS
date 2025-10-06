@@ -22,6 +22,9 @@ object MavMode {
     const val LOITER: UInt = 5u
     const val AUTO: UInt = 3u
     const val LAND: UInt = 9u // Add LAND mode for explicit landing
+    const val RTL: UInt = 6u // Add RTL mode for Return to Launch
+
+
     // Add other modes as needed
 }
 
@@ -854,4 +857,3 @@ class MavlinkTelemetryRepository(
 
 
 }
-
