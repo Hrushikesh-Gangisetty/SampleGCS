@@ -23,7 +23,7 @@ import com.example.aerogcsclone.navigation.Screen
 fun SelectFlyingMethodScreen(navController: NavController) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = Color(0xFF555654)
     ) {
         Column(
             modifier = Modifier
