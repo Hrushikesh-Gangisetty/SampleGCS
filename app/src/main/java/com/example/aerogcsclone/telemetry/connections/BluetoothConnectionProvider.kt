@@ -1,10 +1,11 @@
-package com.example.aerogcsclone.Telemetry.connections
+package com.example.aerogcsclone.telemetry.connections
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import com.divpundir.mavlink.adapters.coroutines.CoroutinesMavConnection
 import com.divpundir.mavlink.adapters.coroutines.asCoroutine
 import com.example.aerogcsclone.telemetry.connections.BluetoothMavConnection
+//import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvide
 
 @SuppressLint("MissingPermission")
 class BluetoothConnectionProvider(
