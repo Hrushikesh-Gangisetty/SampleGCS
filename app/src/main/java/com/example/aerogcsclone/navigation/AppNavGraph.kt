@@ -17,6 +17,7 @@ import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.authentication.WelcomeScreen
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.uiconnection.ConnectionPage
+import com.example.aerogcsclone.uiflyingmethod.SelectFlyingMethodScreen
 import com.example.aerogcsclone.uimain.MainPage
 import com.example.aerogcsclone.uimain.PlanScreen
 import com.example.aerogcsclone.uimain.TopNavBar
@@ -34,6 +35,7 @@ sealed class Screen(val route: String) {
     object Plan : Screen("plan")
     object PlotTemplates : Screen("plot_templates")
     object Logs : Screen("logs")
+    object SelectFlyingMethod : Screen("select_flying_method")
 }
 
 @Composable
@@ -75,6 +77,9 @@ fun AppNavGraph(navController: NavHostController) {
                 navController = navController,
                 viewModel = sharedViewModel
             )
+        }
+        composable(Screen.SelectFlyingMethod.route) {
+            SelectFlyingMethodScreen(navController = navController)
         }
         composable(Screen.Main.route) {
             MainPage(
