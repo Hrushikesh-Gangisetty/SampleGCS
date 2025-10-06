@@ -1,28 +1,62 @@
 package com.example.aerogcsclone.Telemetry
 
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.util.Log
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MissionItemInt
+import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
+import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
+import com.example.aerogcsclone.Telemetry.connections.TcpConnectionProvider
+import com.example.aerogcsclone.utils.GeofenceUtils
 import com.google.android.gms.maps.model.LatLng
-//import com.example.aerogcsclone.Telemetry.MissionItemInt
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import com.example.aerogcsclone.utils.GeofenceUtils
 
-import androidx.compose.runtime.State
+enum class ConnectionType {
+    TCP, BLUETOOTH
+}
+
+@SuppressLint("MissingPermission")
+data class PairedDevice(
+    val name: String,
+    val address: String,
+    val device: BluetoothDevice
+) {
+    constructor(device: BluetoothDevice) : this(
+        name = device.name ?: "Unknown Device",
+        address = device.address,
+        device = device
+    )
+}
 
 class SharedViewModel : ViewModel() {
+
+    // --- Connection State Management ---
+    private val _connectionType = mutableStateOf(ConnectionType.TCP)
+    val connectionType: State<ConnectionType> = _connectionType
 
     private val _ipAddress = mutableStateOf("10.0.2.2")
     val ipAddress: State<String> = _ipAddress
 
     private val _port = mutableStateOf("5762")
     val port: State<String> = _port
+
+    private val _pairedDevices = MutableStateFlow<List<PairedDevice>>(emptyList())
+    val pairedDevices: StateFlow<List<PairedDevice>> = _pairedDevices.asStateFlow()
+
+    private val _selectedDevice = mutableStateOf<PairedDevice?>(null)
+    val selectedDevice: State<PairedDevice?> = _selectedDevice
+
+    fun onConnectionTypeChange(newType: ConnectionType) {
+        _connectionType.value = newType
+    }
 
     fun onIpAddressChange(newValue: String) {
         _ipAddress.value = newValue
@@ -32,6 +66,16 @@ class SharedViewModel : ViewModel() {
         _port.value = newValue
     }
 
+    @SuppressLint("MissingPermission")
+    fun setPairedDevices(devices: Set<BluetoothDevice>) {
+        _pairedDevices.value = devices.map { PairedDevice(it) }
+    }
+
+    fun onDeviceSelected(device: PairedDevice) {
+        _selectedDevice.value = device
+    }
+
+    // --- Telemetry & Repository ---
     private var repo: MavlinkTelemetryRepository? = null
 
     private val _telemetryState = MutableStateFlow(TelemetryState())
@@ -41,42 +85,73 @@ class SharedViewModel : ViewModel() {
         .map { it.connected }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    fun connect() {
+        viewModelScope.launch {
+            val provider: MavConnectionProvider? = when (_connectionType.value) {
+                ConnectionType.TCP -> {
+                    val portInt = port.value.toIntOrNull()
+                    if (portInt != null) {
+                        TcpConnectionProvider(ipAddress.value, portInt)
+                    } else {
+                        Log.e("SharedVM", "Invalid port number.")
+                        null
+                    }
+                }
+                ConnectionType.BLUETOOTH -> {
+                    selectedDevice.value?.device?.let {
+                        BluetoothConnectionProvider(it)
+                    } ?: run {
+                        Log.e("SharedVM", "No Bluetooth device selected.")
+                        null
+                    }
+                }
+            }
+
+            if (provider == null) {
+                Log.e("SharedVM", "Failed to create connection provider.")
+                return@launch
+            }
+
+            // If there's an old repo, close its connection first
+            repo?.closeConnection()
+
+            val newRepo = MavlinkTelemetryRepository(provider)
+            repo = newRepo
+            newRepo.start()
+            newRepo.state.collect {
+                _telemetryState.value = it
+            }
+        }
+    }
+
+    // --- Mission State ---
     var missionUploaded by mutableStateOf(false)
     var lastUploadedCount by mutableStateOf(0)
 
-    // Store uploaded waypoints for display on main screen
     private val _uploadedWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val uploadedWaypoints: StateFlow<List<LatLng>> = _uploadedWaypoints.asStateFlow()
 
-    // Store survey polygon for grid missions
     private val _surveyPolygon = MutableStateFlow<List<LatLng>>(emptyList())
     val surveyPolygon: StateFlow<List<LatLng>> = _surveyPolygon.asStateFlow()
 
-    // Store grid lines for grid missions
     private val _gridLines = MutableStateFlow<List<Pair<LatLng, LatLng>>>(emptyList())
     val gridLines: StateFlow<List<Pair<LatLng, LatLng>>> = _gridLines.asStateFlow()
 
-    // Store grid waypoints for grid missions
     private val _gridWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val gridWaypoints: StateFlow<List<LatLng>> = _gridWaypoints.asStateFlow()
 
-    // Store planning waypoints for geofence preview (separate from uploaded waypoints)
     private val _planningWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val planningWaypoints: StateFlow<List<LatLng>> = _planningWaypoints.asStateFlow()
 
-    // Fence radius state (shared between screens) - now represents buffer distance for polygon
-    private val _fenceRadius = MutableStateFlow(5f) // Default 5m buffer as requested
+    private val _fenceRadius = MutableStateFlow(5f)
     val fenceRadius: StateFlow<Float> = _fenceRadius.asStateFlow()
 
-    // Geofence toggle state
     private val _geofenceEnabled = MutableStateFlow(false)
     val geofenceEnabled: StateFlow<Boolean> = _geofenceEnabled.asStateFlow()
 
-    // Polygon geofence points
     private val _geofencePolygon = MutableStateFlow<List<LatLng>>(emptyList())
     val geofencePolygon: StateFlow<List<LatLng>> = _geofencePolygon.asStateFlow()
 
-    // Setters for plan screen to update these
     fun setSurveyPolygon(polygon: List<LatLng>) {
         _surveyPolygon.value = polygon
         updateGeofencePolygon()
@@ -87,7 +162,6 @@ class SharedViewModel : ViewModel() {
         updateGeofencePolygon()
     }
 
-    // New method for updating planning waypoints (separate from mission upload)
     fun setPlanningWaypoints(waypoints: List<LatLng>) {
         _planningWaypoints.value = waypoints
         updateGeofencePolygon()
@@ -95,7 +169,6 @@ class SharedViewModel : ViewModel() {
 
     fun setFenceRadius(radius: Float) {
         _fenceRadius.value = radius
-        // Update polygon buffer when radius changes
         updateGeofencePolygon()
     }
 
@@ -108,9 +181,6 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Updates the geofence polygon based on current mission plan
-     */
     private fun updateGeofencePolygon() {
         if (!_geofenceEnabled.value) {
             _geofencePolygon.value = emptyList()
@@ -119,17 +189,12 @@ class SharedViewModel : ViewModel() {
 
         val allWaypoints = mutableListOf<LatLng>()
 
-        // Add regular waypoints if any (uploaded ones take priority over planning ones)
         if (_uploadedWaypoints.value.isNotEmpty()) {
             allWaypoints.addAll(_uploadedWaypoints.value)
         } else {
             allWaypoints.addAll(_planningWaypoints.value)
         }
-
-        // Add survey polygon points if any
         allWaypoints.addAll(_surveyPolygon.value)
-
-        // Add grid waypoints if any
         allWaypoints.addAll(_gridWaypoints.value)
 
         if (allWaypoints.isNotEmpty()) {
@@ -141,19 +206,7 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    fun connect() {
-        viewModelScope.launch {
-            val portInt = port.value.toIntOrNull()
-            if (portInt != null) {
-                val newRepo = MavlinkTelemetryRepository(ipAddress.value, portInt)
-                repo = newRepo
-                newRepo.start()
-                newRepo.state.collect {
-                    _telemetryState.value = it
-                }
-            }
-        }
-    }
+    // --- MAVLink Actions ---
 
     fun arm() {
         viewModelScope.launch {
@@ -182,25 +235,18 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Always clear previous mission in FCU before uploading new one (handled in repo)
                 Log.i("SharedVM", "Starting mission upload to FCU...")
                 val success = repo?.uploadMissionWithAck(missionItems) ?: false
                 missionUploaded = success
                 if (success) {
                     lastUploadedCount = missionItems.size
-
-                    // Convert MissionItemInt to LatLng for display
                     val waypoints = missionItems.filter { item ->
-                        // Show all waypoints except RTL (command 20u) and points with x=0/y=0
                         item.command.value != 20u && !(item.x == 0 && item.y == 0)
                     }.map { item ->
                         LatLng(item.x / 1E7, item.y / 1E7)
                     }
                     _uploadedWaypoints.value = waypoints
-
-                    // Update geofence polygon after mission upload
                     updateGeofencePolygon()
-
                     Log.i("SharedVM", "Mission upload succeeded (${missionItems.size})")
                     onResult(true, null)
                 } else {
@@ -221,7 +267,6 @@ class SharedViewModel : ViewModel() {
 
     fun startMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            // Reset missionCompleted and missionElapsedSec before starting a new mission
             _telemetryState.value = _telemetryState.value.copy(missionCompleted = false, missionElapsedSec = null)
             try {
                 Log.i("SharedVM", "Starting mission start sequence...")
@@ -238,7 +283,6 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Step 1: Check for acknowledgment of the mission
                 if (!missionUploaded || lastUploadedCount == 0) {
                     Log.w("SharedVM", "No mission uploaded or acknowledged, cannot start")
                     onResult(false, "No mission uploaded. Please upload a mission first.")
@@ -246,7 +290,6 @@ class SharedViewModel : ViewModel() {
                 }
                 Log.i("SharedVM", "✓ Mission upload acknowledged (${lastUploadedCount} items)")
 
-                // Check basic prerequisites
                 if (!_telemetryState.value.armable) {
                     Log.w("SharedVM", "Vehicle not armable, cannot start mission")
                     onResult(false, "Vehicle not armable. Check sensors and GPS.")
@@ -260,7 +303,6 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Step 2: See if the drone is either in Stabilize or Loiter to arm the drone
                 val currentMode = _telemetryState.value.mode
                 val isInArmableMode = currentMode?.equals("Stabilize", ignoreCase = true) == true ||
                         currentMode?.equals("Loiter", ignoreCase = true) == true
@@ -268,19 +310,15 @@ class SharedViewModel : ViewModel() {
                 if (!isInArmableMode) {
                     Log.i("SharedVM", "Current mode '$currentMode' not suitable for arming, switching to Stabilize")
                     repo?.changeMode(MavMode.STABILIZE)
-
-                    // Wait for mode change to Stabilize
                     val modeTimeout = 5000L
                     val modeStart = System.currentTimeMillis()
                     while (System.currentTimeMillis() - modeStart < modeTimeout) {
-                        val mode = _telemetryState.value.mode
-                        if (mode?.equals("Stabilize", ignoreCase = true) == true) {
+                        if (_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true) {
                             Log.i("SharedVM", "✓ Successfully switched to Stabilize mode")
                             break
                         }
                         delay(500)
                     }
-
                     if (!(_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true)) {
                         Log.w("SharedVM", "Failed to switch to Stabilize mode within timeout")
                         onResult(false, "Failed to switch to suitable mode for arming. Current mode: ${_telemetryState.value.mode}")
@@ -290,18 +328,14 @@ class SharedViewModel : ViewModel() {
                     Log.i("SharedVM", "✓ Already in suitable mode for arming: $currentMode")
                 }
 
-                // Step 3: Arm the drone
                 if (!_telemetryState.value.armed) {
                     Log.i("SharedVM", "Vehicle not armed - attempting to arm")
                     repo?.arm()
-
-                    // Wait for arming with increased timeout
                     val armTimeout = 10000L
                     val armStart = System.currentTimeMillis()
                     while (!_telemetryState.value.armed && System.currentTimeMillis() - armStart < armTimeout) {
                         delay(500)
                     }
-
                     if (!_telemetryState.value.armed) {
                         Log.w("SharedVM", "Vehicle did not arm within timeout")
                         onResult(false, "Vehicle failed to arm. Check pre-arm conditions.")
@@ -312,19 +346,15 @@ class SharedViewModel : ViewModel() {
                     Log.i("SharedVM", "✓ Vehicle already armed")
                 }
 
-                // Step 4: Change mode to Auto
                 if (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true) {
                     Log.i("SharedVM", "Switching vehicle mode to AUTO")
                     repo?.changeMode(MavMode.AUTO)
-
-                    // Wait for mode change to AUTO with increased timeout
                     val autoModeTimeout = 8000L
                     val autoModeStart = System.currentTimeMillis()
                     while (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true &&
                         System.currentTimeMillis() - autoModeStart < autoModeTimeout) {
                         delay(500)
                     }
-
                     if (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true) {
                         Log.w("SharedVM", "Vehicle did not switch to AUTO mode within timeout")
                         onResult(false, "Failed to switch to AUTO mode. Current mode: ${_telemetryState.value.mode}")
@@ -335,13 +365,10 @@ class SharedViewModel : ViewModel() {
                     Log.i("SharedVM", "✓ Vehicle already in AUTO mode")
                 }
 
-                // Give a small delay to ensure all mode changes are processed
                 delay(1000)
 
-                // Step 5: Start the mission
                 Log.i("SharedVM", "Sending start mission command")
                 val result = repo?.startMission() ?: false
-
                 if (result) {
                     Log.i("SharedVM", "✓ Mission start acknowledged by FCU")
                     onResult(true, null)
@@ -349,7 +376,6 @@ class SharedViewModel : ViewModel() {
                     Log.e("SharedVM", "Mission start failed or not acknowledged")
                     onResult(false, "Mission start failed. Check vehicle status and try again.")
                 }
-
             } catch (e: Exception) {
                 Log.e("SharedVM", "Failed to start mission", e)
                 onResult(false, e.message)
@@ -357,7 +383,6 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    // New helper to request mission from FCU and log its items for debugging
     fun readMissionFromFcu() {
         viewModelScope.launch {
             if (repo == null) {
@@ -373,8 +398,6 @@ class SharedViewModel : ViewModel() {
     }
 
     suspend fun cancelConnection() {
-        // Cancel any ongoing connection coroutine (handled by ConnectionPage)
-        // Attempt to close/flush the repo's socket/connection if possible
         repo?.let {
             try {
                 it.closeConnection()
@@ -383,8 +406,6 @@ class SharedViewModel : ViewModel() {
             }
         }
         repo = null
-        _telemetryState.value = TelemetryState() // Reset state
+        _telemetryState.value = TelemetryState()
     }
-
-
 }

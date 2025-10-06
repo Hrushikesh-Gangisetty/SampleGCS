@@ -9,6 +9,7 @@ import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.connection.tcp.TcpClientMavConnection
 import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.definitions.minimal.*
+import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -26,8 +27,7 @@ object MavMode {
 }
 
 class MavlinkTelemetryRepository(
-    private val host: String,
-    private val port: Int
+    private val provider: MavConnectionProvider
 ) {
     private val gcsSystemId: UByte = 255u
     private val gcsComponentId: UByte = 1u
@@ -42,7 +42,7 @@ class MavlinkTelemetryRepository(
     val lastFailure: StateFlow<Throwable?> = _lastFailure.asStateFlow()
 
     // Connection
-    private val connection = TcpClientMavConnection(host, port, CommonDialect).asCoroutine()
+    private val connection = provider.createConnection()
 
     // MAVLink command value for MISSION_CLEAR_ALL
     private val MISSION_CLEAR_ALL_CMD: UInt = 45u
