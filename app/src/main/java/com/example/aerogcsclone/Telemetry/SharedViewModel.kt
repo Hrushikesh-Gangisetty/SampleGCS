@@ -12,6 +12,7 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.example.aerogcsclone.utils.GeofenceUtils
 
 import androidx.compose.runtime.State
 
@@ -59,17 +60,85 @@ class SharedViewModel : ViewModel() {
     private val _gridWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
     val gridWaypoints: StateFlow<List<LatLng>> = _gridWaypoints.asStateFlow()
 
-    // Fence radius state (shared between screens)
-    private val _fenceRadius = MutableStateFlow(500f) // Default 500m
+    // Store planning waypoints for geofence preview (separate from uploaded waypoints)
+    private val _planningWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
+    val planningWaypoints: StateFlow<List<LatLng>> = _planningWaypoints.asStateFlow()
+
+    // Fence radius state (shared between screens) - now represents buffer distance for polygon
+    private val _fenceRadius = MutableStateFlow(5f) // Default 5m buffer as requested
     val fenceRadius: StateFlow<Float> = _fenceRadius.asStateFlow()
 
+    // Geofence toggle state
+    private val _geofenceEnabled = MutableStateFlow(false)
+    val geofenceEnabled: StateFlow<Boolean> = _geofenceEnabled.asStateFlow()
+
+    // Polygon geofence points
+    private val _geofencePolygon = MutableStateFlow<List<LatLng>>(emptyList())
+    val geofencePolygon: StateFlow<List<LatLng>> = _geofencePolygon.asStateFlow()
+
     // Setters for plan screen to update these
-    fun setSurveyPolygon(polygon: List<LatLng>) { _surveyPolygon.value = polygon }
+    fun setSurveyPolygon(polygon: List<LatLng>) {
+        _surveyPolygon.value = polygon
+        updateGeofencePolygon()
+    }
     fun setGridLines(lines: List<Pair<LatLng, LatLng>>) { _gridLines.value = lines }
-    fun setGridWaypoints(waypoints: List<LatLng>) { _gridWaypoints.value = waypoints }
+    fun setGridWaypoints(waypoints: List<LatLng>) {
+        _gridWaypoints.value = waypoints
+        updateGeofencePolygon()
+    }
+
+    // New method for updating planning waypoints (separate from mission upload)
+    fun setPlanningWaypoints(waypoints: List<LatLng>) {
+        _planningWaypoints.value = waypoints
+        updateGeofencePolygon()
+    }
 
     fun setFenceRadius(radius: Float) {
         _fenceRadius.value = radius
+        // Update polygon buffer when radius changes
+        updateGeofencePolygon()
+    }
+
+    fun setGeofenceEnabled(enabled: Boolean) {
+        _geofenceEnabled.value = enabled
+        if (enabled) {
+            updateGeofencePolygon()
+        } else {
+            _geofencePolygon.value = emptyList()
+        }
+    }
+
+    /**
+     * Updates the geofence polygon based on current mission plan
+     */
+    private fun updateGeofencePolygon() {
+        if (!_geofenceEnabled.value) {
+            _geofencePolygon.value = emptyList()
+            return
+        }
+
+        val allWaypoints = mutableListOf<LatLng>()
+
+        // Add regular waypoints if any (uploaded ones take priority over planning ones)
+        if (_uploadedWaypoints.value.isNotEmpty()) {
+            allWaypoints.addAll(_uploadedWaypoints.value)
+        } else {
+            allWaypoints.addAll(_planningWaypoints.value)
+        }
+
+        // Add survey polygon points if any
+        allWaypoints.addAll(_surveyPolygon.value)
+
+        // Add grid waypoints if any
+        allWaypoints.addAll(_gridWaypoints.value)
+
+        if (allWaypoints.isNotEmpty()) {
+            val bufferDistance = _fenceRadius.value.toDouble()
+            val polygonBuffer = GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
+            _geofencePolygon.value = polygonBuffer
+        } else {
+            _geofencePolygon.value = emptyList()
+        }
     }
 
     fun connect() {
@@ -128,6 +197,9 @@ class SharedViewModel : ViewModel() {
                         LatLng(item.x / 1E7, item.y / 1E7)
                     }
                     _uploadedWaypoints.value = waypoints
+
+                    // Update geofence polygon after mission upload
+                    updateGeofencePolygon()
 
                     Log.i("SharedVM", "Mission upload succeeded (${missionItems.size})")
                     onResult(true, null)

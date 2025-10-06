@@ -41,23 +41,8 @@ fun MainPage(
     val gridLines by telemetryViewModel.gridLines.collectAsState()
     val gridWaypoints by telemetryViewModel.gridWaypoints.collectAsState()
     val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
-
-    // Calculate fence center (centroid of surveyPolygon or uploadedWaypoints)
-    val fenceCenter = remember(surveyPolygon, uploadedWaypoints) {
-        when {
-            surveyPolygon.isNotEmpty() -> {
-                val lat = surveyPolygon.map { it.latitude }.average()
-                val lon = surveyPolygon.map { it.longitude }.average()
-                LatLng(lat, lon)
-            }
-            uploadedWaypoints.isNotEmpty() -> {
-                val lat = uploadedWaypoints.map { it.latitude }.average()
-                val lon = uploadedWaypoints.map { it.longitude }.average()
-                LatLng(lat, lon)
-            }
-            else -> null
-        }
-    }
+    val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
+    val geofencePolygon by telemetryViewModel.geofencePolygon.collectAsState()
 
     // Map camera state controlled from parent so refresh can move it
     val cameraPositionState = rememberCameraPositionState()
@@ -103,8 +88,8 @@ fun MainPage(
                 cameraPositionState = cameraPositionState,
                 autoCenter = false,
                 heading = telemetryState.heading,
-                fenceCenter = fenceCenter,
-                fenceRadius = fenceRadius
+                geofencePolygon = geofencePolygon,
+                geofenceEnabled = geofenceEnabled
             )
 
             StatusPanel(

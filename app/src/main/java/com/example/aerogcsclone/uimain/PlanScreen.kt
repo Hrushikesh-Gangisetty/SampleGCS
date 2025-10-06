@@ -49,14 +49,10 @@ fun PlanScreen(
     val missionTemplateUiState by missionTemplateViewModel.uiState.collectAsState()
     val templates by missionTemplateViewModel.templates.collectAsState(initial = emptyList())
     val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
+    val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
+    val geofencePolygon by telemetryViewModel.geofencePolygon.collectAsState()
     val context = LocalContext.current
 
-    // Top navigation bar
-    TopNavBar(
-        telemetryState = telemetryState,
-        authViewModel = authViewModel,
-        navController = navController
-    )
 
     // State management
     var showPlanActions by remember { mutableStateOf(false) }
@@ -139,6 +135,13 @@ fun PlanScreen(
                 includeSpeedCommands = true
             )
             gridResult = gridGenerator.generateGridSurvey(surveyPolygon, params)
+
+            // Update SharedViewModel with the new survey polygon and grid waypoints
+            telemetryViewModel.setSurveyPolygon(surveyPolygon)
+            gridResult?.let { result ->
+                telemetryViewModel.setGridWaypoints(result.waypoints.map { it.position })
+                telemetryViewModel.setGridLines(result.gridLines)
+            }
         }
     }
 
@@ -210,6 +213,9 @@ fun PlanScreen(
             points.add(latLng)
             waypoints.add(item)
             Toast.makeText(context, "Waypoints: ${points.joinToString { "(${it.latitude},${it.longitude})" }}", Toast.LENGTH_SHORT).show()
+
+            // Update SharedViewModel for geofence calculation during planning
+            telemetryViewModel.setPlanningWaypoints(points.toList())
         }
     }
 
@@ -257,8 +263,8 @@ fun PlanScreen(
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
                 gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
-                fenceCenter = fenceCenter,
-                fenceRadius = fenceRadius
+                geofencePolygon = geofencePolygon,
+                geofenceEnabled = geofenceEnabled
             )
 
             // Status indicator
@@ -647,24 +653,74 @@ fun PlanScreen(
                             )
                         }
 
-                        // Fence Radius
+                        HorizontalDivider(color = Color.Gray, thickness = 1.dp)
+
+                        // Geofence Toggle (moved above buffer distance as requested)
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Fence Radius", color = Color.White, modifier = Modifier.weight(1f))
-                                Text("${fenceRadius.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = fenceRadius,
-                                onValueChange = { telemetryViewModel.setFenceRadius(it) },
-                                valueRange = 50f..2000f,
-                                steps = 39,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.Red,
-                                    activeTrackColor = Color.Red,
-                                    inactiveTrackColor = Color.Gray
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "Enable Geofence",
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f),
+                                    fontWeight = FontWeight.Bold
                                 )
-                            )
+                                Switch(
+                                    checked = geofenceEnabled,
+                                    onCheckedChange = { telemetryViewModel.setGeofenceEnabled(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color.Green, // Green when ON
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = Color.Red // Red when OFF
+                                    )
+                                )
+                            }
+                            if (geofenceEnabled) {
+                                Text(
+                                    "Polygon fence active around mission plan",
+                                    color = Color.Green,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    "Geofence disabled",
+                                    color = Color.Red,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+
+                        // Buffer Distance Slider (moved below toggle as requested)
+                        if (geofenceEnabled) {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Buffer Distance", color = Color.White, modifier = Modifier.weight(1f))
+                                    Text("${fenceRadius.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = fenceRadius,
+                                    onValueChange = { telemetryViewModel.setFenceRadius(it) },
+                                    valueRange = 1f..50f, // 1-50m range as requested
+                                    steps = 49,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.Green,
+                                        activeTrackColor = Color.Green,
+                                        inactiveTrackColor = Color.Gray
+                                    )
+                                )
+                                Text(
+                                    "Adjust polygon buffer distance around mission plan",
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
                         }
 
                         gridResult?.let { result ->

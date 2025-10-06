@@ -28,9 +28,9 @@ fun GcsMap(
     gridLines: List<List<LatLng>> = emptyList(),
     gridWaypoints: List<LatLng> = emptyList(),
     heading: Float? = null,
-    // Fence parameters
-    fenceCenter: LatLng? = null,
-    fenceRadius: Float = 500f
+    // Geofence parameters - now using polygon instead of circle
+    geofencePolygon: List<LatLng> = emptyList(),
+    geofenceEnabled: Boolean = false
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -74,15 +74,26 @@ fun GcsMap(
         properties = MapProperties(mapType = mapType),
         onMapClick = { latLng -> onMapClick(latLng) }
     ) {
-        // Fence boundary circle overlay
-        fenceCenter?.let { center ->
-            Circle(
-                center = center,
-                radius = fenceRadius.toDouble(),
-                strokeColor = Color.Red,
-                strokeWidth = 4f,
-                fillColor = Color.Red.copy(alpha = 0.2f)
-            )
+        // Polygon geofence boundary overlay (replaces circular fence)
+        if (geofenceEnabled && geofencePolygon.isNotEmpty()) {
+            // Draw the polygon boundary
+            if (geofencePolygon.size >= 3) {
+                // Close the polygon by connecting last point to first
+                val closedPolygon = geofencePolygon + geofencePolygon.first()
+                Polyline(
+                    points = closedPolygon,
+                    width = 4f,
+                    color = Color.Red
+                )
+
+                // Fill the polygon area with semi-transparent red
+                Polygon(
+                    points = geofencePolygon,
+                    fillColor = Color.Red.copy(alpha = 0.2f),
+                    strokeColor = Color.Red,
+                    strokeWidth = 4f
+                )
+            }
         }
 
         // Drone marker using quadcopter image; centered via anchor Offset(0.5f, 0.5f)
