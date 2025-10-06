@@ -80,6 +80,19 @@ fun TopNavBar(
                                 .width(180.dp)
                                 .padding(vertical = 8.dp, horizontal = 16.dp)
                         ) {
+                            // New Plan Mission menu item
+                            Text(
+                                text = "Plan Mission",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .clickable {
+                                        selectedMode = "Plan Mission"
+                                        menuExpanded = false
+                                        navController.navigate(Screen.Plan.route)
+                                    }
+                            )
                             Text(
                                 text = "Automatic",
                                 color = Color.White,
