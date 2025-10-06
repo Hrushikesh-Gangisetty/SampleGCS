@@ -472,6 +472,28 @@ fun PlanScreen(
                 }
             }
 
+            // Top left arrow back icon
+            if (hasStartedPlanning) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 16.dp)
+                ) {
+                    IconButton(onClick = {
+                        navController.navigate(Screen.Main.route) {
+                            popUpTo(Screen.Plan.route) { inclusive = true }
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+
             // Left sidebar buttons
             if (hasStartedPlanning) {
                 Column(
