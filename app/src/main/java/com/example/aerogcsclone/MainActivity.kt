@@ -17,7 +17,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.example.aerogcsclone.navigation.AppNavGraph
 import com.example.aerogcsclone.integration.TlogIntegration
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.MapsInitializer
 
@@ -33,14 +33,28 @@ private val DarkColorScheme = darkColorScheme(
 
 class MainActivity : ComponentActivity() {
 
-    private val hasPermission = mutableStateOf(false)
+    private val hasRequiredPermissions = mutableStateOf(false)
 
-    private val requestLocation = registerForActivityResult(
+    private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        val fine = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarse = grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        hasPermission.value = fine || coarse
+        val fineLocation = grants.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
+        val coarseLocation = grants.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+
+        val bluetoothScanGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            grants.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false)
+        } else {
+            true // Not required for older APIs
+        }
+
+        val bluetoothConnectGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            grants.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false)
+        } else {
+            true // Not required for older APIs
+        }
+
+        // For the app to function, we need location and the relevant BT permissions.
+        hasRequiredPermissions.value = (fineLocation || coarseLocation) && bluetoothScanGranted && bluetoothConnectGranted
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +83,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        askLocationPermissions()
+        askForPermissions()
     }
 
     override fun onDestroy() {
@@ -78,12 +92,17 @@ class MainActivity : ComponentActivity() {
         TlogIntegration.destroy()
     }
 
-    private fun askLocationPermissions() {
-        requestLocation.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
+    private fun askForPermissions() {
+        val permissionsToRequest = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+
+        requestPermissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 }

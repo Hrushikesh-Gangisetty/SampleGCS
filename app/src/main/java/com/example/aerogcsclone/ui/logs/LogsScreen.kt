@@ -21,7 +21,8 @@ import com.example.aerogcsclone.database.tlog.FlightEntity
 import com.example.aerogcsclone.export.ExportFormat
 import com.example.aerogcsclone.uimain.TopNavBar
 import com.example.aerogcsclone.viewmodel.TlogViewModel
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 

@@ -1,11 +1,12 @@
 package com.example.aerogcsclone.manager
 
 import android.content.Context
-import com.example.aerogcsclone.Telemetry.SharedViewModel
+//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.database.tlog.EventType
 import com.example.aerogcsclone.database.tlog.EventSeverity
 import com.example.aerogcsclone.service.FlightLoggingService
+import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.viewmodel.TlogViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
