@@ -11,9 +11,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MissionItemInt
 import com.example.aerogcsclone.Telemetry.TelemetryState
-import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
-import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
-import com.example.aerogcsclone.Telemetry.connections.TcpConnectionProvider
+//import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
+//import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
 //import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
 //import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 //import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider

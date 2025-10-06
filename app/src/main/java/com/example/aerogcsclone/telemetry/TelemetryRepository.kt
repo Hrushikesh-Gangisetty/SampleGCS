@@ -11,7 +11,8 @@ import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.definitions.minimal.*
 import com.example.aerogcsclone.Telemetry.AppScope
 import com.example.aerogcsclone.Telemetry.TelemetryState
-import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
+//import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
+import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 //import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay

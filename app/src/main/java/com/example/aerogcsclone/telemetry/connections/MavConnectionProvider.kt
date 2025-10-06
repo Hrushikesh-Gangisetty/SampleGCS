@@ -1,4 +1,4 @@
-package com.example.aerogcsclone.Telemetry.connections
+package com.example.aerogcsclone.telemetry.connections
 
 import com.divpundir.mavlink.adapters.coroutines.CoroutinesMavConnection
 
