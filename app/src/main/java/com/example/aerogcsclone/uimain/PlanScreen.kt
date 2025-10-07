@@ -728,8 +728,8 @@ fun PlanScreen(
                                 Slider(
                                     value = fenceRadius,
                                     onValueChange = { telemetryViewModel.setFenceRadius(it) },
-                                    valueRange = 1f..50f, // 1-50m range as requested
-                                    steps = 49,
+                                    valueRange = 0f..50f, // Changed to start from 0 meters
+                                    steps = 50, // Updated steps to match new range
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = SliderDefaults.colors(
                                         thumbColor = Color.Green,
