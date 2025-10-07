@@ -118,7 +118,7 @@ fun AppNavGraph(navController: NavHostController) {
             com.example.aerogcsclone.uimain.SettingsScreen(navController)
         }
         composable(Screen.Calibrations.route) {
-            com.example.aerogcsclone.uimain.CalibrationsScreen()
+            com.example.aerogcsclone.uimain.CalibrationsScreen(viewModel = sharedViewModel)
         }
     }
 }

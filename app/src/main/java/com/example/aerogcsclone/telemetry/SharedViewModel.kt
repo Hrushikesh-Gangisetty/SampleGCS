@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.MAVLink.common.msg_command_long
+import com.MAVLink.common.msg_statustext
 import com.divpundir.mavlink.definitions.common.MissionItemInt
 import com.example.aerogcsclone.Telemetry.TelemetryState
 //import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
@@ -91,6 +93,9 @@ class SharedViewModel : ViewModel() {
         .map { it.connected }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    private val _calibrationStatus = MutableStateFlow<String?>(null)
+    val calibrationStatus: StateFlow<String?> = _calibrationStatus.asStateFlow()
+
     fun connect() {
         viewModelScope.launch {
             val provider: MavConnectionProvider? = when (_connectionType.value) {
@@ -126,6 +131,18 @@ class SharedViewModel : ViewModel() {
             newRepo.start()
             newRepo.state.collect {
                 _telemetryState.value = it
+            }
+
+            viewModelScope.launch {
+                newRepo.mavFrame
+                    .map { it.message }
+                    .filterIsInstance<msg_statustext>()
+                    .collect {
+                        val statusText = it.text.toString()
+                        if (statusText.contains("progress", ignoreCase = true) || statusText.contains("calibration", ignoreCase = true)) {
+                            _calibrationStatus.value = statusText
+                        }
+                    }
             }
         }
     }
@@ -217,6 +234,22 @@ class SharedViewModel : ViewModel() {
     fun arm() {
         viewModelScope.launch {
             repo?.arm()
+        }
+    }
+
+    fun startImuCalibration() {
+        viewModelScope.launch {
+            repo?.let {
+                val command = com.example.aerogcsclone.manager.CalibrationCommands.createImuCalibrationCommand(
+                    targetSystem = it.fcuSystemId.toInt(),
+                    targetComponent = it.fcuComponentId.toInt()
+                )
+                it.connection.trySendUnsignedV2(
+                    it.gcsSystemId,
+                    it.gcsComponentId,
+                    command
+                )
+            }
         }
     }
 
