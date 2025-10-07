@@ -202,7 +202,10 @@ fun TopNavBar(
                         )
                         DropdownMenuItem(
                             text = { Text("Settings") },
-                            onClick = { kebabMenuExpanded = false }
+                            onClick = {
+                                kebabMenuExpanded = false
+                                navController.navigate(Screen.Settings.route)
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("About App") },

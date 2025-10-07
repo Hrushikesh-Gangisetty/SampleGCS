@@ -23,7 +23,7 @@ import com.example.aerogcsclone.navigation.Screen
 fun SelectFlyingMethodScreen(navController: NavController) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = Color(0xFF23272A) // dark grey
     ) {
         Column(
             modifier = Modifier
@@ -70,7 +70,7 @@ fun FlyingMethodCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.DarkGray)
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2F33)) // slightly lighter dark grey
     ) {
         Column(
             modifier = Modifier

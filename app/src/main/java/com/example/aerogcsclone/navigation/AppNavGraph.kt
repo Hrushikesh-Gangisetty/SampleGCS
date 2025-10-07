@@ -37,6 +37,8 @@ sealed class Screen(val route: String) {
     object PlotTemplates : Screen("plot_templates")
     object Logs : Screen("logs")
     object SelectMethod : Screen("select_method")
+    object Settings : Screen("settings")
+    object Calibrations : Screen("calibrations")
 }
 
 @Composable
@@ -111,6 +113,12 @@ fun AppNavGraph(navController: NavHostController) {
         }
         composable(Screen.SelectMethod.route) {
             SelectFlyingMethodScreen(navController = navController)
+        }
+        composable(Screen.Settings.route) {
+            com.example.aerogcsclone.uimain.SettingsScreen(navController)
+        }
+        composable(Screen.Calibrations.route) {
+            com.example.aerogcsclone.uimain.CalibrationsScreen()
         }
     }
 }
