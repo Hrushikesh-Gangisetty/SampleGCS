@@ -115,7 +115,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                 color = Color.White
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             val tabs = listOf("TCP/IP", "Bluetooth")
             TabRow(selectedTabIndex = connectionType.ordinal, containerColor = Color(0xFF333330)) {
@@ -206,11 +206,11 @@ fun BluetoothConnectionContent(viewModel: SharedViewModel) {
     val selectedDevice by viewModel.selectedDevice
 
     if (pairedDevices.isEmpty()) {
-        Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
             Text("No paired Bluetooth devices found.", color = Color.White)
         }
     } else {
-        LazyColumn(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxWidth().height(120.dp)) {
             items(pairedDevices) { device ->
                 DeviceRow(
                     device = device,
