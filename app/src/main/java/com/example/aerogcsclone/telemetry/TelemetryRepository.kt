@@ -860,5 +860,18 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    suspend fun sendCommandLong(command: CommandLong) {
+        try {
+            connection.trySendUnsignedV2(
+                gcsSystemId,
+                gcsComponentId,
+                command
+            )
+            Log.d("MavlinkRepo", "Sent COMMAND_LONG (custom): $command")
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Failed to send custom COMMAND_LONG", e)
+        }
+    }
+
 
 }

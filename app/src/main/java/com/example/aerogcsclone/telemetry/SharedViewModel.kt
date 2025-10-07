@@ -9,9 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.MAVLink.common.msg_command_long
-import com.MAVLink.common.msg_statustext
 import com.divpundir.mavlink.definitions.common.MissionItemInt
+import com.divpundir.mavlink.definitions.common.Statustext
 import com.example.aerogcsclone.Telemetry.TelemetryState
 //import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
 //import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
@@ -96,6 +95,9 @@ class SharedViewModel : ViewModel() {
     private val _calibrationStatus = MutableStateFlow<String?>(null)
     val calibrationStatus: StateFlow<String?> = _calibrationStatus.asStateFlow()
 
+    private val _imuCalibrationStartResult = MutableStateFlow<Boolean?>(null)
+    val imuCalibrationStartResult: StateFlow<Boolean?> = _imuCalibrationStartResult
+
     fun connect() {
         viewModelScope.launch {
             val provider: MavConnectionProvider? = when (_connectionType.value) {
@@ -129,14 +131,16 @@ class SharedViewModel : ViewModel() {
             val newRepo = MavlinkTelemetryRepository(provider)
             repo = newRepo
             newRepo.start()
-            newRepo.state.collect {
-                _telemetryState.value = it
+            viewModelScope.launch {
+                newRepo.state.collect {
+                    _telemetryState.value = it
+                }
             }
 
             viewModelScope.launch {
                 newRepo.mavFrame
                     .map { it.message }
-                    .filterIsInstance<msg_statustext>()
+                    .filterIsInstance<Statustext>()
                     .collect {
                         val statusText = it.text.toString()
                         if (statusText.contains("progress", ignoreCase = true) || statusText.contains("calibration", ignoreCase = true)) {
@@ -240,17 +244,24 @@ class SharedViewModel : ViewModel() {
     fun startImuCalibration() {
         viewModelScope.launch {
             repo?.let {
-                val command = com.example.aerogcsclone.manager.CalibrationCommands.createImuCalibrationCommand(
-                    targetSystem = it.fcuSystemId.toInt(),
-                    targetComponent = it.fcuComponentId.toInt()
-                )
-                it.connection.trySendUnsignedV2(
-                    it.gcsSystemId,
-                    it.gcsComponentId,
-                    command
-                )
+                try {
+                    val command = com.example.aerogcsclone.manager.CalibrationCommands.createImuCalibrationCommand(
+                        targetSystem = it.fcuSystemId,
+                        targetComponent = it.fcuComponentId
+                    )
+                    it.sendCommandLong(command)
+                    _imuCalibrationStartResult.value = true // Assume success if no exception
+                } catch (e: Exception) {
+                    _imuCalibrationStartResult.value = false
+                }
+            } ?: run {
+                _imuCalibrationStartResult.value = false
             }
         }
+    }
+
+    fun resetImuCalibrationStartResult() {
+        _imuCalibrationStartResult.value = null
     }
 
     fun uploadMission(missionItems: List<MissionItemInt>, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {

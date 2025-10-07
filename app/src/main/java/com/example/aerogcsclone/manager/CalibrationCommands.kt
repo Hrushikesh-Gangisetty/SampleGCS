@@ -1,26 +1,27 @@
 package com.example.aerogcsclone.manager
 
-import com.MAVLink.common.msg_command_long
-import com.MAVLink.enums.MAV_CMD
+import com.divpundir.mavlink.api.MavEnumValue
+import com.divpundir.mavlink.definitions.common.CommandLong
+import com.divpundir.mavlink.definitions.common.MavCmd
 
 object CalibrationCommands {
 
     fun createImuCalibrationCommand(
-        targetSystem: Int = 1,
-        targetComponent: Int = 1
-    ): msg_command_long {
-        return msg_command_long().apply {
-            this.target_system = targetSystem.toUByte()
-            this.target_component = targetComponent.toUByte()
-            this.command = MAV_CMD.MAV_CMD_PREFLIGHT_CALIBRATION.toUShort()
-            this.confirmation = 0u
-            this.param1 = 1f // IMU calibration
-            this.param2 = 0f
-            this.param3 = 0f
-            this.param4 = 0f
-            this.param5 = 0f
-            this.param6 = 0f
-            this.param7 = 0f
-        }
+        targetSystem: UByte = 1u,
+        targetComponent: UByte = 1u
+    ): CommandLong {
+        return CommandLong(
+            targetSystem = targetSystem,
+            targetComponent = targetComponent,
+            command = MavEnumValue.of(MavCmd.PREFLIGHT_CALIBRATION),
+            confirmation = 0u,
+            param1 = 1f, // IMU calibration
+            param2 = 0f,
+            param3 = 0f,
+            param4 = 0f,
+            param5 = 0f,
+            param6 = 0f,
+            param7 = 0f
+        )
     }
 }

@@ -108,4 +108,7 @@ dependencies {
     // ViewModel and LiveData
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+
+    // MAVLink Java library (example, adjust if you use a different one)
+    implementation("io.dronefleet.mavlink:mavlink:1.0.7")
 }
