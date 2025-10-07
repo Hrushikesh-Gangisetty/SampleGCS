@@ -19,6 +19,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.divpundir.mavlink.api.MavFrame
+import com.divpundir.mavlink.api.MavMessage
 import kotlinx.coroutines.withTimeoutOrNull
 
 // MAVLink flight modes (ArduPilot values)
@@ -33,20 +35,22 @@ object MavMode {
 class MavlinkTelemetryRepository(
     private val provider: MavConnectionProvider
 ) {
-    private val gcsSystemId: UByte = 255u
-    private val gcsComponentId: UByte = 1u
+    val gcsSystemId: UByte = 255u
+    val gcsComponentId: UByte = 1u
     private val _state = MutableStateFlow(TelemetryState())
     val state: StateFlow<TelemetryState> = _state.asStateFlow()
 
-    private var fcuSystemId: UByte = 0u
-    private var fcuComponentId: UByte = 0u
+    var fcuSystemId: UByte = 0u
+    var fcuComponentId: UByte = 0u
 
     // Diagnostic info
     private val _lastFailure = MutableStateFlow<Throwable?>(null)
     val lastFailure: StateFlow<Throwable?> = _lastFailure.asStateFlow()
 
     // Connection
-    private val connection = provider.createConnection()
+    val connection = provider.createConnection()
+    lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
+        private set
 
     // MAVLink command value for MISSION_CLEAR_ALL
     private val MISSION_CLEAR_ALL_CMD: UInt = 45u
@@ -118,19 +122,19 @@ class MavlinkTelemetryRepository(
         }
 
         // Shared message stream
-        val mavFrameStream = connection.mavFrame
+        mavFrame = connection.mavFrame
             .shareIn(scope, SharingStarted.Eagerly, replay = 0)
 
         // Log raw messages
         scope.launch {
-            mavFrameStream.collect {
+            mavFrame.collect {
                 Log.d("MavlinkRepo", "Frame: ${it.message.javaClass.simpleName} (sysId=${it.systemId}, compId=${it.componentId})")
             }
         }
 
         // Detect FCU
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { it.message is Heartbeat && (it.message as Heartbeat).type != MavType.GCS.wrap() }
                 .collect {
                     if (!state.value.fcuDetected) {
@@ -176,7 +180,7 @@ class MavlinkTelemetryRepository(
 
         // Collector to log COMMAND_ACK messages for diagnostics
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<CommandAck>()
@@ -194,7 +198,7 @@ class MavlinkTelemetryRepository(
 
         // VFR_HUD
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<VfrHud>()
@@ -214,7 +218,7 @@ class MavlinkTelemetryRepository(
 
         // GLOBAL_POSITION_INT
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<GlobalPositionInt>()
@@ -264,7 +268,7 @@ class MavlinkTelemetryRepository(
 
         // BATTERY_STATUS
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<BatteryStatus>()
@@ -278,7 +282,7 @@ class MavlinkTelemetryRepository(
         var lastMode: String? = null
         var lastArmed: Boolean? = null
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { frame -> state.value.fcuDetected && frame.systemId == fcuSystemId }
                 .map { frame -> frame.message }
                 .filterIsInstance<Heartbeat>()
@@ -345,7 +349,7 @@ class MavlinkTelemetryRepository(
         }
         // SYS_STATUS
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<SysStatus>()
@@ -363,7 +367,7 @@ class MavlinkTelemetryRepository(
 
         // GPS_RAW_INT
         scope.launch {
-            mavFrameStream
+            mavFrame
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<GpsRawInt>()
