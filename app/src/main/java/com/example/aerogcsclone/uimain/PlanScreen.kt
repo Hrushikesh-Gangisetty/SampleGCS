@@ -728,7 +728,7 @@ fun PlanScreen(
                                 Slider(
                                     value = fenceRadius,
                                     onValueChange = { telemetryViewModel.setFenceRadius(it) },
-                                    valueRange = 0f..50f, // Changed to start from 0 meters
+                                    valueRange = -4f..50f, // Changed minimum from 0 to -4 for testing boundary crossing
                                     steps = 50, // Updated steps to match new range
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = SliderDefaults.colors(
