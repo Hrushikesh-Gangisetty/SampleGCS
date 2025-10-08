@@ -1,3 +1,4 @@
+@file:Suppress("unused")
 package com.example.aerogcsclone.telemetry
 
 import android.annotation.SuppressLint
@@ -17,12 +18,12 @@ import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
-import com.example.aerogcsclone.telemetry.MavMode
 import com.example.aerogcsclone.utils.GeofenceUtils
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.example.aerogcsclone.grid.GridUtils
 
 enum class ConnectionType {
     TCP, BLUETOOTH
@@ -42,6 +43,35 @@ data class PairedDevice(
 }
 
 class SharedViewModel : ViewModel() {
+
+    // --- Area (survey / mission) state ---
+    // Area of the currently drawn survey polygon (sq meters)
+    private val _surveyAreaSqMeters = MutableStateFlow(0.0)
+    val surveyAreaSqMeters: StateFlow<Double> = _surveyAreaSqMeters.asStateFlow()
+
+    // Formatted area string for display (reuses GridUtils formatting to match Grid statistics)
+    private val _surveyAreaFormatted = MutableStateFlow("0 acres")
+    val surveyAreaFormatted: StateFlow<String> = _surveyAreaFormatted.asStateFlow()
+
+    // Area captured at the time of mission upload (so telemetry shows the uploaded mission's area)
+    private val _missionAreaSqMeters = MutableStateFlow(0.0)
+    val missionAreaSqMeters: StateFlow<Double> = _missionAreaSqMeters.asStateFlow()
+
+    private val _missionAreaFormatted = MutableStateFlow("0 acres")
+    val missionAreaFormatted: StateFlow<String> = _missionAreaFormatted.asStateFlow()
+
+    private fun updateSurveyArea() {
+        val polygon = _surveyPolygon.value
+        if (polygon.size >= 3) {
+            val areaMeters = GridUtils.calculatePolygonArea(polygon)
+            val formatted = GridUtils.calculateAndFormatPolygonArea(polygon)
+            _surveyAreaSqMeters.value = areaMeters
+            _surveyAreaFormatted.value = formatted
+        } else {
+            _surveyAreaSqMeters.value = 0.0
+            _surveyAreaFormatted.value = "0 acres"
+        }
+    }
 
     // --- Connection State Management ---
     private val _connectionType = mutableStateOf(ConnectionType.TCP)
@@ -140,17 +170,19 @@ class SharedViewModel : ViewModel() {
                     .map { it.message }
                     .filterIsInstance<Statustext>()
                     .collect {
-                        val statusText = it.text.toString()
-                        if (statusText.contains("progress", ignoreCase = true) || statusText.contains("calibration", ignoreCase = true)) {
-                            _calibrationStatus.value = statusText
-                        }
-                    }
-            }
+                        val statusText = it.text
+                         if (statusText.contains("progress", ignoreCase = true) || statusText.contains("calibration", ignoreCase = true)) {
+                             _calibrationStatus.value = statusText
+                         }
+                     }
+             }
         }
     }
 
     // --- Mission State ---
-    var missionUploaded by mutableStateOf(false)
+    // Expose mission uploaded state as StateFlow so UI can observe it reliably
+    private val _missionUploaded = MutableStateFlow(false)
+    val missionUploaded: StateFlow<Boolean> = _missionUploaded.asStateFlow()
     var lastUploadedCount by mutableStateOf(0)
 
     private val _uploadedWaypoints = MutableStateFlow<List<LatLng>>(emptyList())
@@ -180,16 +212,20 @@ class SharedViewModel : ViewModel() {
     fun setSurveyPolygon(polygon: List<LatLng>) {
         _surveyPolygon.value = polygon
         updateGeofencePolygon()
+        updateSurveyArea()
     }
     fun setGridLines(lines: List<Pair<LatLng, LatLng>>) { _gridLines.value = lines }
     fun setGridWaypoints(waypoints: List<LatLng>) {
         _gridWaypoints.value = waypoints
         updateGeofencePolygon()
+        // Grid waypoints may be derived from survey polygon - ensure survey area is recalculated
+        updateSurveyArea()
     }
 
     fun setPlanningWaypoints(waypoints: List<LatLng>) {
         _planningWaypoints.value = waypoints
         updateGeofencePolygon()
+        updateSurveyArea()
     }
 
     fun setFenceRadius(radius: Float) {
@@ -265,12 +301,13 @@ class SharedViewModel : ViewModel() {
                     it.sendCommandLong(command)
                     _imuCalibrationStartResult.value = true // Assume success if no exception
                 } catch (e: Exception) {
+                    Log.e("SharedVM", "IMU calibration start failed", e)
                     _imuCalibrationStartResult.value = false
                 }
-            } ?: run {
-                _imuCalibrationStartResult.value = false
-            }
-        }
+             } ?: run {
+                 _imuCalibrationStartResult.value = false
+             }
+         }
     }
 
     fun resetImuCalibrationStartResult() {
@@ -284,7 +321,7 @@ class SharedViewModel : ViewModel() {
 
                 if (repo == null) {
                     Log.w("SharedVM", "No repo available, cannot upload mission")
-                    missionUploaded = false
+                    _missionUploaded.value = false
                     lastUploadedCount = 0
                     onResult(false, "Not connected to vehicle")
                     return@launch
@@ -292,7 +329,7 @@ class SharedViewModel : ViewModel() {
 
                 if (!_telemetryState.value.fcuDetected) {
                     Log.w("SharedVM", "FCU not detected, aborting mission upload")
-                    missionUploaded = false
+                    _missionUploaded.value = false
                     lastUploadedCount = 0
                     onResult(false, "FCU not detected, please connect to vehicle first")
                     return@launch
@@ -300,7 +337,7 @@ class SharedViewModel : ViewModel() {
 
                 Log.i("SharedVM", "Starting mission upload to FCU...")
                 val success = repo?.uploadMissionWithAck(missionItems) ?: false
-                missionUploaded = success
+                _missionUploaded.value = success
                 if (success) {
                     lastUploadedCount = missionItems.size
                     val waypoints = missionItems.filter { item ->
@@ -310,16 +347,36 @@ class SharedViewModel : ViewModel() {
                     }
                     _uploadedWaypoints.value = waypoints
                     updateGeofencePolygon()
+                    // Capture area at time of upload. Prefer explicit survey polygon if available,
+                    // otherwise attempt to use uploaded waypoints to compute a polygon area (if possible).
+                    if (_surveyPolygon.value.size >= 3) {
+                        val areaMeters = GridUtils.calculatePolygonArea(_surveyPolygon.value)
+                        val formatted = GridUtils.calculateAndFormatPolygonArea(_surveyPolygon.value)
+                        _missionAreaSqMeters.value = areaMeters
+                        _missionAreaFormatted.value = formatted
+                    } else if (waypoints.size >= 3) {
+                        val formatted = GridUtils.calculateAndFormatPolygonArea(waypoints)
+                        val areaMeters = GridUtils.calculatePolygonArea(waypoints)
+                        _missionAreaSqMeters.value = areaMeters
+                        _missionAreaFormatted.value = formatted
+                    } else {
+                        _missionAreaSqMeters.value = 0.0
+                        _missionAreaFormatted.value = "0 acres"
+                    }
                     Log.i("SharedVM", "Mission upload succeeded (${missionItems.size})")
                     onResult(true, null)
                 } else {
                     lastUploadedCount = 0
                     _uploadedWaypoints.value = emptyList()
+                    // clear mission area on failed upload
+                    _missionAreaSqMeters.value = 0.0
+                    _missionAreaFormatted.value = "0 acres"
+                    _missionUploaded.value = false
                     Log.e("SharedVM", "Mission upload failed or timed out")
                     onResult(false, "Mission upload failed or timed out")
                 }
             } catch (e: Exception) {
-                missionUploaded = false
+                _missionUploaded.value = false
                 lastUploadedCount = 0
                 _uploadedWaypoints.value = emptyList()
                 Log.e("SharedVM", "Exception during mission upload", e)
@@ -346,7 +403,7 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                if (!missionUploaded || lastUploadedCount == 0) {
+                if (!_missionUploaded.value || lastUploadedCount == 0) {
                     Log.w("SharedVM", "No mission uploaded or acknowledged, cannot start")
                     onResult(false, "No mission uploaded. Please upload a mission first.")
                     return@launch

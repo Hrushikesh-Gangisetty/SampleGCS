@@ -25,6 +25,8 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import androidx.compose.ui.text.font.FontWeight
 import com.example.aerogcsclone.telemetry.SharedViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.style.TextOverflow
 
 
 @Composable
@@ -36,12 +38,23 @@ fun MainPage(
     val telemetryState by telemetryViewModel.telemetryState.collectAsState()
     val context = LocalContext.current
 
+    // Collect area values from ViewModel
+    val missionAreaFormatted by telemetryViewModel.missionAreaFormatted.collectAsState()
+    val surveyAreaFormatted by telemetryViewModel.surveyAreaFormatted.collectAsState()
+    val missionUploaded by telemetryViewModel.missionUploaded.collectAsState()
+
+    // Decide which area string to show in the status panel
+    val areaToDisplay = if (missionUploaded) {
+        if (missionAreaFormatted.isNotBlank()) missionAreaFormatted else "N/A"
+    } else {
+        if (surveyAreaFormatted.isNotBlank()) surveyAreaFormatted else "N/A"
+    }
+
     // Collect uploaded waypoints for display
     val uploadedWaypoints by telemetryViewModel.uploadedWaypoints.collectAsState()
     val surveyPolygon by telemetryViewModel.surveyPolygon.collectAsState()
     val gridLines by telemetryViewModel.gridLines.collectAsState()
     val gridWaypoints by telemetryViewModel.gridWaypoints.collectAsState()
-    val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val geofencePolygon by telemetryViewModel.geofencePolygon.collectAsState()
 
@@ -95,7 +108,7 @@ fun MainPage(
                     .align(Alignment.BottomStart)
                     .padding(12.dp),
                 telemetryState = telemetryState,
-                fenceRadius = fenceRadius
+                areaFormatted = areaToDisplay
             )
 
             FloatingButtons(
@@ -143,7 +156,6 @@ fun MainPage(
         }
 
         // Mission Complete Popup (must be inside the composable)
-        var showMissionCompleteDialog by remember { mutableStateOf(false) }
         var lastMissionTime by remember { mutableStateOf<Long?>(null) }
         var lastMissionDistance by remember { mutableStateOf<Float?>(null) }
         var prevMissionCompleted by remember { mutableStateOf(false) }
@@ -164,13 +176,11 @@ fun MainPage(
             AlertDialog(
                 onDismissRequest = {
                     missionJustCompleted = false
-                    showMissionCompleteDialog = false
                 },
                 confirmButton = {
                     Button(
                         onClick = {
                             missionJustCompleted = false
-                            showMissionCompleteDialog = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -207,7 +217,7 @@ fun MainPage(
 fun StatusPanel(
     modifier: Modifier = Modifier,
     telemetryState: TelemetryState,
-    fenceRadius: Float?
+    areaFormatted: String
 ) {
     Surface(
         modifier = modifier
@@ -224,31 +234,87 @@ fun StatusPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Alt: ${telemetryState.altitudeRelative ?: "N/A"}", color = Color.White, fontSize = 13.sp)
-                Text("Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}", color = Color.White, fontSize = 13.sp)
-                Text("Area: ${fenceRadius?.let { "${it.toInt()} m" } ?: "N/A"}", color = Color.White, fontSize = 13.sp)
-                Text("Flow: N/A", color = Color.White, fontSize = 13.sp)
+                Text(
+                    "Alt: ${telemetryState.altitudeRelative ?: "N/A"}",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "Area: ${areaFormatted}",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "Flow: N/A",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             Spacer(modifier = Modifier.height(2.dp))
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Obs Alt: N/A", color = Color.White, fontSize = 13.sp)
+                Text(
+                    "Obs Alt: N/A",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 // Format mission timer
                 val timeStr = telemetryState.missionElapsedSec?.let { sec ->
                     val m = (sec % 3600) / 60
                     val s = sec % 60
                     "%02d:%02d".format(m, s)
                 } ?: "N/A"
-                Text("Time: $timeStr", color = Color.White, fontSize = 13.sp)
+                Text(
+                    "Time: $timeStr",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 // Format total distance
                 val distStr = telemetryState.totalDistanceMeters?.let { dist ->
                     if (dist < 1000f) "%.0f m".format(dist)
                     else "%.2f km".format(dist / 1000f)
                 } ?: "N/A"
-                Text("Distance: $distStr", color = Color.White, fontSize = 13.sp)
-                Text("Consumed: N/A", color = Color.White, fontSize = 13.sp)
+                Text(
+                    "Distance: $distStr",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "Consumed: N/A",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -314,16 +380,5 @@ fun FloatingButtons(
                 modifier = Modifier.size(20.dp)
             )
         }
-    }
-}
-
-// Add this helper at the bottom of the file (or near the composable)
-fun formatSpeedHumanReadable(speed: Float?): String {
-    if (speed == null || speed < 0f) return "--"
-    return when {
-        speed < 0.01f -> String.format(java.util.Locale.US, "%.0f mm/s", speed * 1000)
-        speed < 1f -> String.format(java.util.Locale.US, "%.1f cm/s", speed * 100)
-        speed < 100f -> String.format(java.util.Locale.US, "%.2f m/s", speed)
-        else -> String.format(java.util.Locale.US, "%.2f km/h", speed * 3.6f)
     }
 }
