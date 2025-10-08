@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,6 +207,32 @@ fun SettingsScreen(navController: NavHostController) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "RangeFinder settings", color = Color.White, fontSize = 18.sp)
                 }
+            }
+
+            Spacer(modifier = Modifier.height(rowSpacing))
+
+            // About App button centered below the grid
+            Button(
+                onClick = { navController.navigate("about_app") },
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(buttonHeight)
+                    .align(Alignment.CenterHorizontally),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = Color.White
+                ),
+                border = BorderStroke(1.dp, Color.White),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "About App",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "About App", color = Color.White, fontSize = 18.sp)
             }
         }
     }

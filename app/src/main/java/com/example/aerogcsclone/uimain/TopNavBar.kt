@@ -85,6 +85,14 @@ fun TopNavBar(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Plan Mission", color = Color.White) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Map,
+                                    contentDescription = "Plan Mission",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
                             onClick = {
                                 selectedMode = "Plan Mission"
                                 menuExpanded = false
@@ -93,6 +101,14 @@ fun TopNavBar(
                         )
                         DropdownMenuItem(
                             text = { Text("Plot Templates", color = Color.White) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.FileCopy,
+                                    contentDescription = "Plot Templates",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
                             onClick = {
                                 selectedMode = "Templates"
                                 menuExpanded = false
@@ -197,6 +213,14 @@ fun TopNavBar(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Logs") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.List,
+                                    contentDescription = "Logs",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
                             onClick = {
                                 kebabMenuExpanded = false
                                 navController.navigate(Screen.Logs.route)
@@ -204,17 +228,29 @@ fun TopNavBar(
                         )
                         DropdownMenuItem(
                             text = { Text("Settings") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
                             onClick = {
                                 kebabMenuExpanded = false
                                 navController.navigate(Screen.Settings.route)
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("About App") },
-                            onClick = { kebabMenuExpanded = false }
-                        )
-                        DropdownMenuItem(
                             text = { Text("Logout") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Logout,
+                                    contentDescription = "Logout",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
                             onClick = {
                                 kebabMenuExpanded = false
                                 authViewModel.signout()
