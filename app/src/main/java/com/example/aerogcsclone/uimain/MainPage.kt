@@ -70,13 +70,6 @@ fun MainPage(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        TopNavBar(
-            telemetryState = telemetryState,
-            authViewModel = authViewModel,
-            navController = navController,
-            onToggleNotificationPanel = { telemetryViewModel.toggleNotificationPanel() }
-        )
-
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -136,6 +129,17 @@ fun MainPage(
                     NotificationPanel(notifications = notifications)
                 }
             }
+
+            // Place the TopNavBar inside the same Box so it overlays the map
+            TopNavBar(
+                telemetryState = telemetryState,
+                authViewModel = authViewModel,
+                navController = navController,
+                onToggleNotificationPanel = { telemetryViewModel.toggleNotificationPanel() },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+            )
         }
 
         // Mission Complete Popup (must be inside the composable)

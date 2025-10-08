@@ -29,27 +29,29 @@ fun TopNavBar(
     telemetryState: TelemetryState,
     authViewModel: AuthViewModel,
     navController: NavHostController,
-    onToggleNotificationPanel: () -> Unit
+    onToggleNotificationPanel: () -> Unit,
+    modifier: Modifier = Modifier // added modifier parameter with default
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
 
     // Set nav bar gradient colors based on connection status
+    val navBarAlpha = 0.85f // increased alpha to make the nav bar less transparent
     val navBarColors = if (telemetryState.connected) {
         listOf(
-            Color(0xFF87CEEB).copy(alpha = 0.6f), // 40% transparent
-            Color(0xFF4A90E2).copy(alpha = 0.6f)
+            Color(0xFF87CEEB).copy(alpha = navBarAlpha),
+            Color(0xFF4A90E2).copy(alpha = navBarAlpha)
         )
     } else {
         listOf(
-            Color(0xFFfd5c63).copy(alpha = 0.6f),
-            Color(0xFFFF320A).copy(alpha = 0.6f)
+            Color(0xFFfd5c63).copy(alpha = navBarAlpha),
+            Color(0xFFFF320A).copy(alpha = navBarAlpha)
         )
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .height(IntrinsicSize.Min) // Let the height be determined by content
