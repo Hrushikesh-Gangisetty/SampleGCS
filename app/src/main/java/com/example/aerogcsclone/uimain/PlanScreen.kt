@@ -76,6 +76,8 @@ fun PlanScreen(
     var surveyPolygon by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var gridResult by remember { mutableStateOf<GridSurveyResult?>(null) }
     val gridGenerator = remember { GridGenerator() }
+    // Local-only geofence polygon used while planning (do not publish until upload)
+    var localGeofencePolygon by remember { mutableStateOf<List<LatLng>>(emptyList()) }
 
     // Camera and waypoint state
     val cameraPositionState = rememberCameraPositionState()
@@ -127,11 +129,21 @@ fun PlanScreen(
             )
             gridResult = gridGenerator.generateGridSurvey(surveyPolygon, params)
 
-            // Update SharedViewModel with the new survey polygon and grid waypoints
-            telemetryViewModel.setSurveyPolygon(surveyPolygon)
-            gridResult?.let { result ->
-                telemetryViewModel.setGridWaypoints(result.waypoints.map { it.position })
-                telemetryViewModel.setGridLines(result.gridLines)
+            // Do NOT update SharedViewModel here: keep planning state local to PlanScreen
+            // SharedViewModel will be updated only after the user uploads the mission
+
+            // Recompute local geofence polygon for preview while planning
+            if (geofenceEnabled) {
+                val allWaypoints = mutableListOf<LatLng>()
+                // prefer grid waypoints for buffer, fall back to survey polygon
+                gridResult?.let { res -> allWaypoints.addAll(res.waypoints.map { it.position }) }
+                if (allWaypoints.isEmpty()) allWaypoints.addAll(surveyPolygon)
+                if (allWaypoints.isNotEmpty()) {
+                    val bufferDistance = fenceRadius.toDouble()
+                    localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
+                } else {
+                    localGeofencePolygon = emptyList()
+                }
             }
         }
     }
@@ -205,8 +217,19 @@ fun PlanScreen(
             waypoints.add(item)
             Toast.makeText(context, "Waypoints: ${points.joinToString { "(${it.latitude},${it.longitude})" }}", Toast.LENGTH_SHORT).show()
 
-            // Update SharedViewModel for geofence calculation during planning
-            telemetryViewModel.setPlanningWaypoints(points.toList())
+            // Previously we updated SharedViewModel planning waypoints here which caused the planned
+            // mission to be displayed across the app immediately. Remove that so the mission stays
+            // local to the Plan screen until the user explicitly uploads it.
+
+            // Recompute local geofence polygon for waypoint planning preview
+            if (geofenceEnabled) {
+                if (points.isNotEmpty()) {
+                    val bufferDistance = fenceRadius.toDouble()
+                    localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), bufferDistance)
+                } else {
+                    localGeofencePolygon = emptyList()
+                }
+            }
         }
     }
 
@@ -227,11 +250,24 @@ fun PlanScreen(
                             if (surveyPolygon.isNotEmpty()) {
                                 surveyPolygon = surveyPolygon.dropLast(1)
                                 if (surveyPolygon.size >= 3) regenerateGrid() else gridResult = null
+                                // update local geofence after deleting a point
+                                if (geofenceEnabled) {
+                                    val allWaypoints = gridResult?.waypoints?.map { it.position } ?: surveyPolygon
+                                    localGeofencePolygon = if (allWaypoints.isNotEmpty()) com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(allWaypoints, fenceRadius.toDouble()) else emptyList()
+                                }
                             }
                         } else {
                             if (waypoints.isNotEmpty()) {
                                 waypoints.removeAt(waypoints.lastIndex)
                                 points.removeAt(points.lastIndex)
+                                // update local geofence after deleting a point
+                                if (geofenceEnabled) {
+                                    if (points.isNotEmpty()) {
+                                        localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), fenceRadius.toDouble())
+                                    } else {
+                                        localGeofencePolygon = emptyList()
+                                    }
+                                }
                             }
                         }
                     },
@@ -254,7 +290,8 @@ fun PlanScreen(
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
                 gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
-                geofencePolygon = geofencePolygon,
+                // Use local geofence preview while planning; otherwise use the shared geofence
+                geofencePolygon = if (hasStartedPlanning) localGeofencePolygon else geofencePolygon,
                 geofenceEnabled = geofenceEnabled
             )
 
@@ -356,6 +393,14 @@ fun PlanScreen(
                                 telemetryViewModel.uploadMission(builtMission) { success, error ->
                                     if (success) {
                                         Toast.makeText(context, "Grid mission uploaded", Toast.LENGTH_SHORT).show()
+                                        // Publish planning points and grid/survey data to SharedViewModel only after successful upload
+                                        val publishedPoints = gridResult?.waypoints?.map { it.position } ?: emptyList()
+                                        telemetryViewModel.setPlanningWaypoints(publishedPoints)
+                                        telemetryViewModel.setSurveyPolygon(surveyPolygon)
+                                        gridResult?.let { result ->
+                                            telemetryViewModel.setGridWaypoints(result.waypoints.map { it.position })
+                                            telemetryViewModel.setGridLines(result.gridLines)
+                                        }
                                         coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
                                         navController.navigate(Screen.Main.route) {
                                             popUpTo(Screen.Plan.route) { inclusive = true }
@@ -364,12 +409,13 @@ fun PlanScreen(
                                         Toast.makeText(context, error ?: "Failed to upload grid mission", Toast.LENGTH_SHORT).show()
                                     }
                                 }
-                            } else if (points.isNotEmpty()) {
-                                // Regular waypoint mission upload
-                                val builtMission = mutableListOf<MissionItemInt>()
-                                val homeLat = telemetryState.latitude ?: 0.0
-                                val homeLon = telemetryState.longitude ?: 0.0
-                                val homeAlt = telemetryState.altitudeMsl ?: 10f
+
+                             } else if (points.isNotEmpty()) {
+                                 // Regular waypoint mission upload
+                                 val builtMission = mutableListOf<MissionItemInt>()
+                                 val homeLat = telemetryState.latitude ?: 0.0
+                                 val homeLon = telemetryState.longitude ?: 0.0
+                                 val homeAlt = telemetryState.altitudeMsl ?: 10f
 
                                 // Add home location as first waypoint
                                 builtMission.add(
@@ -413,16 +459,18 @@ fun PlanScreen(
                                 }
 
                                 telemetryViewModel.uploadMission(builtMission) { success, error ->
-                                    if (success) {
-                                        Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
-                                        coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
-                                        navController.navigate(Screen.Main.route) {
-                                            popUpTo(Screen.Plan.route) { inclusive = true }
-                                        }
-                                    } else {
-                                        Toast.makeText(context, error ?: "Failed to upload mission", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
+                                     if (success) {
+                                         Toast.makeText(context, "Mission uploaded", Toast.LENGTH_SHORT).show()
+                                         // Publish planning points to SharedViewModel only after successful upload
+                                         telemetryViewModel.setPlanningWaypoints(points.toList())
+                                         coroutineScope.launch { telemetryViewModel.readMissionFromFcu() }
+                                         navController.navigate(Screen.Main.route) {
+                                             popUpTo(Screen.Plan.route) { inclusive = true }
+                                         }
+                                     } else {
+                                         Toast.makeText(context, error ?: "Failed to upload mission", Toast.LENGTH_SHORT).show()
+                                     }
+                                 }
                             } else {
                                 Toast.makeText(context, "No waypoints to upload", Toast.LENGTH_SHORT).show()
                             }
@@ -917,5 +965,25 @@ fun PlanScreen(
             },
             isLoading = missionTemplateUiState.isLoading
         )
+    }
+
+    // Recompute local geofence whenever enable flag or radius or planning sets change
+    LaunchedEffect(geofenceEnabled, fenceRadius, gridResult, points, surveyPolygon) {
+        if (!geofenceEnabled) {
+            localGeofencePolygon = emptyList()
+        } else {
+            val allWaypoints = mutableListOf<LatLng>()
+            if (isGridSurveyMode) {
+                gridResult?.let { allWaypoints.addAll(it.waypoints.map { w -> w.position }) }
+                if (allWaypoints.isEmpty()) allWaypoints.addAll(surveyPolygon)
+            } else {
+                allWaypoints.addAll(points)
+            }
+            if (allWaypoints.isNotEmpty()) {
+                localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(allWaypoints, fenceRadius.toDouble())
+            } else {
+                localGeofencePolygon = emptyList()
+            }
+        }
     }
 }
