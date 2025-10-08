@@ -51,8 +51,8 @@ fun TopNavBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding() // Add padding to avoid overlap with system status bar
-            .height(70.dp)
+            .statusBarsPadding()
+            .height(IntrinsicSize.Min) // Let the height be determined by content
             .background(
                 brush = Brush.horizontalGradient(
                     colors = navBarColors
@@ -249,9 +249,9 @@ fun ConnectionStatusWidget(isConnected: Boolean) {
 fun DividerBlock() {
     Box(
         modifier = Modifier
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = 7.dp)
             .width(1.dp)
-            .height(30.dp)
+            .height(22.dp) // slightly smaller height
             .background(Color.White.copy(alpha = 0.7f))
     )
 }
@@ -259,25 +259,25 @@ fun DividerBlock() {
 @Composable
 fun InfoBlock(icon: ImageVector, value: String) {
     Column(
-        modifier = Modifier.padding(horizontal = 6.dp),
+        modifier = Modifier.padding(horizontal = 4.dp), // slightly less padding
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(value, color = Color.White, fontSize = 12.sp)
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp)) // just a little smaller
+        Spacer(modifier = Modifier.height(1.dp))
+        Text(value, color = Color.White, fontSize = 9.sp) // just a little smaller
     }
 }
 
 @Composable
 fun InfoBlockGroup(icon: ImageVector, values: List<String>) {
     Column(
-        modifier = Modifier.padding(horizontal = 6.dp),
+        modifier = Modifier.padding(horizontal = 4.dp), // slightly less padding
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.height(2.dp))
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp)) // just a little smaller
+        Spacer(modifier = Modifier.height(1.dp))
         values.forEach { value ->
-            Text(value, color = Color.White, fontSize = 12.sp)
+            Text(value, color = Color.White, fontSize = 9.sp) // just a little smaller
         }
     }
 }
