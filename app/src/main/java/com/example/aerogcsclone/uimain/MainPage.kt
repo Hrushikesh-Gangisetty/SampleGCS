@@ -259,23 +259,56 @@ fun FloatingButtons(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), // reduced spacing
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        FloatingActionButton(onClick = { onStartMission() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
-            Icon(Icons.Default.PlayArrow, contentDescription = "Start", tint = Color.White)
+        FloatingActionButton(
+            onClick = { onStartMission() },
+            containerColor = Color.Black.copy(alpha = 0.7f),
+            modifier = Modifier.size(48.dp) // reduced button size
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Start",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
-        FloatingActionButton(onClick = { }, containerColor = Color.Black.copy(alpha = 0.7f)) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+        FloatingActionButton(
+            onClick = { },
+            containerColor = Color.Black.copy(alpha = 0.7f),
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Settings",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
-        FloatingActionButton(onClick = { onRefresh() }, containerColor = Color.Black.copy(alpha = 0.7f)) {
-            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
+        FloatingActionButton(
+            onClick = { onRefresh() },
+            containerColor = Color.Black.copy(alpha = 0.7f),
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Refresh",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
         FloatingActionButton(
             onClick = { onToggleMapType() },
-            containerColor = Color.Black.copy(alpha = 0.7f)
+            containerColor = Color.Black.copy(alpha = 0.7f),
+            modifier = Modifier.size(48.dp)
         ) {
-            Icon(Icons.Default.Map, contentDescription = "Map Options", tint = Color.White)
+            Icon(
+                Icons.Default.Map,
+                contentDescription = "Map Options",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
