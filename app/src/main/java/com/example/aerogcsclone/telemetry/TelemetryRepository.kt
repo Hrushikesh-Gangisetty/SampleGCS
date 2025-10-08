@@ -33,7 +33,8 @@ object MavMode {
 }
 
 class MavlinkTelemetryRepository(
-    private val provider: MavConnectionProvider
+    private val provider: MavConnectionProvider,
+    private val sharedViewModel: SharedViewModel
 ) {
     val gcsSystemId: UByte = 255u
     val gcsComponentId: UByte = 1u
@@ -318,6 +319,15 @@ class MavlinkTelemetryRepository(
                     }
                     _state.update { it.copy(armed = armed, mode = mode) }
 
+                    // Arm/Disarm Notifications
+                    if (lastArmed != null && armed != lastArmed) {
+                        if (armed) {
+                            sharedViewModel.addNotification(Notification("Drone Armed", NotificationType.SUCCESS))
+                        } else {
+                            sharedViewModel.addNotification(Notification("Drone Disarmed", NotificationType.INFO))
+                        }
+                    }
+
                     // Mission timer logic
                     if (lastMode != mode || lastArmed != armed) {
                         if (mode.equals("Auto", ignoreCase = true) && armed && (lastMode != mode || lastArmed != armed)) {
@@ -362,6 +372,56 @@ class MavlinkTelemetryRepository(
                     val healthy = (s.onboardControlSensorsHealth.value and SENSOR_3D_GYRO) != 0u
                     val armable = present && enabled && healthy
                     _state.update { it.copy(voltage = vBatt, batteryPercent = pct, armable = armable) }
+                }
+        }
+
+        // STATUSTEXT for arming failures and other messages
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<Statustext>()
+                .collect { status ->
+                    val message = status.text.toString()
+                    val type = when (status.severity.value) {
+                        MavSeverity.EMERGENCY.value, MavSeverity.ALERT.value, MavSeverity.CRITICAL.value, MavSeverity.ERROR.value -> NotificationType.ERROR
+                        MavSeverity.WARNING.value -> NotificationType.WARNING
+                        else -> NotificationType.INFO
+                    }
+                    sharedViewModel.addNotification(Notification(message, type))
+                }
+        }
+
+        // MISSION_CURRENT for mission progress
+        var lastMissionSeq = -1
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<MissionCurrent>()
+                .collect { missionCurrent ->
+                    if (missionCurrent.seq.toInt() != lastMissionSeq) {
+                        lastMissionSeq = missionCurrent.seq.toInt()
+                        sharedViewModel.addNotification(
+                            Notification(
+                                "Executing waypoint #${lastMissionSeq}",
+                                NotificationType.INFO
+                            )
+                        )
+                    }
+                }
+        }
+
+        // MISSION_ACK for mission upload status
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<MissionAck>()
+                .collect { missionAck ->
+                    val message = "Mission upload: ${missionAck.type.entry?.name ?: "UNKNOWN"}"
+                    val type = if (missionAck.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) NotificationType.SUCCESS else NotificationType.ERROR
+                    sharedViewModel.addNotification(Notification(message, type))
                 }
         }
 

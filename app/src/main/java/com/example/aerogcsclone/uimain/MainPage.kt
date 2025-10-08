@@ -62,6 +62,9 @@ fun MainPage(
         }
     }
 
+    val notifications by telemetryViewModel.notifications.collectAsState()
+    val isNotificationPanelVisible by telemetryViewModel.isNotificationPanelVisible.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,7 +73,8 @@ fun MainPage(
         TopNavBar(
             telemetryState = telemetryState,
             authViewModel = authViewModel,
-            navController = navController
+            navController = navController,
+            onToggleNotificationPanel = { telemetryViewModel.toggleNotificationPanel() }
         )
 
         Box(
@@ -126,6 +130,12 @@ fun MainPage(
                         Toast.makeText(context, "No GPS location available", Toast.LENGTH_SHORT).show()
                     }
                 })
+
+            if (isNotificationPanelVisible) {
+                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                    NotificationPanel(notifications = notifications)
+                }
+            }
         }
 
         // Mission Complete Popup (must be inside the composable)

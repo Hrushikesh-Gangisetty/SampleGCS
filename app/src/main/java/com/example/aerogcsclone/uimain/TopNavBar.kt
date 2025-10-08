@@ -28,7 +28,8 @@ import com.example.aerogcsclone.navigation.Screen
 fun TopNavBar(
     telemetryState: TelemetryState,
     authViewModel: AuthViewModel,
-    navController: NavHostController
+    navController: NavHostController,
+    onToggleNotificationPanel: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
@@ -170,6 +171,15 @@ fun TopNavBar(
                     listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed")
                 )
                 DividerBlock()
+
+                // Notification Icon
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = Color.White,
+                    modifier = Modifier.clickable { onToggleNotificationPanel() }
+                )
+                Spacer(modifier = Modifier.width(16.dp))
 
                 // Kebab menu
                 Box {

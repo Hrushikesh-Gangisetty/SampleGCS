@@ -128,7 +128,7 @@ class SharedViewModel : ViewModel() {
             // If there's an old repo, close its connection first
             repo?.closeConnection()
 
-            val newRepo = MavlinkTelemetryRepository(provider)
+            val newRepo = MavlinkTelemetryRepository(provider, this)
             repo = newRepo
             newRepo.start()
             viewModelScope.launch {
@@ -239,6 +239,21 @@ class SharedViewModel : ViewModel() {
         viewModelScope.launch {
             repo?.arm()
         }
+    }
+
+    // --- Notification State ---
+    private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
+    val notifications: StateFlow<List<Notification>> = _notifications.asStateFlow()
+
+    private val _isNotificationPanelVisible = MutableStateFlow(false)
+    val isNotificationPanelVisible: StateFlow<Boolean> = _isNotificationPanelVisible.asStateFlow()
+
+    fun addNotification(notification: Notification) {
+        _notifications.value = listOf(notification) + _notifications.value
+    }
+
+    fun toggleNotificationPanel() {
+        _isNotificationPanelVisible.value = !_isNotificationPanelVisible.value
     }
 
     fun startImuCalibration() {
