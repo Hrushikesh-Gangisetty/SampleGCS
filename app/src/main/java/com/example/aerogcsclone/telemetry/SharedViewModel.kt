@@ -128,7 +128,7 @@ class SharedViewModel : ViewModel() {
             // If there's an old repo, close its connection first
             repo?.closeConnection()
 
-            val newRepo = MavlinkTelemetryRepository(provider, this)
+            val newRepo = MavlinkTelemetryRepository(provider, this@SharedViewModel)
             repo = newRepo
             newRepo.start()
             viewModelScope.launch {

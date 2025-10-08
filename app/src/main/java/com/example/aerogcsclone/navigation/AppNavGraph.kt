@@ -137,7 +137,8 @@ private fun PlotTemplatesScreenWrapper(
         TopNavBar(
             telemetryState = telemetryState,
             authViewModel = authViewModel,
-            navController = navController
+            navController = navController,
+            onToggleNotificationPanel = {}
         )
 
         PlotTemplatesScreen(

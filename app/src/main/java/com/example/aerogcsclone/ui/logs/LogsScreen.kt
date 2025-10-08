@@ -43,7 +43,8 @@ fun LogsScreen(
         TopNavBar(
             telemetryState = telemetryState,
             authViewModel = authViewModel,
-            navController = navController
+            navController = navController,
+            onToggleNotificationPanel = {}
         )
 
         // Main Content
