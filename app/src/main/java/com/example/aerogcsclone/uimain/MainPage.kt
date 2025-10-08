@@ -221,13 +221,15 @@ fun StatusPanel(
 ) {
     Surface(
         modifier = modifier
-            .width(340.dp)
-            .height(64.dp),
-        color = Color.Black.copy(alpha = 0.6f),
-        shape = RoundedCornerShape(8.dp)
+            // Slightly larger but still compact: increase min/max width and height a bit
+            .widthIn(min = 140.dp, max = 380.dp)
+            .heightIn(min = 48.dp, max = 74.dp),
+        // Set 78% transparency (i.e., 78% transparent => 22% opacity)
+        color = Color.Black.copy(alpha = 0.22f),
+        shape = RoundedCornerShape(10.dp)
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
@@ -237,32 +239,32 @@ fun StatusPanel(
                 Text(
                     "Alt: ${telemetryState.altitudeRelative ?: "N/A"}",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.95f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "Speed: ${telemetryState.formattedGroundspeed ?: "N/A"}",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.95f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "Area: ${areaFormatted}",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1.05f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "Flow: N/A",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -275,8 +277,8 @@ fun StatusPanel(
                 Text(
                     "Obs Alt: N/A",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.95f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -289,8 +291,8 @@ fun StatusPanel(
                 Text(
                     "Time: $timeStr",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.95f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -302,16 +304,16 @@ fun StatusPanel(
                 Text(
                     "Distance: $distStr",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1.05f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "Consumed: N/A",
                     color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
