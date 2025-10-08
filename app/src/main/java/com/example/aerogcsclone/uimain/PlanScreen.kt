@@ -38,7 +38,7 @@ import com.example.aerogcsclone.grid.*
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import java.util.Locale
 
-@Suppress("UnusedMaterial3ScaffoldPaddingParameter")
+@Suppress("UnusedMaterial3ScaffoldPaddingParameter", "UNUSED_PARAMETER")
 @Composable
 fun PlanScreen(
     telemetryViewModel: SharedViewModel,
@@ -56,7 +56,6 @@ fun PlanScreen(
 
 
     // State management
-    var showPlanActions by remember { mutableStateOf(false) }
     var isGridSurveyMode by remember { mutableStateOf(false) }
     var showGridControls by remember { mutableStateOf(false) }
     var mapType by remember { mutableStateOf(MapType.SATELLITE) }
@@ -77,15 +76,6 @@ fun PlanScreen(
     var surveyPolygon by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var gridResult by remember { mutableStateOf<GridSurveyResult?>(null) }
     val gridGenerator = remember { GridGenerator() }
-
-    // Calculate fence center (centroid of surveyPolygon)
-    val fenceCenter = remember(surveyPolygon) {
-        if (surveyPolygon.isNotEmpty()) {
-            val lat = surveyPolygon.map { it.latitude }.average()
-            val lon = surveyPolygon.map { it.longitude }.average()
-            LatLng(lat, lon)
-        } else null
-    }
 
     // Camera and waypoint state
     val cameraPositionState = rememberCameraPositionState()
@@ -480,6 +470,7 @@ fun PlanScreen(
                         .align(Alignment.TopStart)
                         .padding(start = 16.dp, top = 16.dp)
                 ) {
+                    @Suppress("DEPRECATION")
                     IconButton(onClick = {
                         navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.Plan.route) { inclusive = true }
@@ -557,11 +548,14 @@ fun PlanScreen(
             if (showGridControls && hasStartedPlanning) {
                 Surface(
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 16.dp)
-                        .width(320.dp),
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 96.dp)
+                        .fillMaxWidth(0.40f) // decreased more from 0.44f to 0.40f
+                        .fillMaxHeight(0.82f) // increased from 0.75f to 0.82f
+                        .widthIn(min = 280.dp) // reduced min width from 300.dp to 280.dp
+                        .heightIn(min = 360.dp), // increased min height from 320.dp to 360.dp
                     shape = RoundedCornerShape(12.dp),
-                    color = Color.Black.copy(alpha = 0.8f)
+                    color = Color.Black.copy(alpha = 0.92f)
                 ) {
                     Column(
                         modifier = Modifier
