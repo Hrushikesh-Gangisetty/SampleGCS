@@ -28,6 +28,7 @@ object MavMode {
     const val STABILIZE: UInt = 0u
     const val LOITER: UInt = 5u
     const val AUTO: UInt = 3u
+    const val RTL: UInt = 6u // RTL (Return to Launch) mode
     const val LAND: UInt = 9u // Add LAND mode for explicit landing
     // Add other modes as needed
 }

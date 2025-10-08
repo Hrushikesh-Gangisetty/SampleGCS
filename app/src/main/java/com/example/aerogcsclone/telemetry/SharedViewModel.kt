@@ -17,9 +17,7 @@ import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
-//import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
-//import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
-//import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
+import com.example.aerogcsclone.telemetry.MavMode
 import com.example.aerogcsclone.utils.GeofenceUtils
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
@@ -472,5 +470,116 @@ class SharedViewModel : ViewModel() {
         }
         repo = null
         _telemetryState.value = TelemetryState()
+    }
+
+    // --- Geofence Violation Detection ---
+    private val _geofenceViolationDetected = MutableStateFlow(false)
+    val geofenceViolationDetected: StateFlow<Boolean> = _geofenceViolationDetected.asStateFlow()
+
+    private var lastGeofenceCheck = 0L
+    private val geofenceCheckInterval = 1000L // Check every 1 second
+
+    init {
+        // Monitor drone position and check geofence violations
+        viewModelScope.launch {
+            telemetryState.collect { state ->
+                checkGeofenceViolation(state)
+            }
+        }
+    }
+
+    private fun checkGeofenceViolation(state: TelemetryState) {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastGeofenceCheck < geofenceCheckInterval) return
+        lastGeofenceCheck = currentTime
+
+        if (!_geofenceEnabled.value || _geofencePolygon.value.isEmpty()) return
+
+        val droneLat = state.latitude
+        val droneLon = state.longitude
+
+        if (droneLat == null || droneLon == null) return
+
+        val dronePosition = LatLng(droneLat, droneLon)
+        val isInsideGeofence = isPointInPolygon(dronePosition, _geofencePolygon.value)
+
+        if (!isInsideGeofence && !_geofenceViolationDetected.value) {
+            // Geofence violation detected!
+            _geofenceViolationDetected.value = true
+            Log.w("Geofence", "GEOFENCE VIOLATION DETECTED! Switching to RTL mode")
+
+            // Add notification
+            addNotification(
+                Notification(
+                    message = "GEOFENCE VIOLATION: Drone crossed boundary! Switching to RTL mode",
+                    type = NotificationType.WARNING
+                )
+            )
+
+            // Automatically switch to RTL mode
+            switchToRTL()
+        } else if (isInsideGeofence && _geofenceViolationDetected.value) {
+            // Drone returned to safe zone
+            _geofenceViolationDetected.value = false
+            Log.i("Geofence", "Drone returned to safe zone")
+
+            addNotification(
+                Notification(
+                    message = "GEOFENCE CLEAR: Drone returned to safe zone",
+                    type = NotificationType.INFO
+                )
+            )
+        }
+    }
+
+    private fun isPointInPolygon(point: LatLng, polygon: List<LatLng>): Boolean {
+        if (polygon.size < 3) return true // No valid polygon
+
+        var inside = false
+        var j = polygon.size - 1
+
+        for (i in polygon.indices) {
+            val xi = polygon[i].longitude
+            val yi = polygon[i].latitude
+            val xj = polygon[j].longitude
+            val yj = polygon[j].latitude
+
+            if (((yi > point.latitude) != (yj > point.latitude)) &&
+                (point.longitude < (xj - xi) * (point.latitude - yi) / (yj - yi) + xi)) {
+                inside = !inside
+            }
+            j = i
+        }
+
+        return inside
+    }
+
+    private fun switchToRTL() {
+        viewModelScope.launch {
+            repo?.let { repository ->
+                try {
+                    Log.i("Geofence", "Sending RTL command to drone")
+                    repository.changeMode(MavMode.RTL)
+
+                    addNotification(
+                        Notification(
+                            message = "RTL ACTIVATED: Return to Launch mode activated due to geofence violation",
+                            type = NotificationType.WARNING
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e("Geofence", "Failed to switch to RTL mode: ${e.message}")
+
+                    addNotification(
+                        Notification(
+                            message = "RTL FAILED: Failed to activate RTL mode - ${e.message}",
+                            type = NotificationType.ERROR
+                        )
+                    )
+                }
+            } ?: run {
+                Log.e("Geofence", "Cannot switch to RTL - no connection to drone")
+            }
+        }
     }
 }
