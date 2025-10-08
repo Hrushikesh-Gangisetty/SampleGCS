@@ -1,11 +1,9 @@
 package com.example.aerogcsclone.uiflyingmethod
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,12 +42,12 @@ fun SelectFlyingMethodScreen(navController: NavController) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 FlyingMethodCard(
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Automatic", tint = Color.White, modifier = Modifier.size(64.dp)) },
+                    icon = { Image(painter = painterResource(id = R.drawable.autonomous), contentDescription = "Automatic", modifier = Modifier.size(64.dp)) },
                     label = "Automatic",
                     onClick = { navController.navigate(Screen.Main.route) }
                 )
                 FlyingMethodCard(
-                    icon = { Icon(painter = painterResource(id = R.drawable.ic_drone), contentDescription = "Manual", tint = Color.White, modifier = Modifier.size(64.dp)) },
+                    icon = { Image(painter = painterResource(id = R.drawable.manual), contentDescription = "Manual", modifier = Modifier.size(64.dp)) },
                     label = "Manual",
                     onClick = { navController.navigate(Screen.Main.route) }
                 )
