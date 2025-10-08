@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
 import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
@@ -74,39 +73,29 @@ fun TopNavBar(
                     modifier = Modifier.clickable { menuExpanded = true }
                 )
                 if (menuExpanded) {
-                    Popup(onDismissRequest = { menuExpanded = false }) {
-                        Column(
-                            modifier = Modifier
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .width(180.dp)
-                                .padding(vertical = 8.dp, horizontal = 16.dp)
-                        ) {
-                            // New Plan Mission menu item
-                            Text(
-                                text = "Plan Mission",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .clickable {
-                                        selectedMode = "Plan Mission"
-                                        menuExpanded = false
-                                        navController.navigate(Screen.Plan.route)
-                                    }
-                            )
-                            Text(
-                                text = "Plot Templates",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .clickable {
-                                        selectedMode = "Templates"
-                                        menuExpanded = false
-                                        navController.navigate(Screen.PlotTemplates.route)
-                                    }
-                            )
-                        }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier
+                            .width(140.dp)
+                            .background(Color(0xFF23232B).copy(alpha = 0.85f))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Plan Mission", color = Color.White) },
+                            onClick = {
+                                selectedMode = "Plan Mission"
+                                menuExpanded = false
+                                navController.navigate(Screen.Plan.route)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Plot Templates", color = Color.White) },
+                            onClick = {
+                                selectedMode = "Templates"
+                                menuExpanded = false
+                                navController.navigate(Screen.PlotTemplates.route)
+                            }
+                        )
                     }
                 }
             }
