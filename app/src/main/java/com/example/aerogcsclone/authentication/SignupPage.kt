@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -44,7 +45,7 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.logbag),
             contentDescription = "Signup Background",
@@ -76,7 +77,16 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                     value = email,
                     onValueChange = { email = it },
 
-                    label = { Text(text = "Email") }
+                    label = { Text(text = "Email") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -85,7 +95,16 @@ fun SignupPage(modifier: Modifier = Modifier, navController: NavController, auth
                     value = password,
                     onValueChange = { password = it },
 
-                    label = { Text(text = "Password") }
+                    label = { Text(text = "Password") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color.Black,
+                        unfocusedBorderColor = Color.Black,
+                        focusedLabelColor = Color.Black,
+                        unfocusedLabelColor = Color.Black
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
