@@ -111,4 +111,7 @@ dependencies {
 
     // MAVLink Java library (example, adjust if you use a different one)
     implementation("io.dronefleet.mavlink:mavlink:1.0.7")
+
+    // Accompanist System UI Controller for status bar control
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
 }

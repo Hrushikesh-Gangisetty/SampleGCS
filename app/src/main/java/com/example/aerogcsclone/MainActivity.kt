@@ -20,6 +20,7 @@ import com.example.aerogcsclone.integration.TlogIntegration
 //import com.example.aerogcsclone.Telemetry.SharedViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.MapsInitializer
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 // ✅ Dark theme setup
 private val DarkColorScheme = darkColorScheme(
@@ -70,6 +71,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val navController = rememberNavController()
+            val systemUiController = rememberSystemUiController()
+            // Hide the system status bar for immersive experience
+            SideEffect {
+                systemUiController.isStatusBarVisible = false
+            }
             MaterialTheme(colorScheme = DarkColorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

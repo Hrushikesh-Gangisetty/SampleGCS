@@ -51,6 +51,7 @@ fun TopNavBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding() // Add padding to avoid overlap with system status bar
             .height(70.dp)
             .background(
                 brush = Brush.horizontalGradient(
