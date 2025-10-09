@@ -37,7 +37,7 @@ fun TopNavBar(
     var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
 
     // Set nav bar gradient colors based on connection status
-    val navBarAlpha = 0.85f // increased alpha to make the nav bar less transparent
+    val navBarAlpha = 0.5f // decreased alpha for more transparency
     val navBarColors = if (telemetryState.connected) {
         listOf(
             Color(0xFF87CEEB).copy(alpha = navBarAlpha),
