@@ -53,8 +53,8 @@ fun TopNavBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .height(IntrinsicSize.Min) // Let the height be determined by content
+            // Removed .statusBarsPadding() to allow navbar to be drawn under status bar
+            .height(IntrinsicSize.Min)
             .background(
                 brush = Brush.horizontalGradient(
                     colors = navBarColors
