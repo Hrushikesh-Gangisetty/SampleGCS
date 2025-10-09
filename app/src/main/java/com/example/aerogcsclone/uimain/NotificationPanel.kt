@@ -15,16 +15,18 @@ import com.example.aerogcsclone.telemetry.NotificationType
 
 @Composable
 fun NotificationPanel(notifications: List<Notification>) {
+    val topNavBarHeight = 56.dp // Adjust if your TopAppBar is a different height
     Box(
         modifier = Modifier
             .fillMaxHeight()
             .fillMaxWidth(0.3f)
             .background(Color.Black.copy(alpha = 0.5f))
-            .padding(8.dp)
+            .padding(start = 8.dp, end = 8.dp, top = topNavBarHeight, bottom = 8.dp)
     ) {
         LazyColumn {
             items(notifications) { notification ->
                 NotificationItem(notification)
+                Spacer(modifier = Modifier.height(4.dp)) // Add spacing between items
             }
         }
     }
