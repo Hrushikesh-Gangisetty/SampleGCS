@@ -72,6 +72,7 @@ fun GcsMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraState,
         properties = MapProperties(mapType = mapType),
+        uiSettings = MapUiSettings(zoomControlsEnabled = false), // Disable zoom controls
         onMapClick = { latLng -> onMapClick(latLng) }
     ) {
         // Polygon geofence boundary overlay (replaces circular fence)
