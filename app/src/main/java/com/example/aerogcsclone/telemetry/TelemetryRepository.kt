@@ -52,7 +52,6 @@ class MavlinkTelemetryRepository(
     // Connection
     val connection = provider.createConnection()
     lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
-        private set
 
     // MAVLink command value for MISSION_CLEAR_ALL
     private val MISSION_CLEAR_ALL_CMD: UInt = 45u

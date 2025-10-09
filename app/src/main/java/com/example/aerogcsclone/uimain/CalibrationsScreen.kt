@@ -1,41 +1,24 @@
 package com.example.aerogcsclone.uimain
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.aerogcsclone.navigation.Screen
 import com.example.aerogcsclone.telemetry.SharedViewModel
 
 @Composable
 fun CalibrationsScreen(
-    viewModel: SharedViewModel
+    viewModel: SharedViewModel,
+    navController: NavController
 ) {
-    val calibrationStatus by viewModel.calibrationStatus.collectAsState()
-    val imuCalibrationStartResult by viewModel.imuCalibrationStartResult.collectAsState()
-    val context = LocalContext.current
-
-    LaunchedEffect(imuCalibrationStartResult) {
-        imuCalibrationStartResult?.let { result ->
-            if (result) {
-                Toast.makeText(context, "Calibration started", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, "Calibration failed", Toast.LENGTH_SHORT).show()
-            }
-            viewModel.resetImuCalibrationStartResult()
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -63,17 +46,9 @@ fun CalibrationsScreen(
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Button(onClick = { viewModel.startImuCalibration() }) {
-                    Text("Start IMU Calibration")
+                Button(onClick = { navController.navigate(Screen.ImuCalibration.route) }) {
+                    Text("Start")
                 }
-            }
-            calibrationStatus?.let {
-                Text(
-                    text = "Status: $it",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
             }
         }
     }

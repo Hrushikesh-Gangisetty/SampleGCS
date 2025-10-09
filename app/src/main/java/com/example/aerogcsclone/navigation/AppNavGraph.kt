@@ -39,6 +39,7 @@ sealed class Screen(val route: String) {
     object SelectMethod : Screen("select_method")
     object Settings : Screen("settings")
     object Calibrations : Screen("calibrations")
+    object ImuCalibration : Screen("imu_calibration")
 }
 
 @Composable
@@ -118,7 +119,16 @@ fun AppNavGraph(navController: NavHostController) {
             com.example.aerogcsclone.uimain.SettingsScreen(navController)
         }
         composable(Screen.Calibrations.route) {
-            com.example.aerogcsclone.uimain.CalibrationsScreen(viewModel = sharedViewModel)
+            com.example.aerogcsclone.uimain.CalibrationsScreen(
+                viewModel = sharedViewModel,
+                navController = navController
+            )
+        }
+        composable(Screen.ImuCalibration.route) {
+            com.example.aerogcsclone.calibration.ImuCalibrationScreen(
+                onComplete = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() }
+            )
         }
     }
 }
