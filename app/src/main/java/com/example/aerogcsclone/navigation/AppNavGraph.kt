@@ -15,6 +15,8 @@ import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.authentication.LoginPage
 import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.authentication.WelcomeScreen
+import com.example.aerogcsclone.calibration.CalibrationScreen
+import com.example.aerogcsclone.calibration.CalibrationViewModel
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
@@ -39,6 +41,7 @@ sealed class Screen(val route: String) {
     object SelectMethod : Screen("select_method")
     object Settings : Screen("settings")
     object Calibrations : Screen("calibrations")
+    object AccelerometerCalibration : Screen("accelerometer_calibration")
 }
 
 @Composable
@@ -118,7 +121,16 @@ fun AppNavGraph(navController: NavHostController) {
             com.example.aerogcsclone.uimain.SettingsScreen(navController)
         }
         composable(Screen.Calibrations.route) {
-            com.example.aerogcsclone.uimain.CalibrationsScreen(viewModel = sharedViewModel)
+            com.example.aerogcsclone.uimain.CalibrationsScreen(navController)
+        }
+        composable(Screen.AccelerometerCalibration.route) {
+            val calibrationViewModel = remember(sharedViewModel) {
+                CalibrationViewModel(sharedViewModel)
+            }
+            CalibrationScreen(
+                viewModel = calibrationViewModel,
+                navController = navController
+            )
         }
     }
 }

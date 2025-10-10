@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.divpundir.mavlink.definitions.common.MavCmd
 import com.divpundir.mavlink.definitions.common.MissionItemInt
 import com.divpundir.mavlink.definitions.common.Statustext
 import com.example.aerogcsclone.Telemetry.TelemetryState
@@ -125,6 +126,10 @@ class SharedViewModel : ViewModel() {
 
     private val _imuCalibrationStartResult = MutableStateFlow<Boolean?>(null)
     val imuCalibrationStartResult: StateFlow<Boolean?> = _imuCalibrationStartResult
+
+    // Expose COMMAND_ACK flow for calibration and other commands
+    val commandAck: SharedFlow<com.divpundir.mavlink.definitions.common.CommandAck>
+        get() = repo?.commandAck ?: MutableSharedFlow()
 
     fun connect() {
         viewModelScope.launch {
@@ -312,6 +317,57 @@ class SharedViewModel : ViewModel() {
 
     fun resetImuCalibrationStartResult() {
         _imuCalibrationStartResult.value = null
+    }
+
+    /**
+     * Send a calibration command to the vehicle.
+     * This method is used for accelerometer calibration and other calibration procedures.
+     */
+    suspend fun sendCalibrationCommand(
+        command: MavCmd,
+        param1: Float = 0f,
+        param2: Float = 0f,
+        param3: Float = 0f,
+        param4: Float = 0f,
+        param5: Float = 0f,
+        param6: Float = 0f,
+        param7: Float = 0f
+    ) {
+        repo?.sendCommand(
+            command = command,
+            param1 = param1,
+            param2 = param2,
+            param3 = param3,
+            param4 = param4,
+            param5 = param5,
+            param6 = param6,
+            param7 = param7
+        )
+    }
+
+    /**
+     * Send a raw calibration command using command ID (for ArduPilot-specific commands).
+     */
+    suspend fun sendCalibrationCommandRaw(
+        commandId: UInt,
+        param1: Float = 0f,
+        param2: Float = 0f,
+        param3: Float = 0f,
+        param4: Float = 0f,
+        param5: Float = 0f,
+        param6: Float = 0f,
+        param7: Float = 0f
+    ) {
+        repo?.sendCommandRaw(
+            commandId = commandId,
+            param1 = param1,
+            param2 = param2,
+            param3 = param3,
+            param4 = param4,
+            param5 = param5,
+            param6 = param6,
+            param7 = param7
+        )
     }
 
     fun uploadMission(missionItems: List<MissionItemInt>, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {

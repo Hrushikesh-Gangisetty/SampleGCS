@@ -4,6 +4,7 @@ import android.util.Log
 import com.divpundir.mavlink.adapters.coroutines.asCoroutine
 import com.divpundir.mavlink.adapters.coroutines.tryConnect
 import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
+import com.divpundir.mavlink.api.MavEnumValue
 import com.divpundir.mavlink.api.wrap
 import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.connection.tcp.TcpClientMavConnection
@@ -61,6 +62,10 @@ class MavlinkTelemetryRepository(
     private val positionHistory = mutableListOf<Pair<Double, Double>>()
     private var totalDistanceMeters: Float = 0f
     private var lastMissionRunning = false
+
+    // COMMAND_ACK flow for calibration and other commands
+    private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
+    val commandAck: SharedFlow<CommandAck> = _commandAck.asSharedFlow()
 
     fun start() {
         val scope = AppScope
@@ -192,6 +197,8 @@ class MavlinkTelemetryRepository(
                             "MavlinkRepo",
                             "COMMAND_ACK received: command=${ack.command} result=${ack.result} progress=${ack.progress}"
                         )
+                        // Emit to the shared flow for ViewModels to consume
+                        _commandAck.emit(ack)
                     } catch (t: Throwable) {
                         Log.i("MavlinkRepo", "COMMAND_ACK received (unable to stringify fields)")
                     }
@@ -500,6 +507,34 @@ class MavlinkTelemetryRepository(
             Log.d("MavlinkRepo", "Sent COMMAND_LONG: cmd=${command} p1=$param1 p2=$param2 p3=$param3 p4=$param4 p5=$param5 p6=$param6 p7=$param7")
         } catch (e: Exception) {
             Log.e("MavlinkRepo", "Failed to send command", e)
+        }
+    }
+
+    /**
+     * Send a raw command using command ID (for ArduPilot-specific commands not in standard MAVLink).
+     */
+    suspend fun sendCommandRaw(commandId: UInt, param1: Float = 0f, param2: Float = 0f, param3: Float = 0f, param4: Float = 0f, param5: Float = 0f, param6: Float = 0f, param7: Float = 0f) {
+        val commandLong = CommandLong(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId,
+            command = MavEnumValue.fromValue(commandId),
+            confirmation = 0u,
+            param1 = param1,
+            param2 = param2,
+            param3 = param3,
+            param4 = param4,
+            param5 = param5,
+            param6 = param6,
+            param7 = param7
+        )
+        try {
+            connection.trySendUnsignedV2(
+                gcsSystemId,
+                gcsComponentId, commandLong
+            )
+            Log.d("MavlinkRepo", "Sent COMMAND_LONG (raw): cmdId=$commandId p1=$param1 p2=$param2 p3=$param3 p4=$param4 p5=$param5 p6=$param6 p7=$param7")
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Failed to send raw command", e)
         }
     }
 
