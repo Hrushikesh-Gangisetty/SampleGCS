@@ -1,95 +1,210 @@
 package com.example.aerogcsclone.calibration
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.divpundir.mavlink.definitions.common.MavCmd
+import com.example.aerogcsclone.telemetry.SharedViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.example.aerogcsclone.manager.CalibrationCommands
-import com.divpundir.mavlink.definitions.common.CommandLong
+import kotlinx.coroutines.withTimeoutOrNull
 
-// UI state for the calibration screen
+// UI state for the barometer calibration screen
+// Keeps simple fields to minimize UI changes while adding robust backend logic
+
 data class BarometerCalibrationUiState(
-    val isConnected: Boolean = true, // Set to true for demo; replace with actual connection logic
+    val isConnected: Boolean = false,
     val statusText: String = "",
     val isCalibrating: Boolean = false,
     val progress: Int = 0,
     val isStopped: Boolean = false,
-    val isFlatSurface: Boolean = true, // Simulate for demo; replace with sensor data
-    val isWindGood: Boolean = true // Simulate for demo; replace with sensor data
+    val isFlatSurface: Boolean = true,
+    val isWindGood: Boolean = true
 )
 
-class BarometerCalibrationViewModel : ViewModel() {
+class BarometerCalibrationViewModel(
+    private val sharedViewModel: SharedViewModel
+) : ViewModel() {
+
     private val _uiState = MutableStateFlow(BarometerCalibrationUiState())
     val uiState: StateFlow<BarometerCalibrationUiState> = _uiState
 
-    private var calibrationJob: Job? = null
+    private var statusJob: Job? = null
+
+    // Tuning knobs
+    private val ackTimeoutMs = 4000L
+    private val maxRetries = 1
+    private val finalOutcomeTimeoutMs = 10000L
+
+    init {
+        // Observe connection state from SharedViewModel
+        viewModelScope.launch {
+            sharedViewModel.isConnected.collect { connected ->
+                _uiState.update { it.copy(isConnected = connected) }
+            }
+        }
+    }
 
     fun checkConditions(flatSurface: Boolean, windGood: Boolean) {
-        _uiState.update {
-            it.copy(isFlatSurface = flatSurface, isWindGood = windGood)
-        }
+        _uiState.update { it.copy(isFlatSurface = flatSurface, isWindGood = windGood) }
     }
 
     fun startCalibration() {
         val state = _uiState.value
+        // Validate environment conditions with clear messaging
         if (!state.isFlatSurface && !state.isWindGood) {
             _uiState.update {
                 it.copy(statusText = "Place the drone on a flat surface. Wind condition is not good. It is better to stop flying and calibrating the drone.")
             }
             return
         } else if (!state.isFlatSurface) {
-            _uiState.update {
-                it.copy(statusText = "Place the drone on a flat surface.")
-            }
+            _uiState.update { it.copy(statusText = "Place the drone on a flat surface.") }
             return
         } else if (!state.isWindGood) {
-            _uiState.update {
-                it.copy(statusText = "Wind condition is not good. It is better to stop flying and calibrating the drone.")
-            }
+            _uiState.update { it.copy(statusText = "Wind condition is not good. It is better to stop flying and calibrating the drone.") }
             return
         }
-        // Send calibration command
-        val command: CommandLong = CalibrationCommands.createBarometerCalibrationCommand()
-        // TODO: Send command to drone
-        _uiState.update {
-            it.copy(
-                statusText = "Barometer calibration started...",
-                isCalibrating = true,
-                progress = 0,
-                isStopped = false
-            )
+        if (!_uiState.value.isConnected) {
+            _uiState.update { it.copy(statusText = "Please connect to the drone first") }
+            return
         }
-        calibrationJob?.cancel()
-        calibrationJob = CoroutineScope(Dispatchers.Default).launch {
-            for (i in 1..100) {
-                delay(50) // Simulate progress, replace with real feedback
-                _uiState.update { state ->
-                    if (!state.isStopped) {
-                        state.copy(progress = i, statusText = "Calibration in progress: $i%")
-                    } else {
-                        state
-                    }
-                }
-                if (_uiState.value.isStopped) break
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    statusText = "Starting barometer calibration...",
+                    isCalibrating = true,
+                    progress = 0,
+                    isStopped = false
+                )
             }
-            if (!_uiState.value.isStopped) {
-                _uiState.update {
-                    it.copy(statusText = "Calibration is successful!", isCalibrating = false, progress = 100)
+
+            // Start listening to STATUSTEXT messages relevant to barometer calibration
+            startStatusListener()
+
+            try {
+                var started = false
+                var lastAck: String? = null
+                repeat(maxRetries + 1) { attempt ->
+                    // Send MAV_CMD_PREFLIGHT_CALIBRATION with barometer flag (param3 = 1)
+                    sharedViewModel.sendCalibrationCommand(
+                        command = MavCmd.PREFLIGHT_CALIBRATION,
+                        param1 = 0f, // gyro
+                        param2 = 0f, // mag
+                        param3 = 1f, // baro
+                        param4 = 0f, // radio
+                        param5 = 0f, // accel
+                        param6 = 0f, // esc
+                        param7 = 0f
+                    )
+
+                    Log.d("BaroCalVM", "Sent PREFLIGHT_CALIBRATION (baro) attempt ${attempt + 1}")
+
+                    val ack = sharedViewModel.awaitCommandAck(241u, ackTimeoutMs)
+                    val result = ack?.result?.value
+                    lastAck = ack?.result?.entry?.name ?: result?.toString()
+                    val ok = (result == 0u /* ACCEPTED */) || (result == 5u /* IN_PROGRESS */)
+                    if (ok) {
+                        started = true
+                        return@repeat
+                    } else if (ack != null) {
+                        // Negative ack -> fail immediately
+                        started = false
+                        return@repeat
+                    }
+                    // ack == null -> retry
                 }
+
+                if (!started) {
+                    _uiState.update {
+                        it.copy(
+                            isCalibrating = false,
+                            statusText = "Failed to start barometer calibration: ${lastAck ?: "No ACK"}"
+                        )
+                    }
+                    stopStatusListener()
+                    return@launch
+                }
+
+                _uiState.update { it.copy(statusText = "Calibrating barometer...", progress = 10) }
+
+                // Await final outcome from STATUSTEXT
+                val success = awaitFinalOutcome(finalOutcomeTimeoutMs)
+                if (success == true) {
+                    _uiState.update { it.copy(statusText = "Barometer calibration successful", isCalibrating = false, progress = 100) }
+                } else if (success == false) {
+                    _uiState.update { it.copy(statusText = "Barometer calibration failed", isCalibrating = false) }
+                } else {
+                    // Timeout: assume completion but inform user no explicit success was received
+                    _uiState.update { it.copy(statusText = "Assuming barometer calibration completed (no explicit success received)", isCalibrating = false, progress = 100) }
+                }
+
+                stopStatusListener()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(statusText = "Error: ${e.message}", isCalibrating = false) }
+                stopStatusListener()
             }
         }
     }
 
     fun stopCalibration() {
-        // TODO: Send stop/cancel command to drone if supported
-        _uiState.update {
-            it.copy(statusText = "Calibration stopped.", isStopped = true, isCalibrating = false)
+        viewModelScope.launch {
+            // No dedicated cancel for baro; send neutral PREFLIGHT_CALIBRATION
+            try {
+                sharedViewModel.sendCalibrationCommand(
+                    command = MavCmd.PREFLIGHT_CALIBRATION,
+                    param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f, param5 = 0f, param6 = 0f, param7 = 0f
+                )
+            } catch (_: Exception) { /* ignore */ }
+            _uiState.update { it.copy(statusText = "Calibration stopped.", isStopped = true, isCalibrating = false) }
+            stopStatusListener()
         }
-        calibrationJob?.cancel()
+    }
+
+    private fun startStatusListener() {
+        statusJob?.cancel()
+        statusJob = viewModelScope.launch {
+            sharedViewModel.calibrationStatus.collectLatest { text ->
+                if (text.isNullOrBlank()) return@collectLatest
+                val lower = text.lowercase()
+                val relevant = listOf("baro", "barometer", "pressure", "calib").any { lower.contains(it) }
+                if (!relevant) return@collectLatest
+
+                _uiState.update { it.copy(statusText = text) }
+
+                // Treat any clear success indicator as completion
+                if (lower.contains("fail")) {
+                    _uiState.update { it.copy(isCalibrating = false) }
+                } else if (lower.contains("success") || lower.contains("complete") || lower.contains("completed") || lower.contains("done")) {
+                    _uiState.update { it.copy(progress = 100, isCalibrating = false) }
+                }
+            }
+        }
+    }
+
+    private fun stopStatusListener() {
+        statusJob?.cancel()
+        statusJob = null
+    }
+
+    private suspend fun awaitFinalOutcome(timeoutMs: Long): Boolean? = withTimeoutOrNull(timeoutMs) {
+        sharedViewModel.calibrationStatus
+            .mapNotNull { it }
+            .first { t ->
+                val l = t.lowercase()
+                // Prefer barometer mentions but accept generic calibration outcome keywords
+                (l.contains("baro") || l.contains("barometer") || l.contains("pressure") || l.contains("calib")) &&
+                        (l.contains("success") || l.contains("fail") || l.contains("complete") || l.contains("completed") || l.contains("done"))
+            }
+            .let { finalTxt ->
+                val l = finalTxt.lowercase()
+                (l.contains("success") || l.contains("complete") || l.contains("completed") || l.contains("done"))
+            }
     }
 }

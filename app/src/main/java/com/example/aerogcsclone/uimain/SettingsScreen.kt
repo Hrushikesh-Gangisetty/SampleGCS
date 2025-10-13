@@ -61,7 +61,7 @@ fun SettingsScreen(navController: NavHostController) {
             // Row 1: IMU Calibrations | Compass Calibration
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { navController.navigate(com.example.aerogcsclone.navigation.Screen.Calibrations.route) },
+                    onClick = { navController.navigate("accelerometer_calibration") },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),

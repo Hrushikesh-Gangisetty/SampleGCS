@@ -203,10 +203,17 @@ class SharedViewModel : ViewModel() {
                     .filterIsInstance<Statustext>()
                     .collect {
                         val statusText = it.text
-                        // Surface common calibration-related prompts, not only ones containing the exact word "calibration"
+                        // Surface common calibration-related prompts, including accel/compass/barometer keywords
                         val lower = statusText.lowercase()
-                        if (listOf("calib", "progress", "place", "position", "level", "nose", "left", "right", "back")
-                                .any { key -> lower.contains(key) }) {
+                        val keys = listOf(
+                            // generic
+                            "calib", "progress",
+                            // accel prompts
+                            "place", "position", "level", "nose", "left", "right", "back",
+                            // barometer
+                            "baro", "barometer", "pressure"
+                        )
+                        if (keys.any { key -> lower.contains(key) }) {
                             _calibrationStatus.value = statusText
                         }
                     }

@@ -146,9 +146,9 @@ fun AppNavGraph(navController: NavHostController) {
             )
         }
         composable("barometer_calibration") {
-            val barometerCalibrationViewModel = viewModel<
-                com.example.aerogcsclone.calibration.BarometerCalibrationViewModel
-            >()
+            val barometerCalibrationViewModel = remember(sharedViewModel) {
+                com.example.aerogcsclone.calibration.BarometerCalibrationViewModel(sharedViewModel)
+            }
             com.example.aerogcsclone.calibration.BarometerCalibrationScreen(
                 viewModel = barometerCalibrationViewModel,
                 navController = navController
