@@ -69,10 +69,12 @@ fun CalibrationsScreen(
 
             CalibrationOptionCard(
                 title = "Compass Calibration",
-                description = "Calibrate the magnetometer/compass (Coming Soon)",
-                icon = Icons.Default.LocationOn,
-                enabled = false,
-                onClick = { }
+                description = "Calibrate the magnetometer by rotating the vehicle slowly through all orientations",
+                icon = Icons.Default.Explore,
+                enabled = true,
+                onClick = {
+                    navController.navigate("compass_calibration")
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

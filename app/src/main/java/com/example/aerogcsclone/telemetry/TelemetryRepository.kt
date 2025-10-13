@@ -10,6 +10,8 @@ import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.connection.tcp.TcpClientMavConnection
 import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.definitions.minimal.*
+import com.divpundir.mavlink.definitions.ardupilotmega.MagCalProgress
+import com.divpundir.mavlink.definitions.common.MagCalReport
 import com.example.aerogcsclone.Telemetry.AppScope
 import com.example.aerogcsclone.Telemetry.TelemetryState
 //import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
@@ -66,6 +68,14 @@ class MavlinkTelemetryRepository(
     // COMMAND_ACK flow for calibration and other commands
     private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
     val commandAck: SharedFlow<CommandAck> = _commandAck.asSharedFlow()
+
+    // MAG_CAL_PROGRESS flow for compass calibration progress
+    private val _magCalProgress = MutableSharedFlow<MagCalProgress>(replay = 0, extraBufferCapacity = 10)
+    val magCalProgress: SharedFlow<MagCalProgress> = _magCalProgress.asSharedFlow()
+
+    // MAG_CAL_REPORT flow for compass calibration final report
+    private val _magCalReport = MutableSharedFlow<MagCalReport>(replay = 0, extraBufferCapacity = 10)
+    val magCalReport: SharedFlow<MagCalReport> = _magCalReport.asSharedFlow()
 
     fun start() {
         val scope = AppScope
@@ -443,6 +453,30 @@ class MavlinkTelemetryRepository(
                     val sats = gps.satellitesVisible.toInt().takeIf { it >= 0 }
                     val hdop = if (gps.eph.toUInt() == 0xFFFFu) null else gps.eph.toFloat() / 100f
                     _state.update { it.copy(sats = sats, hdop = hdop) }
+                }
+        }
+
+        // MAG_CAL_PROGRESS for compass calibration progress
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<MagCalProgress>()
+                .collect { progress ->
+                    Log.d("MavlinkRepo", "MAG_CAL_PROGRESS: compass=${progress.compassId} status=${progress.calStatus.entry?.name} pct=${progress.completionPct}")
+                    _magCalProgress.emit(progress)
+                }
+        }
+
+        // MAG_CAL_REPORT for compass calibration final report
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<MagCalReport>()
+                .collect { report ->
+                    Log.d("MavlinkRepo", "MAG_CAL_REPORT: compass=${report.compassId} status=${report.calStatus.entry?.name} fitness=${report.fitness}")
+                    _magCalReport.emit(report)
                 }
         }
 

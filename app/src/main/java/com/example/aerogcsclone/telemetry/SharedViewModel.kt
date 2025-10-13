@@ -16,7 +16,7 @@ import com.divpundir.mavlink.definitions.common.Statustext
 import com.example.aerogcsclone.Telemetry.TelemetryState
 //import com.example.aerogcsclone.Telemetry.connections.BluetoothConnectionProvider
 //import com.example.aerogcsclone.Telemetry.connections.MavConnectionProvider
-import com.example.aerogcsclone.telemetry.connections.BluetoothConnectionProvider
+import com.example.aerogcsclone.telemetry.  connections.BluetoothConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
 import com.example.aerogcsclone.utils.GeofenceUtils
@@ -130,6 +130,14 @@ class SharedViewModel : ViewModel() {
     // Expose COMMAND_ACK flow for calibration and other commands
     val commandAck: SharedFlow<com.divpundir.mavlink.definitions.common.CommandAck>
         get() = repo?.commandAck ?: MutableSharedFlow()
+
+    // Expose MAG_CAL_PROGRESS flow for compass calibration progress
+    val magCalProgress: SharedFlow<com.divpundir.mavlink.definitions.ardupilotmega.MagCalProgress>
+        get() = repo?.magCalProgress ?: MutableSharedFlow()
+
+    // Expose MAG_CAL_REPORT flow for compass calibration final report
+    val magCalReport: SharedFlow<com.divpundir.mavlink.definitions.common.MagCalReport>
+        get() = repo?.magCalReport ?: MutableSharedFlow()
 
     fun connect() {
         viewModelScope.launch {

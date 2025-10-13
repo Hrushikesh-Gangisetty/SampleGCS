@@ -17,6 +17,8 @@ import com.example.aerogcsclone.authentication.SignupPage
 import com.example.aerogcsclone.authentication.WelcomeScreen
 import com.example.aerogcsclone.calibration.CalibrationScreen
 import com.example.aerogcsclone.calibration.CalibrationViewModel
+import com.example.aerogcsclone.calibration.CompassCalibrationScreen
+import com.example.aerogcsclone.calibration.CompassCalibrationViewModel
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
@@ -42,6 +44,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object Calibrations : Screen("calibrations")
     object AccelerometerCalibration : Screen("accelerometer_calibration")
+    object CompassCalibration : Screen("compass_calibration")
 }
 
 @Composable
@@ -129,6 +132,15 @@ fun AppNavGraph(navController: NavHostController) {
             }
             CalibrationScreen(
                 viewModel = calibrationViewModel,
+                navController = navController
+            )
+        }
+        composable(Screen.CompassCalibration.route) {
+            val compassCalibrationViewModel = remember(sharedViewModel) {
+                CompassCalibrationViewModel(sharedViewModel)
+            }
+            CompassCalibrationScreen(
+                viewModel = compassCalibrationViewModel,
                 navController = navController
             )
         }
