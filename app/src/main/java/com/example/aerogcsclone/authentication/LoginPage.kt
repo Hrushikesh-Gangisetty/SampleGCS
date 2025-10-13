@@ -1,13 +1,21 @@
 package com.example.aerogcsclone.authentication
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -33,6 +41,13 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
     var password by remember { mutableStateOf("") }
     val authState = authViewModel.authState.observeAsState()
     val context = LocalContext.current
+
+    // Google Sign-In launcher
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        authViewModel.handleGoogleSignInResult(context, result.data)
+    }
 
     LaunchedEffect(authState.value) {
         when (val state = authState.value) {
@@ -108,6 +123,29 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
 
                 Button(onClick = { authViewModel.login(email, password) }) {
                     Text(text = "Login", color = Color.Black)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Google Sign-In Button
+                OutlinedButton(
+                    onClick = {
+                        authViewModel.signInWithGoogle(context, googleSignInLauncher)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_google),
+                        contentDescription = "Google Icon",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.Unspecified
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Sign in with Google")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

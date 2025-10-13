@@ -114,4 +114,10 @@ dependencies {
 
     // Accompanist System UI Controller for status bar control
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
+
+    implementation(platform("com.google.firebase:firebase-bom:33.13.0"))
+    implementation ("androidx.navigation:navigation-compose:2.7.6")
+    implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+    implementation ("com.google.firebase:firebase-auth-ktx:22.3.1")
+    implementation ("com.google.android.gms:play-services-auth:20.7.0")
 }
