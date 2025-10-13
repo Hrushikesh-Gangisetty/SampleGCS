@@ -132,7 +132,8 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
                     onClick = {
                         authViewModel.signInWithGoogle(context, googleSignInLauncher)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.wrapContentWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
@@ -141,11 +142,11 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
                     Icon(
                         painter = painterResource(id = R.drawable.ic_google),
                         contentDescription = "Google Icon",
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = Color.Unspecified
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Sign in with Google")
+                    Text(text = "Sign in with Google", fontSize = 14.sp)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
