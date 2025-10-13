@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 
 class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewModel() {
 
@@ -17,6 +18,16 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
     private var currentPositionIndex = 0
     private var statusTextCollectorJob: Job? = null
+
+    // Tuning knobs
+    private val ackTimeoutMs = 4000L
+    private val startPromptTimeoutMs = 8000L
+    private val nextPromptTimeoutMs = 8000L
+    private val finalOutcomeTimeoutMs = 10000L
+    private val maxRetries = 1 // retry count for no-ACK cases
+
+    // Prompt flow for "Place vehicle ..." STATUSTEXT parsing
+    private var accelPromptFlow = MutableSharedFlow<AccelCalibrationPosition>(extraBufferCapacity = 1)
 
     init {
         // Observe connection state from SharedViewModel
@@ -28,7 +39,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
     }
 
     /**
-     * Start the accelerometer calibration process.
+     * Start the accelerometer calibration process (ArduPilot).
+     * Requires either an ACK (ACCEPTED/IN_PROGRESS) + a prompt, or a prompt alone, before showing step 1.
      */
     fun startCalibration() {
         if (!_uiState.value.isConnected) {
@@ -52,89 +64,70 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
             currentPositionIndex = 0
 
+            // Reset prompt flow to avoid stale emissions from previous runs
+            accelPromptFlow = MutableSharedFlow(extraBufferCapacity = 1)
+
             // Start listening to STATUSTEXT messages from the telemetry
             startStatusTextListener()
 
             // Send MAV_CMD_PREFLIGHT_CALIBRATION with param5 = 1.0 (accelerometer calibration)
+            var startedAckOk = false
+            var lastAckDesc: String? = null
             try {
-                sharedViewModel.sendCalibrationCommand(
-                    command = MavCmd.PREFLIGHT_CALIBRATION,
-                    param1 = 0f, // Gyro
-                    param2 = 0f, // Magnetometer
-                    param3 = 0f, // Barometer
-                    param4 = 0f, // Radio
-                    param5 = 1f, // Accelerometer - START
-                    param6 = 0f, // ESC/Motor
-                    param7 = 0f  // Unused
-                )
+                repeat(maxRetries + 1) { attempt ->
+                    Log.d("CalibrationVM", "Sending PREFLIGHT_CALIBRATION (accel) attempt=${attempt + 1}")
+                    sharedViewModel.sendCalibrationCommand(
+                        command = MavCmd.PREFLIGHT_CALIBRATION,
+                        param1 = 0f, // Gyro
+                        param2 = 0f, // Magnetometer
+                        param3 = 0f, // Barometer
+                        param4 = 0f, // Radio
+                        param5 = 1f, // Accelerometer - START
+                        param6 = 0f, // ESC/Motor
+                        param7 = 0f  // Unused
+                    )
 
-                Log.d("CalibrationVM", "Sent PREFLIGHT_CALIBRATION command to start accel calibration")
-
-                // Wait for drone to acknowledge calibration start
-                delay(1000)
-
-                // Now send the LEVEL position command immediately
-                Log.d("CalibrationVM", "Sending LEVEL position command (param1=1.0)")
-
-                var ackReceived = false
-
-                // Start listening for COMMAND_ACK for LEVEL position
-                val commandAckJob = viewModelScope.launch {
-                    sharedViewModel.commandAck
-                        .filter { it.command.value == 42429u }
-                        .firstOrNull()
-                        ?.let { ack ->
-                            ackReceived = true
-                            Log.d("CalibrationVM", "COMMAND_ACK for LEVEL position: result=${ack.result.entry?.name ?: ack.result.value}")
-
-                            if (ack.result.value == 0u) { // ACCEPTED
-                                Log.d("CalibrationVM", "✓ LEVEL position command ACCEPTED")
-                                // Move to next position (LEFT)
-                                currentPositionIndex++
-                                proceedToNextPosition()
-                            } else {
-                                Log.e("CalibrationVM", "✗ LEVEL position command FAILED: ${ack.result.entry?.name ?: ack.result.value}")
-                                _uiState.update {
-                                    it.copy(
-                                        calibrationState = CalibrationState.Failed("Calibration failed at LEVEL position: ${ack.result.entry?.name ?: "Unknown error"}"),
-                                        statusText = "Calibration failed - drone rejected LEVEL position"
-                                    )
-                                }
-                                stopStatusTextListener()
-                            }
-                        }
+                    val ack = sharedViewModel.awaitCommandAck(241u, ackTimeoutMs)
+                    lastAckDesc = ack?.result?.entry?.name ?: ack?.result?.value?.toString()
+                    val result = ack?.result?.value
+                    val ok = (result == 0u /* ACCEPTED */) || (result == 5u /* IN_PROGRESS */)
+                    if (ok) {
+                        startedAckOk = true
+                        return@repeat
+                    } else if (ack != null) {
+                        // Negative ACK -> fail immediately
+                        return@repeat
+                    }
+                    // ack == null -> rely on prompt
                 }
 
-                // Send LEVEL position command (param1 = 1.0)
-                sharedViewModel.sendCalibrationCommandRaw(
-                    commandId = 42429u, // MAV_CMD_ACCELCAL_VEHICLE_POS
-                    param1 = 1.0f, // LEVEL position
-                    param2 = 0f,
-                    param3 = 0f,
-                    param4 = 0f,
-                    param5 = 0f,
-                    param6 = 0f,
-                    param7 = 0f
-                )
-
-                Log.d("CalibrationVM", "✓ LEVEL position command sent, waiting for COMMAND_ACK...")
-
-                // Wait for COMMAND_ACK with timeout
-                delay(3000)
-                commandAckJob.cancel()
-
-                // If still in Initiating state and no ACK was received
-                if (!ackReceived && _uiState.value.calibrationState is CalibrationState.Initiating) {
-                    Log.w("CalibrationVM", "No COMMAND_ACK received for LEVEL position within timeout")
+                // Wait for the first prompt (LEVEL expected). If prompt doesn't arrive, fail.
+                val firstPrompt = awaitNextPrompt(startPromptTimeoutMs)
+                if (firstPrompt != null) {
+                    // Align index to the prompt given by autopilot
+                    currentPositionIndex = AccelCalibrationPosition.entries.indexOf(firstPrompt).coerceAtLeast(0)
                     _uiState.update {
                         it.copy(
-                            calibrationState = CalibrationState.Failed("Timeout waiting for drone acknowledgment of LEVEL position"),
-                            statusText = "Calibration failed - no response from drone"
+                            calibrationState = CalibrationState.AwaitingUserInput(
+                                position = firstPrompt,
+                                instruction = firstPrompt.instruction
+                            ),
+                            statusText = firstPrompt.instruction,
+                            currentPositionIndex = currentPositionIndex
+                        )
+                    }
+                    Log.d("CalibrationVM", "Start prompt received: ${firstPrompt.name}")
+                } else {
+                    val reason = if (startedAckOk) "No start prompt received" else "No ACK and no start prompt"
+                    Log.e("CalibrationVM", "✗ Calibration start failed: $reason (ack=$lastAckDesc)")
+                    _uiState.update {
+                        it.copy(
+                            calibrationState = CalibrationState.Failed("Calibration start failed: $reason"),
+                            statusText = "Calibration failed to start"
                         )
                     }
                     stopStatusTextListener()
                 }
-
             } catch (e: Exception) {
                 Log.e("CalibrationVM", "Failed to start calibration", e)
                 _uiState.update {
@@ -149,6 +142,7 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
     /**
      * User confirms the current position and moves to the next.
+     * Requires either an ACCEPTED/IN_PROGRESS ACK or the next prompt to proceed.
      */
     fun onNextPosition() {
         val currentState = _uiState.value.calibrationState
@@ -157,12 +151,6 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
             viewModelScope.launch {
                 val position = currentState.position
 
-                Log.d("CalibrationVM", "========================================")
-                Log.d("CalibrationVM", "USER CONFIRMED POSITION")
-                Log.d("CalibrationVM", "Position: ${position.name}")
-                Log.d("CalibrationVM", "Position index: $currentPositionIndex")
-                Log.d("CalibrationVM", "========================================")
-
                 _uiState.update {
                     it.copy(
                         calibrationState = CalibrationState.ProcessingPosition(position),
@@ -170,83 +158,121 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                     )
                 }
 
-                // Send the position acknowledgment using a custom command
-                // MAV_CMD_ACCELCAL_VEHICLE_POS is command ID 42429 in ArduPilot
                 try {
-                    Log.d("CalibrationVM", "SENDING MAV_CMD_ACCELCAL_VEHICLE_POS")
-                    Log.d("CalibrationVM", "Command ID: 42429 (MAV_CMD_ACCELCAL_VEHICLE_POS)")
-                    Log.d("CalibrationVM", "Parameters:")
-                    Log.d("CalibrationVM", "  param1 (Position): ${position.paramValue} (${position.name})")
-                    Log.d("CalibrationVM", "  param2-7: 0.0")
+                    // Reset prompt flow before sending this step to avoid consuming old prompts
+                    accelPromptFlow = MutableSharedFlow(extraBufferCapacity = 1)
 
-                    var ackReceived = false
-
-                    // Start listening for COMMAND_ACK
-                    val commandAckJob = viewModelScope.launch {
-                        sharedViewModel.commandAck
-                            .filter { it.command.value == 42429u }
-                            .firstOrNull()
-                            ?.let { ack ->
-                                ackReceived = true
-                                Log.d("CalibrationVM", "COMMAND_ACK for calibration command: result=${ack.result.entry?.name ?: ack.result.value}")
-
-                                // Check if command was successful (ACCEPTED = 0)
-                                if (ack.result.value == 0u) {
-                                    Log.d("CalibrationVM", "✓ Position command ACCEPTED by drone")
-                                    // Move to next position
-                                    currentPositionIndex++
-                                    Log.d("CalibrationVM", "Moving to next position (index: $currentPositionIndex)")
-                                    proceedToNextPosition()
-                                } else {
-                                    // Command failed
-                                    Log.e("CalibrationVM", "✗ Position command FAILED: ${ack.result.entry?.name ?: ack.result.value}")
-                                    _uiState.update {
-                                        it.copy(
-                                            calibrationState = CalibrationState.Failed("Calibration position command failed: ${ack.result.entry?.name ?: "Unknown error"}"),
-                                            statusText = "Calibration failed - drone rejected position command"
-                                        )
-                                    }
-                                    stopStatusTextListener()
-                                }
-                            }
+                    // Send and await ACK for this position
+                    var ackOk = false
+                    var lastAck: String? = null
+                    repeat(maxRetries + 1) { attempt ->
+                        Log.d("CalibrationVM", "Sending ACCELCAL_VEHICLE_POS=${position.name} attempt=${attempt + 1}")
+                        sharedViewModel.sendCalibrationCommandRaw(
+                            commandId = 42429u, // MAV_CMD_ACCELCAL_VEHICLE_POS
+                            param1 = position.paramValue,
+                            param2 = 0f,
+                            param3 = 0f,
+                            param4 = 0f,
+                            param5 = 0f,
+                            param6 = 0f,
+                            param7 = 0f
+                        )
+                        val ack = sharedViewModel.awaitCommandAck(42429u, ackTimeoutMs)
+                        val result = ack?.result?.value
+                        lastAck = ack?.result?.entry?.name ?: result?.toString()
+                        val ok = (result == 0u /* ACCEPTED */) || (result == 5u /* IN_PROGRESS */)
+                        if (ok) {
+                            ackOk = true
+                            return@repeat
+                        } else if (ack != null) {
+                            // Negative ACK -> fail immediately
+                            ackOk = false
+                            return@repeat
+                        }
+                        // ack == null -> rely on prompt
                     }
 
-                    // Use raw command ID for ArduPilot-specific command
-                    sharedViewModel.sendCalibrationCommandRaw(
-                        commandId = 42429u, // MAV_CMD_ACCELCAL_VEHICLE_POS
-                        param1 = position.paramValue,
-                        param2 = 0f,
-                        param3 = 0f,
-                        param4 = 0f,
-                        param5 = 0f,
-                        param6 = 0f,
-                        param7 = 0f
-                    )
+                    // If this was the last position, wait for final outcome explicitly
+                    val isLast = position == AccelCalibrationPosition.BACK
+                    if (isLast) {
+                        val outcome = awaitFinalOutcome(finalOutcomeTimeoutMs)
+                        when (outcome) {
+                            true -> {
+                                // Success will also be set by listener, but ensure state
+                                _uiState.update {
+                                    it.copy(
+                                        calibrationState = CalibrationState.Success("Calibration completed successfully!"),
+                                        statusText = "Calibration successful"
+                                    )
+                                }
+                                stopStatusTextListener()
+                            }
+                            false -> {
+                                _uiState.update {
+                                    it.copy(
+                                        calibrationState = CalibrationState.Failed("Calibration failed at final step"),
+                                        statusText = "Calibration failed"
+                                    )
+                                }
+                                stopStatusTextListener()
+                            }
+                            null -> {
+                                _uiState.update {
+                                    it.copy(
+                                        calibrationState = CalibrationState.Failed("Timeout waiting for completion"),
+                                        statusText = "Calibration timeout"
+                                    )
+                                }
+                                stopStatusTextListener()
+                            }
+                        }
+                        return@launch
+                    }
 
-                    Log.d("CalibrationVM", "✓ Position command sent, waiting for COMMAND_ACK...")
-
-                    // Wait for COMMAND_ACK with timeout
-                    delay(3000)
-                    commandAckJob.cancel()
-
-                    // If we reach here and still in ProcessingPosition state and no ACK received
-                    if (!ackReceived && _uiState.value.calibrationState is CalibrationState.ProcessingPosition) {
-                        Log.w("CalibrationVM", "No COMMAND_ACK received within timeout")
+                    // For intermediate positions: wait for the next prompt and only then advance
+                    val nextPrompt = awaitNextPrompt(nextPromptTimeoutMs)
+                    if (nextPrompt == null) {
+                        // If ACK was explicitly negative or no prompt came, fail fast
+                        val reason = if (ackOk) "No next prompt from vehicle" else "No ACK and no next prompt"
+                        Log.e("CalibrationVM", "✗ Step failed: ${position.name} -> $reason (lastAck=$lastAck)")
                         _uiState.update {
                             it.copy(
-                                calibrationState = CalibrationState.Failed("Timeout waiting for drone acknowledgment"),
-                                statusText = "Calibration failed - no response from drone"
+                                calibrationState = CalibrationState.Failed("Step failed: $reason"),
+                                statusText = "Calibration failed - $reason"
                             )
                         }
                         stopStatusTextListener()
+                        return@launch
+                    }
+
+                    // If vehicle asks for same position again, treat as not accepted
+                    if (nextPrompt == position) {
+                        Log.e("CalibrationVM", "✗ Vehicle still asking for ${position.name} -> not accepted")
+                        _uiState.update {
+                            it.copy(
+                                calibrationState = CalibrationState.Failed("Position not accepted by vehicle: ${position.name}"),
+                                statusText = "Please retry calibration"
+                            )
+                        }
+                        stopStatusTextListener()
+                        return@launch
+                    }
+
+                    // Update to vehicle-requested next position
+                    currentPositionIndex = AccelCalibrationPosition.entries.indexOf(nextPrompt).coerceAtLeast(currentPositionIndex + 1)
+                    _uiState.update {
+                        it.copy(
+                            calibrationState = CalibrationState.AwaitingUserInput(
+                                position = nextPrompt,
+                                instruction = nextPrompt.instruction
+                            ),
+                            statusText = nextPrompt.instruction,
+                            currentPositionIndex = currentPositionIndex
+                        )
                     }
 
                 } catch (e: Exception) {
-                    Log.e("CalibrationVM", "========================================")
-                    Log.e("CalibrationVM", "FAILED TO SEND POSITION COMMAND")
-                    Log.e("CalibrationVM", "Position: ${position.name}")
-                    Log.e("CalibrationVM", "Error: ${e.message}", e)
-                    Log.e("CalibrationVM", "========================================")
+                    Log.e("CalibrationVM", "Failed to send position command ${position.name}", e)
                     _uiState.update {
                         it.copy(
                             calibrationState = CalibrationState.Failed("Failed to process position: ${e.message}"),
@@ -273,7 +299,7 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 )
             }
 
-            // Send MAV_CMD_PREFLIGHT_CALIBRATION with all params = 0 to cancel
+            // There is no dedicated cancel for accel; try clearing by sending PREFLIGHT_CALIBRATION with zeros
             try {
                 sharedViewModel.sendCalibrationCommand(
                     command = MavCmd.PREFLIGHT_CALIBRATION,
@@ -285,8 +311,6 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                     param6 = 0f,
                     param7 = 0f
                 )
-
-                Log.d("CalibrationVM", "Sent cancel calibration command")
 
                 delay(500)
 
@@ -332,52 +356,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
     }
 
     /**
-     * Proceed to the next calibration position or complete the process.
-     */
-    private fun proceedToNextPosition() {
-        val nextPosition = AccelCalibrationPosition.entries.getOrNull(currentPositionIndex)
-
-        Log.d("CalibrationVM", "========================================")
-        Log.d("CalibrationVM", "PROCEED TO NEXT POSITION")
-        Log.d("CalibrationVM", "Current index: $currentPositionIndex")
-        Log.d("CalibrationVM", "Next position: ${nextPosition?.name ?: "COMPLETE"}")
-        Log.d("CalibrationVM", "========================================")
-
-        if (nextPosition != null) {
-            Log.d("CalibrationVM", "Setting position: ${nextPosition.name}")
-            Log.d("CalibrationVM", "Instruction: ${nextPosition.instruction}")
-
-            _uiState.update {
-                it.copy(
-                    calibrationState = CalibrationState.AwaitingUserInput(
-                        position = nextPosition,
-                        instruction = nextPosition.instruction
-                    ),
-                    statusText = nextPosition.instruction,
-                    currentPositionIndex = currentPositionIndex
-                )
-            }
-
-            Log.d("CalibrationVM", "✓ Ready for user to position drone as: ${nextPosition.name}")
-        } else {
-            // All positions completed
-            Log.d("CalibrationVM", "========================================")
-            Log.d("CalibrationVM", "ALL POSITIONS COMPLETED!")
-            Log.d("CalibrationVM", "========================================")
-
-            _uiState.update {
-                it.copy(
-                    calibrationState = CalibrationState.Success("Calibration completed successfully!"),
-                    statusText = "Calibration successful"
-                )
-            }
-            stopStatusTextListener()
-            Log.d("CalibrationVM", "Status text listener stopped")
-        }
-    }
-
-    /**
      * Start listening to STATUSTEXT messages for calibration feedback.
+     * Emits parsed position prompts to accelPromptFlow and auto-resolves success/failure text.
      */
     private fun startStatusTextListener() {
         stopStatusTextListener() // Stop any existing listener
@@ -385,48 +365,41 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
         statusTextCollectorJob = viewModelScope.launch {
             sharedViewModel.calibrationStatus.collect { statusText ->
-                statusText?.let {
-                    Log.d("CalibrationVM", "========================================")
-                    Log.d("CalibrationVM", "RECEIVED STATUSTEXT FROM DRONE")
-                    Log.d("CalibrationVM", "Message: $it")
-                    Log.d("CalibrationVM", "========================================")
+                statusText?.let { text ->
+                    Log.d("CalibrationVM", "STATUSTEXT: $text")
 
                     // Update status text in UI
                     _uiState.update { state ->
-                        state.copy(statusText = it)
+                        state.copy(statusText = text)
+                    }
+
+                    // Parse known prompts and emit
+                    parseAccelPrompt(text)?.let { pos ->
+                        accelPromptFlow.tryEmit(pos)
                     }
 
                     // Check for success or failure messages
                     when {
-                        it.contains("Calibration successful", ignoreCase = true) -> {
-                            Log.d("CalibrationVM", "✓✓✓ CALIBRATION SUCCESSFUL ✓✓✓")
+                        text.contains("Calibration successful", ignoreCase = true) -> {
                             _uiState.update { state ->
                                 state.copy(
-                                    calibrationState = CalibrationState.Success(it),
-                                    statusText = it
+                                    calibrationState = CalibrationState.Success(text),
+                                    statusText = text
                                 )
                             }
                             stopStatusTextListener()
                         }
-                        it.contains("Calibration FAILED", ignoreCase = true) ||
-                        it.contains("failed", ignoreCase = true) -> {
-                            Log.e("CalibrationVM", "✗✗✗ CALIBRATION FAILED ✗✗✗")
+                        text.contains("Calibration FAILED", ignoreCase = true) ||
+                        text.contains("failed", ignoreCase = true) -> {
                             _uiState.update { state ->
                                 state.copy(
-                                    calibrationState = CalibrationState.Failed(it),
-                                    statusText = it
+                                    calibrationState = CalibrationState.Failed(text),
+                                    statusText = text
                                 )
                             }
                             stopStatusTextListener()
                         }
-                        it.contains("Place vehicle", ignoreCase = true) -> {
-                            Log.d("CalibrationVM", "ArduPilot prompting for position")
-                            // ArduPilot is prompting for next position
-                            // The state machine will handle this via user clicking Next
-                        }
-                        else -> {
-                            Log.d("CalibrationVM", "General status message received")
-                        }
+                        else -> Unit
                     }
                 }
             }
@@ -434,12 +407,40 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
         Log.d("CalibrationVM", "STATUSTEXT listener job started")
     }
 
-    /**
-     * Stop listening to STATUSTEXT messages.
-     */
+    /** Stop listening to STATUSTEXT messages. */
     private fun stopStatusTextListener() {
         statusTextCollectorJob?.cancel()
         statusTextCollectorJob = null
+    }
+
+    /** Parse ArduPilot accel calibration prompts into positions. */
+    private fun parseAccelPrompt(text: String): AccelCalibrationPosition? {
+        val lower = text.lowercase()
+        return when {
+            lower.contains("place") && lower.contains("level") -> AccelCalibrationPosition.LEVEL
+            lower.contains("place") && lower.contains("left") -> AccelCalibrationPosition.LEFT
+            lower.contains("place") && lower.contains("right") -> AccelCalibrationPosition.RIGHT
+            lower.contains("place") && (lower.contains("nose down") || (lower.contains("nose") && lower.contains("down"))) -> AccelCalibrationPosition.NOSEDOWN
+            lower.contains("place") && (lower.contains("nose up") || (lower.contains("nose") && lower.contains("up"))) -> AccelCalibrationPosition.NOSEUP
+            lower.contains("place") && lower.contains("back") -> AccelCalibrationPosition.BACK
+            else -> null
+        }
+    }
+
+    /** Await next "Place vehicle ..." prompt. */
+    private suspend fun awaitNextPrompt(timeoutMs: Long): AccelCalibrationPosition? = withTimeoutOrNull(timeoutMs) {
+        accelPromptFlow.first()
+    }
+
+    /** Await a final outcome from STATUSTEXT: success/failed. Returns true=success, false=failed, null=timeout. */
+    private suspend fun awaitFinalOutcome(timeoutMs: Long): Boolean? = withTimeoutOrNull(timeoutMs) {
+        sharedViewModel.calibrationStatus
+            .mapNotNull { it }
+            .first { txt ->
+                val l = txt.lowercase()
+                l.contains("calibration successful") || l.contains("failed")
+            }
+            .contains("successful", ignoreCase = true)
     }
 
     override fun onCleared() {

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.example.aerogcsclone.grid.GridUtils
+import kotlinx.coroutines.withTimeoutOrNull
 
 enum class ConnectionType {
     TCP, BLUETOOTH
@@ -139,6 +140,24 @@ class SharedViewModel : ViewModel() {
     val magCalReport: SharedFlow<com.divpundir.mavlink.definitions.common.MagCalReport>
         get() = repo?.magCalReport ?: MutableSharedFlow()
 
+    // --- Calibration helpers ---
+    /**
+     * Await a COMMAND_ACK for the given command id within the timeout.
+     * Returns the ack if received, or null if the timeout elapses.
+     */
+    suspend fun awaitCommandAck(commandId: UInt, timeoutMs: Long = 5000L): com.divpundir.mavlink.definitions.common.CommandAck? {
+        return try {
+            withTimeoutOrNull(timeoutMs) {
+                commandAck
+                    .filter { it.command.value == commandId }
+                    .first()
+            }
+        } catch (e: Exception) {
+            Log.e("SharedVM", "Error while awaiting COMMAND_ACK for $commandId", e)
+            null
+        }
+    }
+
     fun connect() {
         viewModelScope.launch {
             val provider: MavConnectionProvider? = when (_connectionType.value) {
@@ -184,11 +203,14 @@ class SharedViewModel : ViewModel() {
                     .filterIsInstance<Statustext>()
                     .collect {
                         val statusText = it.text
-                         if (statusText.contains("progress", ignoreCase = true) || statusText.contains("calibration", ignoreCase = true)) {
-                             _calibrationStatus.value = statusText
-                         }
-                     }
-             }
+                        // Surface common calibration-related prompts, not only ones containing the exact word "calibration"
+                        val lower = statusText.lowercase()
+                        if (listOf("calib", "progress", "place", "position", "level", "nose", "left", "right", "back")
+                                .any { key -> lower.contains(key) }) {
+                            _calibrationStatus.value = statusText
+                        }
+                    }
+            }
         }
     }
 
@@ -312,15 +334,20 @@ class SharedViewModel : ViewModel() {
                         targetComponent = it.fcuComponentId
                     )
                     it.sendCommandLong(command)
-                    _imuCalibrationStartResult.value = true // Assume success if no exception
+
+                    // Wait briefly for ACK of PREFLIGHT_CALIBRATION (241)
+                    val ack = awaitCommandAck(241u, timeoutMs = 4000)
+                    val resultVal = ack?.result?.value
+                    val accepted = resultVal == 0u || resultVal == 5u // ACCEPTED or IN_PROGRESS
+                    _imuCalibrationStartResult.value = accepted || ack == null // treat no-ACK as unknown, but allow UI flow
                 } catch (e: Exception) {
                     Log.e("SharedVM", "IMU calibration start failed", e)
                     _imuCalibrationStartResult.value = false
                 }
-             } ?: run {
-                 _imuCalibrationStartResult.value = false
-             }
-         }
+            } ?: run {
+                _imuCalibrationStartResult.value = false
+            }
+        }
     }
 
     fun resetImuCalibrationStartResult() {

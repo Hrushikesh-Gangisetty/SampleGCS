@@ -17,6 +17,10 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
     private var progressListenerJob: Job? = null
     private var reportListenerJob: Job? = null
 
+    // Tuning knobs
+    private val ackTimeoutMs = 4000L
+    private val maxRetries = 1
+
     init {
         // Observe connection state from SharedViewModel
         viewModelScope.launch {
@@ -63,59 +67,32 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                 // param4: Delay (0 = start immediately)
                 // param5: AutoReboot (0 = no auto reboot)
                 // param6: Fitness (0 = default fitness level)
-                sharedViewModel.sendCalibrationCommandRaw(
-                    commandId = 42424u, // MAV_CMD_DO_START_MAG_CAL
-                    param1 = 0f, // Calibrate all compasses
-                    param2 = 0f, // No retry
-                    param3 = 1f, // Autosave
-                    param4 = 0f, // No delay
-                    param5 = 0f, // No auto-reboot
-                    param6 = 0f  // Default fitness
-                )
+                var started = false
+                var lastAckDesc: String? = null
+                repeat(maxRetries + 1) { attempt ->
+                    sharedViewModel.sendCalibrationCommandRaw(
+                        commandId = 42424u, // MAV_CMD_DO_START_MAG_CAL
+                        param1 = 0f, // Calibrate all compasses
+                        param2 = 0f, // No retry
+                        param3 = 1f, // Autosave
+                        param4 = 0f, // No delay
+                        param5 = 0f, // No auto-reboot
+                        param6 = 0f  // Default fitness
+                    )
 
-                Log.d("CompassCalVM", "Sent MAV_CMD_DO_START_MAG_CAL command")
+                    Log.d("CompassCalVM", "Sent MAV_CMD_DO_START_MAG_CAL command (attempt ${attempt + 1})")
 
-                // Wait for command acknowledgment
-                delay(1000)
-
-                var ackReceived = false
-                val commandAckJob = viewModelScope.launch {
-                    sharedViewModel.commandAck
-                        .filter { it.command.value == 42424u }
-                        .firstOrNull()
-                        ?.let { ack ->
-                            ackReceived = true
-                            Log.d("CompassCalVM", "COMMAND_ACK for MAG_CAL_START: result=${ack.result.entry?.name ?: ack.result.value}")
-
-                            if (ack.result.value == 0u) { // ACCEPTED
-                                Log.d("CompassCalVM", "✓ Compass calibration started successfully")
-                                _uiState.update {
-                                    it.copy(
-                                        calibrationState = CompassCalibrationState.InProgress(
-                                            currentInstruction = "Rotate vehicle slowly - point each side down towards earth"
-                                        ),
-                                        statusText = "Calibration in progress..."
-                                    )
-                                }
-                            } else {
-                                Log.e("CompassCalVM", "✗ Compass calibration start FAILED: ${ack.result.entry?.name ?: ack.result.value}")
-                                _uiState.update {
-                                    it.copy(
-                                        calibrationState = CompassCalibrationState.Failed("Calibration start failed: ${ack.result.entry?.name ?: "Unknown error"}"),
-                                        statusText = "Failed to start calibration"
-                                    )
-                                }
-                                stopListeners()
-                            }
-                        }
+                    val ack = sharedViewModel.awaitCommandAck(42424u, ackTimeoutMs)
+                    lastAckDesc = ack?.result?.entry?.name ?: ack?.result?.value?.toString()
+                    val result = ack?.result?.value
+                    val ok = (result == 0u /* ACCEPTED */) || (result == 5u /* IN_PROGRESS */)
+                    if (ok || ack == null) {
+                        started = true
+                        return@repeat
+                    }
                 }
 
-                delay(3000)
-                commandAckJob.cancel()
-
-                if (!ackReceived && _uiState.value.calibrationState is CompassCalibrationState.Starting) {
-                    Log.w("CompassCalVM", "No COMMAND_ACK received for MAG_CAL_START within timeout")
-                    // Assume success and proceed (some autopilots may not send ACK immediately)
+                if (started) {
                     _uiState.update {
                         it.copy(
                             calibrationState = CompassCalibrationState.InProgress(
@@ -124,6 +101,16 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                             statusText = "Calibration in progress..."
                         )
                     }
+                } else {
+                    Log.e("CompassCalVM", "✗ Compass calibration start FAILED: $lastAckDesc")
+                    _uiState.update {
+                        it.copy(
+                            calibrationState = CompassCalibrationState.Failed("Calibration start failed: ${lastAckDesc ?: "Unknown error"}"),
+                            statusText = "Failed to start calibration"
+                        )
+                    }
+                    stopListeners()
+                    return@launch
                 }
 
             } catch (e: Exception) {
@@ -305,4 +292,3 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
         stopListeners()
     }
 }
-
