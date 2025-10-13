@@ -24,4 +24,23 @@ object CalibrationCommands {
             param7 = 0f
         )
     }
+
+    fun createBarometerCalibrationCommand(
+        targetSystem: UByte = 1u,
+        targetComponent: UByte = 1u
+    ): CommandLong {
+        return CommandLong(
+            targetSystem = targetSystem,
+            targetComponent = targetComponent,
+            command = MavEnumValue.of(MavCmd.PREFLIGHT_CALIBRATION),
+            confirmation = 0u,
+            param1 = 0f, // IMU
+            param2 = 0f, // Magnetometer
+            param3 = 1f, // Barometer calibration
+            param4 = 0f,
+            param5 = 0f,
+            param6 = 0f,
+            param7 = 0f
+        )
+    }
 }

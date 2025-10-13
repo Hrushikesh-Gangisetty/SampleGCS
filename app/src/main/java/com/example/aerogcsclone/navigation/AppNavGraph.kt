@@ -45,6 +45,7 @@ sealed class Screen(val route: String) {
     object Calibrations : Screen("calibrations")
     object AccelerometerCalibration : Screen("accelerometer_calibration")
     object CompassCalibration : Screen("compass_calibration")
+    object BarometerCalibration : Screen("barometer_calibration")
 }
 
 @Composable
@@ -141,6 +142,15 @@ fun AppNavGraph(navController: NavHostController) {
             }
             CompassCalibrationScreen(
                 viewModel = compassCalibrationViewModel,
+                navController = navController
+            )
+        }
+        composable("barometer_calibration") {
+            val barometerCalibrationViewModel = viewModel<
+                com.example.aerogcsclone.calibration.BarometerCalibrationViewModel
+            >()
+            com.example.aerogcsclone.calibration.BarometerCalibrationScreen(
+                viewModel = barometerCalibrationViewModel,
                 navController = navController
             )
         }

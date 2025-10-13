@@ -109,6 +109,37 @@ fun SettingsScreen(navController: NavHostController) {
 
             Spacer(modifier = Modifier.height(rowSpacing))
 
+            // Row: Barometer Calibration | (Optional placeholder)
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = { navController.navigate("barometer_calibration") },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(buttonHeight),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = Color.White
+                    ),
+                    border = BorderStroke(1.dp, Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Speed,
+                        contentDescription = "Barometer",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Barometer Calibration", color = Color.White, fontSize = 18.sp)
+                }
+
+                Spacer(modifier = Modifier.width(columnSpacing))
+
+                Spacer(modifier = Modifier.weight(1f)) // Empty space or add another button if needed
+            }
+
+            Spacer(modifier = Modifier.height(rowSpacing))
+
             // Row 2: Spraying system | Remote controller
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(

@@ -3,7 +3,9 @@ package com.example.aerogcsclone.uimain
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -30,7 +32,9 @@ fun CalibrationsScreen(
             .padding(24.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
             // Header
             Row(
@@ -74,6 +78,18 @@ fun CalibrationsScreen(
                 enabled = true,
                 onClick = {
                     navController.navigate("compass_calibration")
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CalibrationOptionCard(
+                title = "Barometer Calibration",
+                description = "Calibrate the barometer for accurate altitude readings",
+                icon = Icons.Default.Speed,
+                enabled = true,
+                onClick = {
+                    navController.navigate("barometer_calibration")
                 }
             )
 
