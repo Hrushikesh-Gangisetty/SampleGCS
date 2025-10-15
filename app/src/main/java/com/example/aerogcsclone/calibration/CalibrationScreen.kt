@@ -118,11 +118,36 @@ fun CalibrationScreen(
             CalibrationActions(
                 calibrationState = uiState.calibrationState,
                 isConnected = uiState.isConnected,
-                onStart = { viewModel.startCalibration() },
-                onNext = { viewModel.onNextPosition() },
+                buttonText = uiState.buttonText,
+                onButtonClick = { viewModel.onButtonClick() },
                 onCancel = { viewModel.showCancelDialog(true) },
                 onReset = { viewModel.resetCalibration() }
             )
+        }
+
+        // Show compass calibration progress if in progress
+        if (uiState.calibrationState is CalibrationState.CompassCalibrating) {
+            val progress = (uiState.calibrationState as CalibrationState.CompassCalibrating).progress
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Compass Calibration Progress: $progress%",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White
+                )
+                LinearProgressIndicator(
+                    progress = progress / 100f,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .padding(top = 8.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
@@ -184,6 +209,7 @@ private fun CalibrationProgress(
             color = when (calibrationState) {
                 is CalibrationState.Success -> Color.Green
                 is CalibrationState.Failed -> Color.Red
+                is CalibrationState.CompassCalibrating -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.primary
             },
             trackColor = Color.Gray.copy(alpha = 0.3f)
@@ -222,6 +248,14 @@ private fun CalibrationContent(
                     is CalibrationState.Success -> SuccessContent(calibrationState.message)
                     is CalibrationState.Failed -> FailedContent(calibrationState.errorMessage)
                     is CalibrationState.Cancelled -> CancelledContent()
+                    is CalibrationState.CompassCalibrating -> {
+                        Text(
+                            text = "Compass Calibration in Progress...",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -533,8 +567,8 @@ private fun DroneOrientationIcon(position: AccelCalibrationPosition) {
 private fun CalibrationActions(
     calibrationState: CalibrationState,
     isConnected: Boolean,
-    onStart: () -> Unit,
-    onNext: () -> Unit,
+    buttonText: String,
+    onButtonClick: () -> Unit,
     onCancel: () -> Unit,
     onReset: () -> Unit
 ) {
@@ -544,8 +578,9 @@ private fun CalibrationActions(
     ) {
         when (calibrationState) {
             is CalibrationState.Idle -> {
+                // Single button: "Start Calibration"
                 Button(
-                    onClick = onStart,
+                    onClick = onButtonClick,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = isConnected,
                     colors = ButtonDefaults.buttonColors(
@@ -554,11 +589,14 @@ private fun CalibrationActions(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start Calibration", fontSize = 16.sp)
+                    Text(buttonText, fontSize = 16.sp)
                 }
             }
 
-            is CalibrationState.AwaitingUserInput -> {
+            is CalibrationState.Initiating,
+            is CalibrationState.AwaitingUserInput,
+            is CalibrationState.ProcessingPosition -> {
+                // During calibration: Cancel + Main button ("Click when Done")
                 Button(
                     onClick = onCancel,
                     modifier = Modifier.weight(1f),
@@ -569,21 +607,23 @@ private fun CalibrationActions(
                     Text("Cancel")
                 }
                 Button(
-                    onClick = onNext,
+                    onClick = onButtonClick,
                     modifier = Modifier.weight(2f),
+                    enabled = calibrationState is CalibrationState.AwaitingUserInput,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Next", fontSize = 16.sp)
+                    Text(buttonText, fontSize = 16.sp)
                 }
             }
 
             is CalibrationState.Success,
             is CalibrationState.Failed,
             is CalibrationState.Cancelled -> {
+                // After calibration: Reset to start new
                 Button(
                     onClick = onReset,
                     modifier = Modifier.fillMaxWidth(),
@@ -598,7 +638,7 @@ private fun CalibrationActions(
             }
 
             else -> {
-                // Initiating or Processing - show cancel button only
+                // Fallback: show cancel button
                 Button(
                     onClick = onCancel,
                     modifier = Modifier.fillMaxWidth(),

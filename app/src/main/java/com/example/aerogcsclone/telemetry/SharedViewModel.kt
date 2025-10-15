@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MavCmd
+import com.divpundir.mavlink.definitions.common.MavResult
 import com.divpundir.mavlink.definitions.common.MissionItemInt
 import com.divpundir.mavlink.definitions.common.Statustext
 import com.example.aerogcsclone.Telemetry.TelemetryState
@@ -131,6 +132,10 @@ class SharedViewModel : ViewModel() {
     // Expose COMMAND_ACK flow for calibration and other commands
     val commandAck: SharedFlow<com.divpundir.mavlink.definitions.common.CommandAck>
         get() = repo?.commandAck ?: MutableSharedFlow()
+
+    // Expose COMMAND_LONG flow for incoming commands from FC (e.g., ACCELCAL_VEHICLE_POS)
+    val commandLong: SharedFlow<com.divpundir.mavlink.definitions.common.CommandLong>
+        get() = repo?.commandLong ?: MutableSharedFlow()
 
     // Expose MAG_CAL_PROGRESS flow for compass calibration progress
     val magCalProgress: SharedFlow<com.divpundir.mavlink.definitions.ardupilotmega.MagCalProgress>
@@ -409,6 +414,24 @@ class SharedViewModel : ViewModel() {
             param5 = param5,
             param6 = param6,
             param7 = param7
+        )
+    }
+
+    /**
+     * Send COMMAND_ACK back to autopilot (for ArduPilot conversational calibration protocol).
+     * This is used during IMU calibration where GCS sends ACK to autopilot to confirm position.
+     */
+    suspend fun sendCommandAck(
+        commandId: UInt,
+        result: MavResult,
+        progress: UByte = 0u,
+        resultParam2: Int = 0
+    ) {
+        repo?.sendCommandAck(
+            commandId = commandId,
+            result = result,
+            progress = progress,
+            resultParam2 = resultParam2
         )
     }
 

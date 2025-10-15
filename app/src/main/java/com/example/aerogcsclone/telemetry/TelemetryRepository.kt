@@ -69,6 +69,10 @@ class MavlinkTelemetryRepository(
     private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
     val commandAck: SharedFlow<CommandAck> = _commandAck.asSharedFlow()
 
+    // COMMAND_LONG flow for incoming commands from FC (e.g., ACCELCAL_VEHICLE_POS)
+    private val _commandLong = MutableSharedFlow<CommandLong>(replay = 0, extraBufferCapacity = 10)
+    val commandLong: SharedFlow<CommandLong> = _commandLong.asSharedFlow()
+
     // MAG_CAL_PROGRESS flow for compass calibration progress
     private val _magCalProgress = MutableSharedFlow<MagCalProgress>(replay = 0, extraBufferCapacity = 10)
     val magCalProgress: SharedFlow<MagCalProgress> = _magCalProgress.asSharedFlow()
@@ -211,6 +215,26 @@ class MavlinkTelemetryRepository(
                         _commandAck.emit(ack)
                     } catch (t: Throwable) {
                         Log.i("MavlinkRepo", "COMMAND_ACK received (unable to stringify fields)")
+                    }
+                }
+        }
+
+        // Collector for incoming COMMAND_LONG messages from FC (e.g., for IMU calibration)
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<CommandLong>()
+                .collect { cmd ->
+                    try {
+                        Log.i(
+                            "MavlinkRepo",
+                            "COMMAND_LONG received: command=${cmd.command.value} param1=${cmd.param1}"
+                        )
+                        // Emit to the shared flow for ViewModels to consume
+                        _commandLong.emit(cmd)
+                    } catch (t: Throwable) {
+                        Log.i("MavlinkRepo", "COMMAND_LONG received (unable to stringify fields)")
                     }
                 }
         }
@@ -569,6 +593,37 @@ class MavlinkTelemetryRepository(
             Log.d("MavlinkRepo", "Sent COMMAND_LONG (raw): cmdId=$commandId p1=$param1 p2=$param2 p3=$param3 p4=$param4 p5=$param5 p6=$param6 p7=$param7")
         } catch (e: Exception) {
             Log.e("MavlinkRepo", "Failed to send raw command", e)
+        }
+    }
+
+    /**
+     * Send COMMAND_ACK message to autopilot.
+     * This is used in ArduPilot's conversational calibration protocol where the GCS
+     * sends ACK messages back to the autopilot to confirm user actions.
+     */
+    suspend fun sendCommandAck(
+        commandId: UInt,
+        result: MavResult,
+        progress: UByte = 0u,
+        resultParam2: Int = 0
+    ) {
+        val commandAck = CommandAck(
+            command = MavEnumValue.fromValue(commandId),
+            result = result.wrap(),
+            progress = progress,
+            resultParam2 = resultParam2,
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId
+        )
+        try {
+            connection.trySendUnsignedV2(
+                gcsSystemId,
+                gcsComponentId,
+                commandAck
+            )
+            Log.d("MavlinkRepo", "Sent COMMAND_ACK: cmd=$commandId result=${result.name} progress=$progress")
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Failed to send COMMAND_ACK", e)
         }
     }
 

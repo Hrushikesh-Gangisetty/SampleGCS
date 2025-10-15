@@ -7,8 +7,7 @@ sealed class CompassCalibrationState {
     object Idle : CompassCalibrationState()
     object Starting : CompassCalibrationState()
     data class InProgress(
-        val compassProgress: Map<Int, Int> = emptyMap(), // compass_id -> completion_pct
-        val currentInstruction: String = "Rotate vehicle slowly"
+        val currentInstruction: String = "Rotate vehicle slowly on all axes"
     ) : CompassCalibrationState()
     data class Success(
         val message: String,
@@ -27,6 +26,5 @@ data class CompassCalibrationUiState(
     val compassProgress: Map<Int, Int> = emptyMap(), // compass_id -> completion percentage (0-100)
     val isConnected: Boolean = false,
     val showCancelDialog: Boolean = false,
-    val overallProgress: Int = 0 // Average progress across all compasses
+    val overallProgress: Int = 0 // Overall progress percentage
 )
-
