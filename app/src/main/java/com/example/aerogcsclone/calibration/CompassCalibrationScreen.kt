@@ -3,7 +3,9 @@ package com.example.aerogcsclone.calibration
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,6 +46,36 @@ fun CompassCalibrationScreen(
             dismissButton = {
                 TextButton(onClick = { viewModel.showCancelDialog(false) }) {
                     Text("Continue Calibration")
+                }
+            }
+        )
+    }
+
+    // Show accept calibration dialog
+    if (uiState.showAcceptDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.showAcceptDialog(false) },
+            title = { Text("Accept Calibration Results?") },
+            text = {
+                Column {
+                    Text("Calibration completed successfully for all compasses.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Review the results below and accept to save the calibration.", fontSize = 14.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.acceptCalibration()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) {
+                    Text("Accept & Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.showAcceptDialog(false) }) {
+                    Text("Review")
                 }
             }
         )
@@ -102,7 +134,9 @@ fun CompassCalibrationScreen(
                 statusText = uiState.statusText,
                 isConnected = uiState.isConnected,
                 compassProgress = uiState.compassProgress,
-                overallProgress = uiState.overallProgress
+                compassReports = uiState.compassReports,
+                overallProgress = uiState.overallProgress,
+                calibrationComplete = uiState.calibrationComplete
             )
         }
 
@@ -116,8 +150,10 @@ fun CompassCalibrationScreen(
             CompassCalibrationActions(
                 calibrationState = uiState.calibrationState,
                 isConnected = uiState.isConnected,
+                calibrationComplete = uiState.calibrationComplete,
                 onStart = { viewModel.startCalibration() },
                 onCancel = { viewModel.showCancelDialog(true) },
+                onAccept = { viewModel.acceptCalibration() },
                 onReset = { viewModel.resetCalibration() }
             )
         }
@@ -167,9 +203,9 @@ private fun CompassCalibrationProgress(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Progress bar with green color
+        // Progress bar with green color - USING NON-DEPRECATED API
         LinearProgressIndicator(
-            progress = overallProgress.toFloat() / 100f,
+            progress = { overallProgress.toFloat() / 100f },  // Lambda instead of direct value
             modifier = Modifier
                 .fillMaxWidth(0.8f)
                 .height(8.dp),
@@ -189,11 +225,15 @@ private fun CompassCalibrationContent(
     calibrationState: CompassCalibrationState,
     statusText: String,
     isConnected: Boolean,
-    compassProgress: Map<Int, Int>,
-    overallProgress: Int
+    compassProgress: Map<Int, CompassProgress>,
+    compassReports: Map<Int, CompassReport>,
+    overallProgress: Int,
+    calibrationComplete: Boolean
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Card(
@@ -215,9 +255,14 @@ private fun CompassCalibrationContent(
                     is CompassCalibrationState.InProgress -> InProgressContent(
                         instruction = calibrationState.currentInstruction,
                         compassProgress = compassProgress,
-                        overallProgress = overallProgress
+                        compassReports = compassReports,
+                        overallProgress = overallProgress,
+                        calibrationComplete = calibrationComplete
                     )
-                    is CompassCalibrationState.Success -> SuccessContent(calibrationState.message, calibrationState.reportDetails)
+                    is CompassCalibrationState.Success -> SuccessContent(
+                        calibrationState.message,
+                        calibrationState.compassReports
+                    )
                     is CompassCalibrationState.Failed -> FailedContent(calibrationState.errorMessage)
                     is CompassCalibrationState.Cancelled -> CancelledContent()
                 }
@@ -325,9 +370,10 @@ private fun IdleContent(isConnected: Boolean) {
                 Text(
                     text = "1. Hold vehicle in the air\n" +
                             "2. Rotate slowly - point each side down\n" +
-                            "3. Complete 6 full rotations\n" +
-                            "4. Listen for 3 rising tones when done\n" +
-                            "5. Reboot autopilot after success",
+                            "3. Follow on-screen rotation guidance\n" +
+                            "4. Wait for all compasses to complete\n" +
+                            "5. Review and accept calibration\n" +
+                            "6. Reboot autopilot after success",
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     lineHeight = 20.sp
@@ -383,42 +429,62 @@ private fun StartingContent() {
 @Composable
 private fun InProgressContent(
     instruction: String,
-    compassProgress: Map<Int, Int>,
-    overallProgress: Int
+    compassProgress: Map<Int, CompassProgress>,
+    compassReports: Map<Int, CompassReport>,
+    overallProgress: Int,
+    calibrationComplete: Boolean
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth()
     ) {
-        val infiniteTransition = rememberInfiniteTransition(label = "rotation")
-        val angle by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "angle"
-        )
+        if (!calibrationComplete) {
+            val infiniteTransition = rememberInfiniteTransition(label = "rotation")
+            val angle by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(3000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "angle"
+            )
 
-        Icon(
-            imageVector = Icons.Default.Explore,
-            contentDescription = null,
-            tint = Color(0xFF4CAF50),
-            modifier = Modifier
-                .size(80.dp)
-                .rotate(angle)
-        )
+            Icon(
+                imageVector = Icons.Default.Explore,
+                contentDescription = null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier
+                    .size(80.dp)
+                    .rotate(angle)
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Calibrating...",
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
+            Text(
+                text = "Calibrating...",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier.size(80.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Calibration Complete!",
+                color = Color(0xFF4CAF50),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -451,6 +517,9 @@ private fun InProgressContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     compassProgress.entries.sortedBy { it.key }.forEach { (compassId, progress) ->
+                        // Use remember to force recomposition for each compass
+                        val compassProgressValue by rememberUpdatedState(progress.completionPct.toFloat() / 100f)
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -463,7 +532,6 @@ private fun InProgressContent(
                             )
 
                             LinearProgressIndicator(
-                                progress = progress.toFloat() / 100f,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(6.dp),
@@ -472,7 +540,7 @@ private fun InProgressContent(
                             )
 
                             Text(
-                                text = "$progress%",
+                                text = "${progress.completionPct}%",
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 12.sp,
                                 modifier = Modifier.width(50.dp),
@@ -487,11 +555,132 @@ private fun InProgressContent(
                 }
             }
         }
+
+        // Show calibration reports if available
+        if (compassReports.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A28)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Calibration Results:",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    compassReports.entries.sortedBy { it.key }.forEach { (compassId, report) ->
+                        CompassReportCard(compassId, report)
+
+                        if (compassId != compassReports.keys.max()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun SuccessContent(message: String, reportDetails: String?) {
+private fun CompassReportCard(compassId: Int, report: CompassReport) {
+    val isSuccess = report.calStatus.contains("SUCCESS", ignoreCase = true)
+    val fitnessColor = when {
+        report.fitness < 50f -> Color(0xFF4CAF50)  // Green - excellent
+        report.fitness < 100f -> Color(0xFFFFA726) // Orange - good
+        else -> Color.Red                           // Red - poor
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSuccess) Color(0xFF1B5E20).copy(alpha = 0.3f)
+                            else Color(0xFF5D4037).copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Compass $compassId",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                        contentDescription = null,
+                        tint = if (isSuccess) Color(0xFF4CAF50) else Color.Red,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = report.calStatus,
+                        color = if (isSuccess) Color(0xFF4CAF50) else Color.Red,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Fitness score
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Fitness:",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp
+                )
+                Text(
+                    text = String.format("%.2f", report.fitness) +
+                           if (report.fitness < 100f) " (Good)" else " (Review)",
+                    color = fitnessColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Offsets
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Offsets:",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp
+                )
+                Text(
+                    text = String.format("X:%.1f Y:%.1f Z:%.1f", report.ofsX, report.ofsY, report.ofsZ),
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuccessContent(message: String, compassReports: List<CompassReport>) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -518,7 +707,7 @@ private fun SuccessContent(message: String, reportDetails: String?) {
             textAlign = TextAlign.Center
         )
 
-        if (reportDetails != null) {
+        if (compassReports.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -529,17 +718,19 @@ private fun SuccessContent(message: String, reportDetails: String?) {
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Calibration Details:",
+                        text = "Final Calibration Results:",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = reportDetails,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    compassReports.sortedBy { it.compassId.toInt() }.forEach { report ->
+                        CompassReportCard(report.compassId.toInt(), report)
+                        if (report != compassReports.last()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
                 }
             }
         }
@@ -599,10 +790,40 @@ private fun FailedContent(errorMessage: String) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = errorMessage,
-            color = Color.White.copy(alpha = 0.7f),
+            color = Color.White.copy(alpha = 0.8f),
             fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF5D4037).copy(alpha = 0.3f)),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Troubleshooting Tips:",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "• Ensure vehicle is away from metal objects\n" +
+                            "• Rotate slowly and smoothly\n" +
+                            "• Complete all 6 orientations fully\n" +
+                            "• Check for magnetic interference\n" +
+                            "• Try calibration again",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
+                )
+            }
+        }
     }
 }
 
@@ -628,7 +849,7 @@ private fun CancelledContent() {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "The calibration process was cancelled",
+            text = "The calibration process was cancelled.",
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 14.sp,
             textAlign = TextAlign.Center
@@ -640,13 +861,15 @@ private fun CancelledContent() {
 private fun CompassCalibrationActions(
     calibrationState: CompassCalibrationState,
     isConnected: Boolean,
+    calibrationComplete: Boolean,
     onStart: () -> Unit,
     onCancel: () -> Unit,
+    onAccept: () -> Unit,
     onReset: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when (calibrationState) {
             is CompassCalibrationState.Idle -> {
@@ -657,7 +880,8 @@ private fun CompassCalibrationActions(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF4CAF50),
                         disabledContainerColor = Color.Gray
-                    )
+                    ),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
@@ -665,23 +889,58 @@ private fun CompassCalibrationActions(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start Calibration")
+                    Text("Start Calibration", fontSize = 16.sp)
                 }
             }
             is CompassCalibrationState.Starting,
             is CompassCalibrationState.InProgress -> {
-                Button(
-                    onClick = onCancel,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Cancel Calibration")
+                if (calibrationComplete) {
+                    // Show Accept and Cancel buttons
+                    Button(
+                        onClick = onAccept,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Accept", fontSize = 16.sp)
+                    }
+
+                    Button(
+                        onClick = onCancel,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cancel,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Cancel", fontSize = 16.sp)
+                    }
+                } else {
+                    // Show only Cancel button during calibration
+                    Button(
+                        onClick = onCancel,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cancel,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Cancel Calibration", fontSize = 16.sp)
+                    }
                 }
             }
             is CompassCalibrationState.Success,
@@ -690,7 +949,8 @@ private fun CompassCalibrationActions(
                 Button(
                     onClick = onReset,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -698,10 +958,9 @@ private fun CompassCalibrationActions(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Reset")
+                    Text("Start New Calibration", fontSize = 16.sp)
                 }
             }
         }
     }
 }
-

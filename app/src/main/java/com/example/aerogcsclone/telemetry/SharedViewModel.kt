@@ -147,6 +147,24 @@ class SharedViewModel : ViewModel() {
 
     // --- Calibration helpers ---
     /**
+     * Request MAG_CAL_PROGRESS and MAG_CAL_REPORT messages from the autopilot.
+     * This is needed because these messages are not sent by default.
+     */
+    suspend fun requestMagCalMessages(hz: Float = 10f) {
+        Log.d("SharedVM", "Requesting MAG_CAL_PROGRESS and MAG_CAL_REPORT messages at $hz Hz")
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 191f, // MAG_CAL_PROGRESS message ID
+            param2 = if (hz <= 0f) 0f else (1_000_000f / hz) // interval in microseconds
+        )
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 192f, // MAG_CAL_REPORT message ID
+            param2 = if (hz <= 0f) 0f else (1_000_000f / hz) // interval in microseconds
+        )
+    }
+
+    /**
      * Await a COMMAND_ACK for the given command id within the timeout.
      * Returns the ack if received, or null if the timeout elapses.
      */
