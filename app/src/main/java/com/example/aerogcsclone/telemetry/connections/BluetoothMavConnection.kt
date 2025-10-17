@@ -7,6 +7,7 @@ import com.divpundir.mavlink.api.MavFrame
 import com.divpundir.mavlink.api.MavMessage
 import com.divpundir.mavlink.connection.BufferedMavConnection
 import com.divpundir.mavlink.connection.MavConnection
+import com.divpundir.mavlink.definitions.ardupilotmega.ArdupilotmegaDialect
 import com.divpundir.mavlink.definitions.common.CommonDialect
 import okio.buffer
 import okio.sink
@@ -41,7 +42,7 @@ class BluetoothMavConnection(
                 socket.inputStream.source().buffer(),
                 socket.outputStream.sink().buffer(),
                 socket, // The socket is the closeable resource
-                CommonDialect
+                ArdupilotmegaDialect
             )
         } catch (e: IOException) {
             close() // Clean up on failure
