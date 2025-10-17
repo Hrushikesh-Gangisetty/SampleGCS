@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,60 +27,6 @@ fun CompassCalibrationScreen(
     navController: NavController
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    // Show cancel confirmation dialog
-    if (uiState.showCancelDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.showCancelDialog(false) },
-            title = { Text("Cancel Calibration?") },
-            text = { Text("Are you sure you want to cancel the compass calibration process?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.cancelCalibration()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Yes, Cancel")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.showCancelDialog(false) }) {
-                    Text("Continue Calibration")
-                }
-            }
-        )
-    }
-
-    // Show accept calibration dialog
-    if (uiState.showAcceptDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.showAcceptDialog(false) },
-            title = { Text("Accept Calibration Results?") },
-            text = {
-                Column {
-                    Text("Calibration completed successfully for all compasses.")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Review the results below and accept to save the calibration.", fontSize = 14.sp)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.acceptCalibration()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                ) {
-                    Text("Accept & Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.showAcceptDialog(false) }) {
-                    Text("Review")
-                }
-            }
-        )
-    }
 
     Column(
         modifier = Modifier
@@ -102,6 +49,7 @@ fun CompassCalibrationScreen(
                     ) {
                         navController.popBackStack()
                     } else {
+                        // Show a simple confirmation for back during calibration
                         viewModel.showCancelDialog(true)
                     }
                 }
@@ -168,7 +116,7 @@ private fun CompassCalibrationHeader(onBackClick: () -> Unit) {
     ) {
         IconButton(onClick = onBackClick) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
@@ -517,9 +465,6 @@ private fun InProgressContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     compassProgress.entries.sortedBy { it.key }.forEach { (compassId, progress) ->
-                        // Use remember to force recomposition for each compass
-                        val compassProgressValue by rememberUpdatedState(progress.completionPct.toFloat() / 100f)
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -532,6 +477,7 @@ private fun InProgressContent(
                             )
 
                             LinearProgressIndicator(
+                                progress = { progress.completionPct.toFloat() / 100f },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(6.dp),
@@ -873,10 +819,11 @@ private fun CompassCalibrationActions(
     ) {
         when (calibrationState) {
             is CompassCalibrationState.Idle -> {
+                // Only Start button is enabled, Accept and Cancel are disabled
                 Button(
                     onClick = onStart,
                     enabled = isConnected,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF4CAF50),
                         disabledContainerColor = Color.Gray
@@ -888,68 +835,120 @@ private fun CompassCalibrationActions(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start Calibration", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Start", fontSize = 16.sp)
+                }
+
+                Button(
+                    onClick = onAccept,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50),
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Accept", fontSize = 16.sp)
+                }
+
+                Button(
+                    onClick = onCancel,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Cancel", fontSize = 16.sp)
                 }
             }
             is CompassCalibrationState.Starting,
             is CompassCalibrationState.InProgress -> {
-                if (calibrationComplete) {
-                    // Show Accept and Cancel buttons
-                    Button(
-                        onClick = onAccept,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Accept", fontSize = 16.sp)
-                    }
+                // Start button is disabled, Accept and Cancel are enabled
+                Button(
+                    onClick = onStart,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50),
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Start", fontSize = 16.sp)
+                }
 
-                    Button(
-                        onClick = onCancel,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Cancel,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Cancel", fontSize = 16.sp)
-                    }
-                } else {
-                    // Show only Cancel button during calibration
-                    Button(
-                        onClick = onCancel,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Cancel,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Cancel Calibration", fontSize = 16.sp)
-                    }
+                Button(
+                    onClick = onAccept,
+                    enabled = calibrationComplete,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50),
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Accept", fontSize = 16.sp)
+                }
+
+                Button(
+                    onClick = onCancel,
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Cancel", fontSize = 16.sp)
                 }
             }
             is CompassCalibrationState.Success,
             is CompassCalibrationState.Failed,
             is CompassCalibrationState.Cancelled -> {
+                // Show all three buttons, but only Start is enabled (acts as Reset)
                 Button(
                     onClick = onReset,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50),
+                        disabledContainerColor = Color.Gray
+                    ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
@@ -957,8 +956,46 @@ private fun CompassCalibrationActions(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start New Calibration", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Start", fontSize = 16.sp)
+                }
+
+                Button(
+                    onClick = onAccept,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50),
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Accept", fontSize = 16.sp)
+                }
+
+                Button(
+                    onClick = onCancel,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        disabledContainerColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Cancel", fontSize = 16.sp)
                 }
             }
         }

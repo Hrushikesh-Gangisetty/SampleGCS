@@ -86,6 +86,7 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
      */
     fun startCalibration() {
         if (!_uiState.value.isConnected) {
+            Log.e("CompassCalVM", "❌ Cannot start calibration - Not connected to drone")
             _uiState.update {
                 it.copy(
                     calibrationState = CompassCalibrationState.Failed("Not connected to drone"),
@@ -96,6 +97,11 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
         }
 
         viewModelScope.launch {
+            Log.d("CompassCalVM", "")
+            Log.d("CompassCalVM", "═══════════════════════════════════════════════════════")
+            Log.d("CompassCalVM", "         COMPASS CALIBRATION STARTING")
+            Log.d("CompassCalVM", "═══════════════════════════════════════════════════════")
+
             _uiState.update {
                 it.copy(
                     calibrationState = CompassCalibrationState.Starting,
@@ -107,10 +113,24 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                 )
             }
 
+            // CRITICAL: Request MAG_CAL_PROGRESS and MAG_CAL_REPORT messages from autopilot
+            // These messages are NOT sent by default and must be explicitly requested
+            try {
+                Log.d("CompassCalVM", "→ Requesting message streaming from autopilot...")
+                sharedViewModel.requestMagCalMessages(hz = 10f) // Request at 10 Hz
+                Log.d("CompassCalVM", "✓ Message streaming requested successfully")
+                delay(200) // Give autopilot time to process message interval requests
+                Log.d("CompassCalVM", "✓ Waited 200ms for autopilot to configure streaming")
+            } catch (e: Exception) {
+                Log.e("CompassCalVM", "❌ Failed to request mag cal messages: ${e.message}", e)
+            }
+
             // Subscribe to MAG_CAL_PROGRESS and MAG_CAL_REPORT before sending command
+            Log.d("CompassCalVM", "→ Starting message listeners...")
             startProgressListener()
             startReportListener()
             startStatusTextListener() // Also listen to STATUSTEXT as fallback
+            Log.d("CompassCalVM", "✓ All message listeners started")
 
             // --- ADDED: Timeout for progress message ---
             val progressTimeoutMs = 7000L
@@ -118,16 +138,24 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
             val progressJob = launch {
                 sharedViewModel.magCalProgress.take(1).collect {
                     progressReceived = true
+                    Log.d("CompassCalVM", "✓ First MAG_CAL_PROGRESS message received!")
                 }
             }
             val statusTextJob = launch {
                 sharedViewModel.calibrationStatus.take(1).collect {
                     progressReceived = true
+                    Log.d("CompassCalVM", "✓ First calibration STATUSTEXT received!")
                 }
             }
 
             try {
-                Log.d("CompassCalVM", "Sending MAV_CMD_DO_START_MAG_CAL (42424) - params: (0, 1, 1, 0, 0, 0, 0)")
+                Log.d("CompassCalVM", "")
+                Log.d("CompassCalVM", "→ Sending MAV_CMD_DO_START_MAG_CAL (42424)")
+                Log.d("CompassCalVM", "   Parameters: (0, 1, 1, 0, 0, 0, 0)")
+                Log.d("CompassCalVM", "   - param1=0: Calibrate all compasses")
+                Log.d("CompassCalVM", "   - param2=1: Retry on failure")
+                Log.d("CompassCalVM", "   - param3=1: Autosave results")
+
                 sharedViewModel.sendCalibrationCommandRaw(
                     commandId = MAV_CMD_DO_START_MAG_CAL,
                     param1 = 0f,
@@ -138,11 +166,21 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                     param6 = 0f,
                     param7 = 0f
                 )
+                Log.d("CompassCalVM", "✓ Command sent, waiting for COMMAND_ACK...")
+
                 val ack = sharedViewModel.awaitCommandAck(MAV_CMD_DO_START_MAG_CAL, ackTimeoutMs)
                 val ackResult = ack?.result?.value
                 val ackName = ack?.result?.entry?.name ?: "NO_ACK"
-                Log.d("CompassCalVM", "Received COMMAND_ACK: result=$ackName (value=$ackResult)")
+
+                Log.d("CompassCalVM", "")
+                Log.d("CompassCalVM", "← Received COMMAND_ACK:")
+                Log.d("CompassCalVM", "   └─ Result: $ackName (value=$ackResult)")
+
                 if (ackResult == 0u || ackResult == 5u) {
+                    Log.d("CompassCalVM", "✓ COMMAND ACCEPTED - Calibration started successfully!")
+                    Log.d("CompassCalVM", "")
+                    Log.d("CompassCalVM", "⏳ Waiting for progress messages (timeout: ${progressTimeoutMs}ms)...")
+
                     _uiState.update {
                         it.copy(
                             calibrationState = CompassCalibrationState.InProgress(
@@ -151,11 +189,17 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                             statusText = "Calibrating... Rotate vehicle on all axes"
                         )
                     }
-                    Log.d("CompassCalVM", "✓ Compass calibration started successfully")
+
                     // --- ADDED: Wait for progress or timeout ---
                     delay(progressTimeoutMs)
                     if (!progressReceived) {
-                        Log.e("CompassCalVM", "No MAG_CAL_PROGRESS or STATUSTEXT received after $progressTimeoutMs ms!")
+                        Log.e("CompassCalVM", "")
+                        Log.e("CompassCalVM", "❌ TIMEOUT: No progress messages received after ${progressTimeoutMs}ms")
+                        Log.e("CompassCalVM", "   This may indicate:")
+                        Log.e("CompassCalVM", "   - Firmware doesn't support MAG_CAL messages")
+                        Log.e("CompassCalVM", "   - Message streaming request failed")
+                        Log.e("CompassCalVM", "   - Connection issues")
+
                         _uiState.update {
                             it.copy(
                                 calibrationState = CompassCalibrationState.Failed("No progress received from autopilot!"),
@@ -163,8 +207,10 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                             )
                         }
                         stopAllListeners()
+                        stopMagCalMessageStreaming()
                     }
                 } else {
+                    Log.e("CompassCalVM", "❌ COMMAND REJECTED by autopilot: $ackName")
                     _uiState.update {
                         it.copy(
                             calibrationState = CompassCalibrationState.Failed("Calibration rejected by autopilot: $ackName"),
@@ -172,9 +218,10 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                         )
                     }
                     stopAllListeners()
+                    stopMagCalMessageStreaming()
                 }
             } catch (e: Exception) {
-                Log.e("CompassCalVM", "Failed to start compass calibration", e)
+                Log.e("CompassCalVM", "❌ Exception during calibration start", e)
                 _uiState.update {
                     it.copy(
                         calibrationState = CompassCalibrationState.Failed("Error: ${e.message}"),
@@ -182,6 +229,7 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                     )
                 }
                 stopAllListeners()
+                stopMagCalMessageStreaming()
             } finally {
                 progressJob.cancel()
                 statusTextJob.cancel()
@@ -640,8 +688,25 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
         Log.d("CompassCalVM", "All message listeners stopped")
     }
 
+    /**
+     * Stop the automatic streaming of MAG_CAL_PROGRESS and MAG_CAL_REPORT messages.
+     * This is called when calibration is stopped or completed.
+     */
+    private fun stopMagCalMessageStreaming() {
+        viewModelScope.launch {
+            try {
+                Log.d("CompassCalVM", "Stopping MAG_CAL_PROGRESS and MAG_CAL_REPORT message streaming")
+                sharedViewModel.stopMagCalMessages()
+                delay(100) // Give time for the stop command to take effect
+            } catch (e: Exception) {
+                Log.e("CompassCalVM", "Failed to stop mag cal message streaming", e)
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopAllListeners()
+        stopMagCalMessageStreaming()
     }
 }

@@ -487,7 +487,12 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<MagCalProgress>()
                 .collect { progress ->
-                    Log.d("MavlinkRepo", "MAG_CAL_PROGRESS: compass=${progress.compassId} status=${progress.calStatus.entry?.name} pct=${progress.completionPct}")
+                    Log.d("CompassCalVM", "📨 MAG_CAL_PROGRESS received:")
+                    Log.d("CompassCalVM", "   └─ Compass ID: ${progress.compassId}")
+                    Log.d("CompassCalVM", "   └─ Status: ${progress.calStatus.entry?.name ?: "UNKNOWN"}")
+                    Log.d("CompassCalVM", "   └─ Completion: ${progress.completionPct}%")
+                    Log.d("CompassCalVM", "   └─ Attempt: ${progress.attempt}")
+                    Log.d("CompassCalVM", "   └─ Direction: X=${progress.directionX}, Y=${progress.directionY}, Z=${progress.directionZ}")
                     _magCalProgress.emit(progress)
                 }
         }
@@ -499,7 +504,12 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<MagCalReport>()
                 .collect { report ->
-                    Log.d("MavlinkRepo", "MAG_CAL_REPORT: compass=${report.compassId} status=${report.calStatus.entry?.name} fitness=${report.fitness}")
+                    Log.d("CompassCalVM", "📊 MAG_CAL_REPORT received:")
+                    Log.d("CompassCalVM", "   └─ Compass ID: ${report.compassId}")
+                    Log.d("CompassCalVM", "   └─ Status: ${report.calStatus.entry?.name ?: "UNKNOWN"}")
+                    Log.d("CompassCalVM", "   └─ Fitness: ${report.fitness}")
+                    Log.d("CompassCalVM", "   └─ Offsets: X=${report.ofsX}, Y=${report.ofsY}, Z=${report.ofsZ}")
+                    Log.d("CompassCalVM", "   └─ Autosaved: ${report.autosaved}")
                     _magCalReport.emit(report)
                 }
         }

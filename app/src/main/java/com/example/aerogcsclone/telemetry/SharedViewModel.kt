@@ -151,17 +151,49 @@ class SharedViewModel : ViewModel() {
      * This is needed because these messages are not sent by default.
      */
     suspend fun requestMagCalMessages(hz: Float = 10f) {
-        Log.d("SharedVM", "Requesting MAG_CAL_PROGRESS and MAG_CAL_REPORT messages at $hz Hz")
+        Log.d("CompassCalVM", "========== REQUESTING MAG CAL MESSAGE STREAMING ==========")
+        Log.d("CompassCalVM", "Requesting MAG_CAL_PROGRESS (191) at $hz Hz")
+        Log.d("CompassCalVM", "Requesting MAG_CAL_REPORT (192) at $hz Hz")
+        Log.d("CompassCalVM", "Interval: ${if (hz > 0f) (1_000_000f / hz).toInt() else 0} microseconds")
+
         repo?.sendCommand(
             MavCmd.SET_MESSAGE_INTERVAL,
             param1 = 191f, // MAG_CAL_PROGRESS message ID
             param2 = if (hz <= 0f) 0f else (1_000_000f / hz) // interval in microseconds
         )
+        Log.d("CompassCalVM", "✓ MAG_CAL_PROGRESS message interval command sent")
+
         repo?.sendCommand(
             MavCmd.SET_MESSAGE_INTERVAL,
             param1 = 192f, // MAG_CAL_REPORT message ID
             param2 = if (hz <= 0f) 0f else (1_000_000f / hz) // interval in microseconds
         )
+        Log.d("CompassCalVM", "✓ MAG_CAL_REPORT message interval command sent")
+        Log.d("CompassCalVM", "========================================================")
+    }
+
+    /**
+     * Stop MAG_CAL_PROGRESS and MAG_CAL_REPORT message streaming.
+     * Sets the message interval to 0 (disabled).
+     */
+    suspend fun stopMagCalMessages() {
+        Log.d("CompassCalVM", "========== STOPPING MAG CAL MESSAGE STREAMING ==========")
+        Log.d("CompassCalVM", "Disabling MAG_CAL_PROGRESS (191) streaming")
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 191f, // MAG_CAL_PROGRESS message ID
+            param2 = 0f // 0 = disable streaming
+        )
+        Log.d("CompassCalVM", "✓ MAG_CAL_PROGRESS streaming disabled")
+
+        Log.d("CompassCalVM", "Disabling MAG_CAL_REPORT (192) streaming")
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 192f, // MAG_CAL_REPORT message ID
+            param2 = 0f // 0 = disable streaming
+        )
+        Log.d("CompassCalVM", "✓ MAG_CAL_REPORT streaming disabled")
+        Log.d("CompassCalVM", "========================================================")
     }
 
     /**
