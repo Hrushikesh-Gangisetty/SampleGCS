@@ -90,7 +90,9 @@ class BarometerCalibrationViewModel(
 
             try {
                 var started = false
-                var lastAck: String? = null
+                var lastAckText: String? = null
+                var lastAckResult: UInt? = null
+
                 repeat(maxRetries + 1) { attempt ->
                     // Send MAV_CMD_PREFLIGHT_CALIBRATION with barometer flag (param3 = 1)
                     sharedViewModel.sendCalibrationCommand(
@@ -108,13 +110,15 @@ class BarometerCalibrationViewModel(
 
                     val ack = sharedViewModel.awaitCommandAck(241u, ackTimeoutMs)
                     val result = ack?.result?.value
-                    lastAck = ack?.result?.entry?.name ?: result?.toString()
+                    lastAckResult = result
+                    lastAckText = ack?.result?.entry?.name ?: result?.toString()
                     val ok = (result == 0u /* ACCEPTED */) || (result == 5u /* IN_PROGRESS */)
                     if (ok) {
                         started = true
                         return@repeat
                     } else if (ack != null) {
-                        // Negative ack -> fail immediately
+                        // Received a non-accepted ACK (e.g. temporarily rejected / denied)
+                        // Do not immediately stop listening to STATUSTEXT; allow autopilot to still report final outcome.
                         started = false
                         return@repeat
                     }
@@ -122,14 +126,38 @@ class BarometerCalibrationViewModel(
                 }
 
                 if (!started) {
-                    _uiState.update {
-                        it.copy(
-                            isCalibrating = false,
-                            statusText = "Failed to start barometer calibration: ${lastAck ?: "No ACK"}"
-                        )
+                    if (lastAckResult != null) {
+                        // We received an ACK but it was not accepted; wait for STATUSTEXT outcome before failing.
+                        _uiState.update {
+                            it.copy(
+                                statusText = "Start returned: ${lastAckText ?: "ACK"}. Waiting for status updates...",
+                                isCalibrating = true,
+                                progress = 5
+                            )
+                        }
+
+                        val success = awaitFinalOutcome(finalOutcomeTimeoutMs)
+                        if (success == true) {
+                            _uiState.update { it.copy(statusText = "Barometer calibration successful", isCalibrating = false, progress = 100) }
+                        } else if (success == false) {
+                            _uiState.update { it.copy(statusText = "Barometer calibration failed", isCalibrating = false) }
+                        } else {
+                            _uiState.update { it.copy(statusText = "No explicit success received after ACK (${lastAckText ?: "unknown"}). Assuming completion if STATUSTEXT not received.", isCalibrating = false, progress = 100) }
+                        }
+
+                        stopStatusListener()
+                        return@launch
+                    } else {
+                        // No ACK at all -> fail
+                        _uiState.update {
+                            it.copy(
+                                isCalibrating = false,
+                                statusText = "Failed to start barometer calibration: No ACK"
+                            )
+                        }
+                        stopStatusListener()
+                        return@launch
                     }
-                    stopStatusListener()
-                    return@launch
                 }
 
                 _uiState.update { it.copy(statusText = "Calibrating barometer...", progress = 10) }
