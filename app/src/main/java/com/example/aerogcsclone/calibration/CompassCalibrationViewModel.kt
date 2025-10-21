@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aerogcsclone.telemetry.SharedViewModel
+import com.example.aerogcsclone.utils.TextToSpeechManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -180,6 +181,9 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                     Log.d("CompassCalVM", "✓ COMMAND ACCEPTED - Calibration started successfully!")
                     Log.d("CompassCalVM", "")
                     Log.d("CompassCalVM", "⏳ Waiting for progress messages (timeout: ${progressTimeoutMs}ms)...")
+
+                    // Announce calibration started via TTS
+                    sharedViewModel.announceCalibrationStarted()
 
                     _uiState.update {
                         it.copy(
@@ -492,6 +496,9 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
 
                         Log.d("CompassCalVM", "✓ Calibration SUCCESS detected via STATUSTEXT")
 
+                        // Announce calibration finished successfully via TTS
+                        sharedViewModel.announceCalibrationFinished(isSuccess = true)
+
                         _uiState.update {
                             it.copy(
                                 calibrationState = CompassCalibrationState.Success(
@@ -512,6 +519,9 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                         lower.contains("compass cal failed")) {
 
                         Log.d("CompassCalVM", "✗ Calibration FAILED detected via STATUSTEXT")
+
+                        // Announce calibration failed via TTS
+                        sharedViewModel.announceCalibrationFinished(isSuccess = false)
 
                         _uiState.update {
                             it.copy(

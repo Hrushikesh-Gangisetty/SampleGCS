@@ -3,6 +3,7 @@ package com.example.aerogcsclone.telemetry
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import com.example.aerogcsclone.telemetry.  connections.BluetoothConnectionProvi
 import com.example.aerogcsclone.telemetry.connections.MavConnectionProvider
 import com.example.aerogcsclone.telemetry.connections.TcpConnectionProvider
 import com.example.aerogcsclone.utils.GeofenceUtils
+import com.example.aerogcsclone.utils.TextToSpeechManager
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -48,6 +50,46 @@ data class PairedDevice(
 }
 
 class SharedViewModel : ViewModel() {
+
+    // TextToSpeech manager for voice announcements
+    private var ttsManager: TextToSpeechManager? = null
+
+    // Initialize TTS with context
+    fun initializeTextToSpeech(context: Context) {
+        if (ttsManager == null) {
+            ttsManager = TextToSpeechManager(context)
+            Log.d("SharedVM", "TextToSpeech initialized")
+        }
+    }
+
+    // TTS announcement methods
+    fun announceCalibrationStarted() {
+        ttsManager?.announceCalibrationStarted()
+    }
+
+    fun announceCalibrationFinished(isSuccess: Boolean = true) {
+        ttsManager?.announceCalibrationFinished(isSuccess)
+    }
+
+    fun announceCalibrationFinished() {
+        ttsManager?.announceCalibrationFinished()
+    }
+
+    fun announceConnectionFailed() {
+        ttsManager?.announceConnectionFailed()
+    }
+
+    fun announceSelectedAutomatic() {
+        ttsManager?.announceSelectedAutomatic()
+    }
+
+    fun announceSelectedManual() {
+        ttsManager?.announceSelectedManual()
+    }
+
+    fun announceCalibration(calibrationType: String) {
+        ttsManager?.announceCalibration(calibrationType)
+    }
 
     // --- Area (survey / mission) state ---
     // Area of the currently drawn survey polygon (sq meters)
@@ -818,6 +860,14 @@ class SharedViewModel : ViewModel() {
                 checkGeofenceViolation(state)
             }
         }
+
+        // Monitor connection status and announce via TTS
+        viewModelScope.launch {
+            isConnected.collect { connected ->
+                ttsManager?.announceConnectionStatus(connected)
+                Log.d("SharedVM", "Connection status changed: ${if (connected) "Connected" else "Disconnected"}")
+            }
+        }
     }
 
     private fun checkGeofenceViolation(state: TelemetryState) {
@@ -913,5 +963,11 @@ class SharedViewModel : ViewModel() {
                 Log.e("Geofence", "Cannot switch to RTL - no connection to drone")
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ttsManager?.shutdown()
+        Log.d("SharedVM", "ViewModel cleared, TTS shutdown")
     }
 }

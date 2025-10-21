@@ -16,9 +16,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.aerogcsclone.R
 import com.example.aerogcsclone.navigation.Screen
+import com.example.aerogcsclone.telemetry.SharedViewModel
 
 @Composable
-fun SelectFlyingMethodScreen(navController: NavController) {
+fun SelectFlyingMethodScreen(navController: NavController, sharedViewModel: SharedViewModel) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF23272A) // dark grey
@@ -44,12 +45,18 @@ fun SelectFlyingMethodScreen(navController: NavController) {
                 FlyingMethodCard(
                     icon = { Image(painter = painterResource(id = R.drawable.autonomous), contentDescription = "Automatic", modifier = Modifier.size(64.dp)) },
                     label = "Automatic",
-                    onClick = { navController.navigate(Screen.Main.route) }
+                    onClick = {
+                        sharedViewModel.announceSelectedAutomatic()
+                        navController.navigate(Screen.Main.route)
+                    }
                 )
                 FlyingMethodCard(
                     icon = { Image(painter = painterResource(id = R.drawable.manual), contentDescription = "Manual", modifier = Modifier.size(64.dp)) },
                     label = "Manual",
-                    onClick = { navController.navigate(Screen.Main.route) }
+                    onClick = {
+                        sharedViewModel.announceSelectedManual()
+                        navController.navigate(Screen.Main.route)
+                    }
                 )
             }
         }

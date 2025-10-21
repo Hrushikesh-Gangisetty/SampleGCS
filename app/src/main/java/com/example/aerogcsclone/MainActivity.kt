@@ -17,10 +17,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.example.aerogcsclone.navigation.AppNavGraph
 import com.example.aerogcsclone.integration.TlogIntegration
-//import com.example.aerogcsclone.Telemetry.SharedViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.MapsInitializer
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import com.example.aerogcsclone.telemetry.SharedViewModel
 
 // ✅ Dark theme setup
 private val DarkColorScheme = darkColorScheme(
@@ -72,6 +72,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
             val systemUiController = rememberSystemUiController()
+
+            // Create SharedViewModel instance and initialize TTS
+            val sharedViewModel: SharedViewModel = viewModel()
+
+            // Initialize TextToSpeech when the app starts
+            LaunchedEffect(Unit) {
+                sharedViewModel.initializeTextToSpeech(this@MainActivity)
+            }
+
             // Hide the system status bar for immersive experience
             SideEffect {
                 systemUiController.isStatusBarVisible = false

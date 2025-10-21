@@ -167,7 +167,7 @@ fun SettingsScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(columnSpacing))
 
                 Button(
-                    onClick = { navController.navigate("rc_calibration") },
+                    onClick = { navController.navigate("remote_controller") },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
