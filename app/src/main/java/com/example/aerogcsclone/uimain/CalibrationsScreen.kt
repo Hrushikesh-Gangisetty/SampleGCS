@@ -97,10 +97,12 @@ fun CalibrationsScreen(
 
             CalibrationOptionCard(
                 title = "Radio Calibration",
-                description = "Calibrate radio control inputs (Coming Soon)",
-                icon = Icons.Default.Settings,
-                enabled = false,
-                onClick = { }
+                description = "Calibrate radio control inputs",
+                icon = Icons.Default.Gamepad,
+                enabled = true,
+                onClick = {
+                    navController.navigate("rc_calibration")
+                }
             )
         }
     }

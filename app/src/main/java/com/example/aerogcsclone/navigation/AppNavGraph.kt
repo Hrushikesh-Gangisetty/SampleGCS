@@ -19,6 +19,8 @@ import com.example.aerogcsclone.calibration.CalibrationScreen
 import com.example.aerogcsclone.calibration.CalibrationViewModel
 import com.example.aerogcsclone.calibration.CompassCalibrationScreen
 import com.example.aerogcsclone.calibration.CompassCalibrationViewModel
+import com.example.aerogcsclone.calibration.RCCalibrationScreen
+import com.example.aerogcsclone.calibration.RCCalibrationViewModel
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
@@ -151,6 +153,15 @@ fun AppNavGraph(navController: NavHostController) {
             }
             com.example.aerogcsclone.calibration.BarometerCalibrationScreen(
                 viewModel = barometerCalibrationViewModel,
+                navController = navController
+            )
+        }
+        composable("rc_calibration") {
+            val rcCalibrationViewModel = remember(sharedViewModel) {
+                RCCalibrationViewModel(sharedViewModel)
+            }
+            RCCalibrationScreen(
+                viewModel = rcCalibrationViewModel,
                 navController = navController
             )
         }

@@ -81,6 +81,14 @@ class MavlinkTelemetryRepository(
     private val _magCalReport = MutableSharedFlow<MagCalReport>(replay = 0, extraBufferCapacity = 10)
     val magCalReport: SharedFlow<MagCalReport> = _magCalReport.asSharedFlow()
 
+    // RC_CHANNELS flow for radio control calibration
+    private val _rcChannels = MutableSharedFlow<RcChannels>(replay = 0, extraBufferCapacity = 10)
+    val rcChannels: SharedFlow<RcChannels> = _rcChannels.asSharedFlow()
+
+    // PARAM_VALUE flow for parameter reading
+    private val _paramValue = MutableSharedFlow<ParamValue>(replay = 0, extraBufferCapacity = 10)
+    val paramValue: SharedFlow<ParamValue> = _paramValue.asSharedFlow()
+
     fun start() {
         val scope = AppScope
 
@@ -511,6 +519,30 @@ class MavlinkTelemetryRepository(
                     Log.d("CompassCalVM", "   └─ Offsets: X=${report.ofsX}, Y=${report.ofsY}, Z=${report.ofsZ}")
                     Log.d("CompassCalVM", "   └─ Autosaved: ${report.autosaved}")
                     _magCalReport.emit(report)
+                }
+        }
+
+        // RC_CHANNELS for radio control calibration
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<RcChannels>()
+                .collect { rcChannels ->
+                    Log.d("RCCalVM", "📻 RC_CHANNELS received: ch1=${rcChannels.chan1Raw} ch2=${rcChannels.chan2Raw} ch3=${rcChannels.chan3Raw} ch4=${rcChannels.chan4Raw}")
+                    _rcChannels.emit(rcChannels)
+                }
+        }
+
+        // PARAM_VALUE for parameter reading
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<ParamValue>()
+                .collect { paramValue ->
+                    Log.d("ParamVM", "📝 PARAM_VALUE received: ${paramValue.paramId} = ${paramValue.paramValue}")
+                    _paramValue.emit(paramValue)
                 }
         }
 

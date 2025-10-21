@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
+import com.divpundir.mavlink.api.wrap
 import com.divpundir.mavlink.definitions.common.MavCmd
 import com.divpundir.mavlink.definitions.common.MavResult
 import com.divpundir.mavlink.definitions.common.MissionItemInt
@@ -145,6 +147,14 @@ class SharedViewModel : ViewModel() {
     val magCalReport: SharedFlow<com.divpundir.mavlink.definitions.common.MagCalReport>
         get() = repo?.magCalReport ?: MutableSharedFlow()
 
+    // Expose RC_CHANNELS flow for RC calibration
+    val rcChannels: SharedFlow<com.divpundir.mavlink.definitions.common.RcChannels>
+        get() = repo?.rcChannels ?: MutableSharedFlow()
+
+    // Expose PARAM_VALUE flow for parameter reading
+    val paramValue: SharedFlow<com.divpundir.mavlink.definitions.common.ParamValue>
+        get() = repo?.paramValue ?: MutableSharedFlow()
+
     // --- Calibration helpers ---
     /**
      * Request MAG_CAL_PROGRESS and MAG_CAL_REPORT messages from the autopilot.
@@ -211,6 +221,100 @@ class SharedViewModel : ViewModel() {
             Log.e("SharedVM", "Error while awaiting COMMAND_ACK for $commandId", e)
             null
         }
+    }
+
+    /**
+     * Request RC_CHANNELS messages from the autopilot at specified rate.
+     * Message ID 65 for RC_CHANNELS.
+     */
+    suspend fun requestRCChannels(hz: Float = 10f) {
+        Log.d("RCCalVM", "========== REQUESTING RC_CHANNELS MESSAGE STREAMING ==========")
+        Log.d("RCCalVM", "Requesting RC_CHANNELS (65) at $hz Hz")
+        Log.d("RCCalVM", "Interval: ${if (hz > 0f) (1_000_000f / hz).toInt() else 0} microseconds")
+
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 65f, // RC_CHANNELS message ID
+            param2 = if (hz <= 0f) 0f else (1_000_000f / hz) // interval in microseconds
+        )
+        Log.d("RCCalVM", "✓ RC_CHANNELS message interval command sent")
+        Log.d("RCCalVM", "==============================================================")
+    }
+
+    /**
+     * Stop RC_CHANNELS message streaming.
+     */
+    suspend fun stopRCChannels() {
+        Log.d("RCCalVM", "========== STOPPING RC_CHANNELS MESSAGE STREAMING ==========")
+        repo?.sendCommand(
+            MavCmd.SET_MESSAGE_INTERVAL,
+            param1 = 65f, // RC_CHANNELS message ID
+            param2 = 0f // 0 = disable streaming
+        )
+        Log.d("RCCalVM", "✓ RC_CHANNELS streaming disabled")
+        Log.d("RCCalVM", "=============================================================")
+    }
+
+    /**
+     * Request a parameter value from the autopilot by name.
+     * The response will come via the paramValue flow.
+     */
+    suspend fun requestParameter(paramId: String) {
+        repo?.let { repository ->
+            try {
+                val paramRequestRead = com.divpundir.mavlink.definitions.common.ParamRequestRead(
+                    targetSystem = repository.fcuSystemId,
+                    targetComponent = repository.fcuComponentId,
+                    paramId = paramId,
+                    paramIndex = -1
+                )
+                repository.connection.trySendUnsignedV2(
+                    repository.gcsSystemId,
+                    repository.gcsComponentId,
+                    paramRequestRead
+                )
+                Log.d("RCCalVM", "📤 Sent PARAM_REQUEST_READ for: $paramId")
+            } catch (e: Exception) {
+                Log.e("RCCalVM", "Failed to request parameter $paramId", e)
+            }
+        }
+    }
+
+    /**
+     * Set a parameter value on the autopilot.
+     * Returns the PARAM_VALUE response if successful within timeout.
+     */
+    suspend fun setParameter(paramId: String, value: Float, timeoutMs: Long = 3000L): com.divpundir.mavlink.definitions.common.ParamValue? {
+        repo?.let { repository ->
+            try {
+                Log.d("RCCalVM", "📤 Setting parameter: $paramId = $value")
+
+                val paramSet = com.divpundir.mavlink.definitions.common.ParamSet(
+                    targetSystem = repository.fcuSystemId,
+                    targetComponent = repository.fcuComponentId,
+                    paramId = paramId,
+                    paramValue = value,
+                    paramType = com.divpundir.mavlink.definitions.common.MavParamType.REAL32.wrap()
+                )
+
+                repository.connection.trySendUnsignedV2(
+                    repository.gcsSystemId,
+                    repository.gcsComponentId,
+                    paramSet
+                )
+
+                // Wait for PARAM_VALUE response confirming the set
+                return withTimeoutOrNull(timeoutMs) {
+                    paramValue
+                        .filter { it.paramId == paramId }
+                        .first()
+                }
+            } catch (e: Exception) {
+                Log.e("RCCalVM", "Failed to set parameter $paramId", e)
+                return null
+            }
+        }
+        return null
     }
 
     fun connect() {
