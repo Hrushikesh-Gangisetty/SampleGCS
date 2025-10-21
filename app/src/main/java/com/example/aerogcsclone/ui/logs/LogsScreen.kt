@@ -39,13 +39,7 @@ fun LogsScreen(
     val flights by tlogViewModel.flights.collectAsState(initial = emptyList())
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top Navigation Bar
-        TopNavBar(
-            telemetryState = telemetryState,
-            authViewModel = authViewModel,
-            navController = navController,
-            onToggleNotificationPanel = {}
-        )
+        // TopNavBar removed - it's already handled in AppNavGraph.kt
 
         // Main Content
         Column(

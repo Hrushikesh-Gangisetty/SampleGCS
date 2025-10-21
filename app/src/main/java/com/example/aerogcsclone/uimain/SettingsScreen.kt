@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.aerogcsclone.navigation.Screen
 
 @Composable
 fun SettingsScreen(navController: NavHostController) {
@@ -61,7 +62,7 @@ fun SettingsScreen(navController: NavHostController) {
             // Row 1: IMU Calibrations | Compass Calibration
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { navController.navigate("accelerometer_calibration") },
+                    onClick = { navController.navigate(Screen.Calibrations.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -85,7 +86,7 @@ fun SettingsScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(columnSpacing))
 
                 Button(
-                    onClick = { navController.navigate("compass_calibration") },
+                    onClick = { navController.navigate(Screen.CompassCalibration.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -112,7 +113,7 @@ fun SettingsScreen(navController: NavHostController) {
             // Row: Barometer Calibration | (Optional placeholder)
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { navController.navigate("barometer_calibration") },
+                    onClick = { navController.navigate(Screen.BarometerCalibration.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -143,7 +144,7 @@ fun SettingsScreen(navController: NavHostController) {
             // Row 2: Spraying system | Remote controller
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { navController.navigate("spraying_system") },
+                    onClick = { navController.navigate(Screen.SprayingSystem.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -167,7 +168,7 @@ fun SettingsScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(columnSpacing))
 
                 Button(
-                    onClick = { navController.navigate("remote_controller") },
+                    onClick = { navController.navigate(Screen.RemoteController.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -194,7 +195,7 @@ fun SettingsScreen(navController: NavHostController) {
             // Row 3: Aircraft | RangeFinder settings
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { navController.navigate("aircraft") },
+                    onClick = { navController.navigate(Screen.Aircraft.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -218,7 +219,7 @@ fun SettingsScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(columnSpacing))
 
                 Button(
-                    onClick = { navController.navigate("rangefinder_settings") },
+                    onClick = { navController.navigate(Screen.RangeFinderSettings.route) },
                     modifier = Modifier
                         .weight(1f)
                         .height(buttonHeight),
@@ -244,7 +245,7 @@ fun SettingsScreen(navController: NavHostController) {
 
             // About App button centered below the grid
             Button(
-                onClick = { navController.navigate("about_app") },
+                onClick = { navController.navigate(Screen.AboutApp.route) },
                 modifier = Modifier
                     .fillMaxWidth(0.6f)
                     .height(buttonHeight)

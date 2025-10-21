@@ -20,10 +20,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.aerogcsclone.telemetry.SharedViewModel
 
 @Composable
 fun CalibrationsScreen(
-    navController: NavController
+    navController: NavController,
+    sharedViewModel: SharedViewModel
 ) {
     Box(
         modifier = Modifier
@@ -65,6 +67,7 @@ fun CalibrationsScreen(
                 description = "Calibrate the IMU accelerometer by rotating the drone through 6 positions",
                 icon = Icons.Default.Settings,
                 onClick = {
+                    sharedViewModel.announceCalibration("Accelerometer")
                     navController.navigate("accelerometer_calibration")
                 }
             )
@@ -77,6 +80,7 @@ fun CalibrationsScreen(
                 icon = Icons.Default.Explore,
                 enabled = true,
                 onClick = {
+                    sharedViewModel.announceCalibration("Compass")
                     navController.navigate("compass_calibration")
                 }
             )
@@ -89,6 +93,7 @@ fun CalibrationsScreen(
                 icon = Icons.Default.Speed,
                 enabled = true,
                 onClick = {
+                    sharedViewModel.announceCalibration("Barometer")
                     navController.navigate("barometer_calibration")
                 }
             )

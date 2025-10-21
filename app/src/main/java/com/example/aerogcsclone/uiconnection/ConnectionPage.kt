@@ -80,6 +80,8 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                 errorMessage = "Connection timed out. Please check your settings and try again."
                 showPopup = true
                 viewModel.cancelConnection() // Clean up the failed attempt
+                // Announce connection failure via TTS
+                viewModel.announceConnectionFailed()
             }
         }
     }

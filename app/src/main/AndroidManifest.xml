@@ -25,6 +25,9 @@
     -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Permission for Text-to-Speech -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Declare that the app uses Bluetooth -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="true"/>
 

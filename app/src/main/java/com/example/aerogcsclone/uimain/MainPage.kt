@@ -143,16 +143,7 @@ fun MainPage(
                 }
             }
 
-            // Place the TopNavBar inside the same Box so it overlays the map
-            TopNavBar(
-                telemetryState = telemetryState,
-                authViewModel = authViewModel,
-                navController = navController,
-                onToggleNotificationPanel = { telemetryViewModel.toggleNotificationPanel() },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-            )
+            // TopNavBar removed - it's already handled in AppNavGraph.kt
         }
 
         // Mission Complete Popup (must be inside the composable)

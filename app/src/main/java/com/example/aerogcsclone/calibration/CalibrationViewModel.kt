@@ -92,6 +92,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
         }
 
         viewModelScope.launch {
+            // Announce calibration started via TTS
+            sharedViewModel.announceCalibrationStarted()
+
             _uiState.update {
                 it.copy(
                     calibrationState = CalibrationState.Initiating,
@@ -269,6 +272,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
         when {
             lower.contains("calibration successful") || lower.contains("calibration complete") -> {
                 Log.d("CalibrationVM", "✓ Calibration successful!")
+                // Announce calibration success via TTS
+                sharedViewModel.announceCalibrationFinished(isSuccess = true)
+
                 _uiState.update {
                     it.copy(
                         calibrationState = CalibrationState.Success("Calibration completed successfully!"),
@@ -282,6 +288,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
             lower.contains("calibration failed") -> {
                 Log.e("CalibrationVM", "Calibration failed")
+                // Announce calibration failure via TTS
+                sharedViewModel.announceCalibrationFinished(isSuccess = false)
+
                 _uiState.update {
                     it.copy(
                         calibrationState = CalibrationState.Failed("Calibration failed"),
