@@ -134,6 +134,24 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
     }
 
     /**
+     * Announces IMU calibration position
+     * Converts position names to natural speech (e.g., LEVEL -> "Level", NOSEDOWN -> "Nose down")
+     */
+    fun announceIMUPosition(position: String) {
+        val spokenText = when (position.uppercase(Locale.US)) {
+            "LEVEL" -> "Level"
+            "LEFT" -> "Left"
+            "RIGHT" -> "Right"
+            "NOSEDOWN", "NOSE_DOWN" -> "Nose down"
+            "NOSEUP", "NOSE_UP" -> "Nose up"
+            "BACK" -> "Inverted down"
+            else -> position.replace("_", " ").lowercase(Locale.US)
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+        }
+        speak(spokenText)
+    }
+
+    /**
      * Stops any ongoing speech
      */
     fun stop() {

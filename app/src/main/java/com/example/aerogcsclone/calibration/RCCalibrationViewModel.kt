@@ -175,8 +175,18 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
      */
     private fun startRCChannelsListener() {
         rcChannelsListenerJob?.cancel()
+
+        var firstMessageReceived = false
+
         rcChannelsListenerJob = viewModelScope.launch {
             sharedViewModel.rcChannels.collect { rcChannels ->
+                // Announce remote connected on first RC_CHANNELS message
+                if (!firstMessageReceived) {
+                    firstMessageReceived = true
+                    sharedViewModel.speak("Remote is connected")
+                    Log.d("RCCalVM", "✓ Remote controller connected - receiving RC_CHANNELS")
+                }
+
                 // Extract all 16 channels from RC_CHANNELS message
                 val channelValues = listOf(
                     rcChannels.chan1Raw.toInt(),
@@ -240,21 +250,26 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
         viewModelScope.launch {
             Log.d("RCCalVM", "========== STARTING RC CALIBRATION ==========")
 
+            // Announce calibration started
+            sharedViewModel.announceCalibrationStarted()
+
             // Initialize min/max tracking
             for (i in 0..15) {
                 capturedMin[i] = 2200  // Start high so any real value will be lower
                 capturedMax[i] = 800   // Start low so any real value will be higher
             }
 
+            val instruction = "Move all RC sticks and switches to their extreme positions"
             _uiState.update {
                 it.copy(
-                    calibrationState = RCCalibrationState.CapturingMinMax(
-                        "Move all RC sticks and switches to their extreme positions"
-                    ),
+                    calibrationState = RCCalibrationState.CapturingMinMax(instruction),
                     statusText = "Move sticks to extremes...",
                     buttonText = "Click when Done"
                 )
             }
+
+            // Announce the instruction
+            sharedViewModel.speak(instruction)
 
             Log.d("RCCalVM", "✓ Capturing min/max values - move all controls to extremes")
         }
@@ -277,6 +292,10 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
 
             if (validChannels < 4) {
                 Log.e("RCCalVM", "❌ Not enough valid channels captured (only $validChannels)")
+
+                // Announce calibration failure
+                sharedViewModel.announceCalibrationFinished(isSuccess = false)
+
                 _uiState.update {
                     it.copy(
                         calibrationState = RCCalibrationState.Failed(
@@ -408,6 +427,9 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
 
             Log.d("RCCalVM", summary)
 
+            // Announce calibration success
+            sharedViewModel.announceCalibrationFinished(isSuccess = true)
+
             _uiState.update {
                 it.copy(
                     calibrationState = RCCalibrationState.Success(summary),
@@ -418,6 +440,13 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
 
             Log.d("RCCalVM", "========== RC CALIBRATION COMPLETE ==========")
         }
+    }
+
+    /**
+     * Announce safety warning message via TTS
+     */
+    fun announceSafetyWarning(message: String) {
+        sharedViewModel.speak(message)
     }
 
     /**
@@ -467,4 +496,3 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
         }
     }
 }
-

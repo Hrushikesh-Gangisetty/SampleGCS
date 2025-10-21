@@ -240,6 +240,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                         Log.d("CalibrationVM", "FC requests position: ${position.name}")
                         currentPosition = position
 
+                        // Announce the IMU position via TTS
+                        sharedViewModel.announceIMUPosition(position.name)
+
                         _uiState.update {
                             it.copy(
                                 calibrationState = CalibrationState.AwaitingUserInput(
@@ -307,6 +310,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 AccelCalibrationPosition.fromStatusText(text)?.let { position ->
                     Log.d("CalibrationVM", "Parsed position from STATUSTEXT: ${position.name}")
                     currentPosition = position
+
+                    // Announce the IMU position via TTS
+                    sharedViewModel.announceIMUPosition(position.name)
 
                     _uiState.update {
                         it.copy(

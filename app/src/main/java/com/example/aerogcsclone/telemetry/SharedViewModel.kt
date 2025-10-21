@@ -91,6 +91,14 @@ class SharedViewModel : ViewModel() {
         ttsManager?.announceCalibration(calibrationType)
     }
 
+    fun announceIMUPosition(position: String) {
+        ttsManager?.announceIMUPosition(position)
+    }
+
+    fun speak(text: String) {
+        ttsManager?.speak(text)
+    }
+
     // --- Area (survey / mission) state ---
     // Area of the currently drawn survey polygon (sq meters)
     private val _surveyAreaSqMeters = MutableStateFlow(0.0)

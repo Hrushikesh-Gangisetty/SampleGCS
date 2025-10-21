@@ -28,6 +28,19 @@ fun RCCalibrationScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showSafetyDialog by remember { mutableStateOf(false) }
     var showInstructionDialog by remember { mutableStateOf(false) }
+    var safetyWarningRead by remember { mutableStateOf(false) }
+
+    // Announce safety warning when dialog is shown
+    LaunchedEffect(showSafetyDialog) {
+        if (showSafetyDialog) {
+            safetyWarningRead = false
+            val safetyMessage = "Safety Warning. Before proceeding, ensure: Your transmitter is ON and receiver is powered and connected. Your motor does NOT have power, NO PROPS attached!"
+            viewModel.announceSafetyWarning(safetyMessage)
+            // Enable button after announcement (approximately 8 seconds for the message)
+            kotlinx.coroutines.delay(8000)
+            safetyWarningRead = true
+        }
+    }
 
     // Safety Warning Dialog
     if (showSafetyDialog) {
@@ -78,12 +91,18 @@ fun RCCalibrationScreen(
                     onClick = {
                         showSafetyDialog = false
                         showInstructionDialog = true
+                        safetyWarningRead = false
                     },
+                    enabled = safetyWarningRead,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF9800)
+                        containerColor = Color(0xFFFF9800),
+                        disabledContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f)
                     )
                 ) {
-                    Text("I Understand", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (safetyWarningRead) "I Understand" else "Please wait...",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {

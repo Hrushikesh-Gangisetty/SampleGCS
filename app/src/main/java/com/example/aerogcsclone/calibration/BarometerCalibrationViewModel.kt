@@ -59,15 +59,22 @@ class BarometerCalibrationViewModel(
         val state = _uiState.value
         // Validate environment conditions with clear messaging
         if (!state.isFlatSurface && !state.isWindGood) {
+            val message = "Place the drone on a flat surface. Wind condition is not good. It is better to stop flying and calibrating the drone."
             _uiState.update {
-                it.copy(statusText = "Place the drone on a flat surface. Wind condition is not good. It is better to stop flying and calibrating the drone.")
+                it.copy(statusText = message)
             }
+            // Announce the warning message
+            sharedViewModel.speak(message)
             return
         } else if (!state.isFlatSurface) {
-            _uiState.update { it.copy(statusText = "Place the drone on a flat surface.") }
+            val message = "Place the drone on a flat surface."
+            _uiState.update { it.copy(statusText = message) }
+            sharedViewModel.speak(message)
             return
         } else if (!state.isWindGood) {
-            _uiState.update { it.copy(statusText = "Wind condition is not good. It is better to stop flying and calibrating the drone.") }
+            val message = "Wind condition is not good. It is better to stop flying and calibrating the drone."
+            _uiState.update { it.copy(statusText = message) }
+            sharedViewModel.speak(message)
             return
         }
         if (!_uiState.value.isConnected) {
@@ -76,6 +83,9 @@ class BarometerCalibrationViewModel(
         }
 
         viewModelScope.launch {
+            // Announce calibration started
+            sharedViewModel.announceCalibrationStarted()
+
             _uiState.update {
                 it.copy(
                     statusText = "Starting barometer calibration...",
@@ -166,8 +176,12 @@ class BarometerCalibrationViewModel(
                 val success = awaitFinalOutcome(finalOutcomeTimeoutMs)
                 if (success == true) {
                     _uiState.update { it.copy(statusText = "Barometer calibration successful", isCalibrating = false, progress = 100) }
+                    // Announce success
+                    sharedViewModel.announceCalibrationFinished(isSuccess = true)
                 } else if (success == false) {
                     _uiState.update { it.copy(statusText = "Barometer calibration failed", isCalibrating = false) }
+                    // Announce failure
+                    sharedViewModel.announceCalibrationFinished(isSuccess = false)
                 } else {
                     // Timeout: assume completion but inform user no explicit success was received
                     _uiState.update { it.copy(statusText = "Assuming barometer calibration completed (no explicit success received)", isCalibrating = false, progress = 100) }
@@ -176,6 +190,8 @@ class BarometerCalibrationViewModel(
                 stopStatusListener()
             } catch (e: Exception) {
                 _uiState.update { it.copy(statusText = "Error: ${e.message}", isCalibrating = false) }
+                // Announce failure
+                sharedViewModel.announceCalibrationFinished(isSuccess = false)
                 stopStatusListener()
             }
         }
