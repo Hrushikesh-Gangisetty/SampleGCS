@@ -25,6 +25,8 @@ import com.example.aerogcsclone.calibration.CompassCalibrationScreen
 import com.example.aerogcsclone.calibration.CompassCalibrationViewModel
 import com.example.aerogcsclone.calibration.RCCalibrationScreen
 import com.example.aerogcsclone.calibration.RCCalibrationViewModel
+import com.example.aerogcsclone.calibration.BarometerCalibrationScreen
+import com.example.aerogcsclone.calibration.BarometerCalibrationViewModel
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
@@ -258,8 +260,9 @@ fun AppNavGraph(navController: NavHostController) {
             }
         }
 
-        // Placeholder screens for Settings menu items
+        // Actual screens for Barometer Calibration and Remote Controller
         composable(Screen.BarometerCalibration.route) {
+            val barometerCalibrationViewModel: BarometerCalibrationViewModel = viewModel { BarometerCalibrationViewModel(sharedViewModel) }
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
             Column {
                 TopNavBar(
@@ -268,7 +271,10 @@ fun AppNavGraph(navController: NavHostController) {
                     navController = navController,
                     onToggleNotificationPanel = { }
                 )
-                PlaceholderScreen("Barometer Calibration", "Barometer calibration functionality coming soon!")
+                BarometerCalibrationScreen(
+                    navController = navController,
+                    viewModel = barometerCalibrationViewModel
+                )
             }
         }
 
@@ -294,7 +300,11 @@ fun AppNavGraph(navController: NavHostController) {
                     navController = navController,
                     onToggleNotificationPanel = { }
                 )
-                PlaceholderScreen("Remote Controller", "Remote controller settings coming soon!")
+                // Use actual screen for RC Calibration
+                RCCalibrationScreen(
+                    viewModel = remember(sharedViewModel) { RCCalibrationViewModel(sharedViewModel) },
+                    navController = navController
+                )
             }
         }
 
@@ -335,15 +345,6 @@ fun AppNavGraph(navController: NavHostController) {
                 )
                 PlaceholderScreen("About App", "Ground Control Station v1.0\nDeveloped for drone operations")
             }
-        }
-        composable("rc_calibration") {
-            val rcCalibrationViewModel = remember(sharedViewModel) {
-                RCCalibrationViewModel(sharedViewModel)
-            }
-            RCCalibrationScreen(
-                viewModel = rcCalibrationViewModel,
-                navController = navController
-            )
         }
     }
 }

@@ -3,6 +3,8 @@ package com.example.aerogcsclone.uimain
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -16,14 +18,17 @@ import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import androidx.compose.ui.graphics.vector.ImageVector
 
 @Composable
 fun SettingsScreen(navController: NavHostController) {
@@ -35,13 +40,16 @@ fun SettingsScreen(navController: NavHostController) {
         contentAlignment = Alignment.TopStart
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = "Settings",
                 color = Color.White,
                 fontSize = 32.sp,
-                modifier = Modifier.padding(bottom = 32.dp)
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
             // Light blue horizontal line separating the title from the rest of the content
@@ -53,218 +61,158 @@ fun SettingsScreen(navController: NavHostController) {
                     .padding(bottom = 24.dp)
             )
 
-            // Two-column layout: three rows, each row has two buttons (left + right)
-            val buttonHeight = 56.dp
-            val columnSpacing = 16.dp
-            val rowSpacing = 18.dp
+            // Single column layout with numbered buttons
+            val buttonHeight = 70.dp
+            val buttonSpacing = 12.dp
 
-            // Row 1: IMU Calibrations | Compass Calibration
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = { navController.navigate("accelerometer_calibration") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Speed,
-                        contentDescription = "Speedometer",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "IMU Calibrations", color = Color.White, fontSize = 18.sp)
-                }
+            // 1. IMU Calibrations
+            NumberedButton(
+                number = 1,
+                icon = Icons.Filled.Speed,
+                title = "IMU Calibrations",
+                onClick = { navController.navigate("accelerometer_calibration") },
+                height = buttonHeight
+            )
 
-                Spacer(modifier = Modifier.width(columnSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-                Button(
-                    onClick = { navController.navigate("compass_calibration") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Explore,
-                        contentDescription = "Compass",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Compass Calibration", color = Color.White, fontSize = 18.sp)
-                }
-            }
+            // 2. Compass Calibration
+            NumberedButton(
+                number = 2,
+                icon = Icons.Filled.Explore,
+                title = "Compass Calibration",
+                onClick = { navController.navigate("compass_calibration") },
+                height = buttonHeight
+            )
 
-            Spacer(modifier = Modifier.height(rowSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-            // Row: Barometer Calibration | (Optional placeholder)
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = { navController.navigate("barometer_calibration") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Speed,
-                        contentDescription = "Barometer",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Barometer Calibration", color = Color.White, fontSize = 18.sp)
-                }
+            // 3. Barometer Calibration
+            NumberedButton(
+                number = 3,
+                icon = Icons.Filled.Thermostat,
+                title = "Barometer Calibration",
+                onClick = { navController.navigate("barometer_calibration") },
+                height = buttonHeight
+            )
 
-                Spacer(modifier = Modifier.width(columnSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-                Spacer(modifier = Modifier.weight(1f)) // Empty space or add another button if needed
-            }
+            // 4. Spraying System
+            NumberedButton(
+                number = 4,
+                icon = Icons.Filled.Opacity,
+                title = "Spraying System",
+                onClick = { navController.navigate("spraying_system") },
+                height = buttonHeight
+            )
 
-            Spacer(modifier = Modifier.height(rowSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-            // Row 2: Spraying system | Remote controller
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = { navController.navigate("spraying_system") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Opacity,
-                        contentDescription = "Spraying System",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Spraying system", color = Color.White, fontSize = 18.sp)
-                }
+            // 5. Remote Controller
+            NumberedButton(
+                number = 5,
+                icon = Icons.Filled.Gamepad,
+                title = "Remote Controller",
+                onClick = { navController.navigate("remote_controller") },
+                height = buttonHeight
+            )
 
-                Spacer(modifier = Modifier.width(columnSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-                Button(
-                    onClick = { navController.navigate("remote_controller") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Gamepad,
-                        contentDescription = "Remote Controller",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Remote controller", color = Color.White, fontSize = 18.sp)
-                }
-            }
+            // 6. Aircraft
+            NumberedButton(
+                number = 6,
+                icon = Icons.Filled.Flight,
+                title = "Aircraft",
+                onClick = { navController.navigate("aircraft") },
+                height = buttonHeight
+            )
 
-            Spacer(modifier = Modifier.height(rowSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-            // Row 3: Aircraft | RangeFinder settings
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = { navController.navigate("aircraft") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Flight,
-                        contentDescription = "Aircraft",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Aircraft", color = Color.White, fontSize = 18.sp)
-                }
+            // 7. RangeFinder Settings
+            NumberedButton(
+                number = 7,
+                icon = Icons.Filled.GpsFixed,
+                title = "RangeFinder Settings",
+                onClick = { navController.navigate("rangefinder_settings") },
+                height = buttonHeight
+            )
 
-                Spacer(modifier = Modifier.width(columnSpacing))
+            Spacer(modifier = Modifier.height(buttonSpacing))
 
-                Button(
-                    onClick = { navController.navigate("rangefinder_settings") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.GpsFixed,
-                        contentDescription = "RangeFinder",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "RangeFinder settings", color = Color.White, fontSize = 18.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(rowSpacing))
-
-            // About App button centered below the grid
-            Button(
+            // 8. About App
+            NumberedButton(
+                number = 8,
+                icon = Icons.Filled.Info,
+                title = "About App",
                 onClick = { navController.navigate("about_app") },
+                height = buttonHeight
+            )
+        }
+    }
+}
+
+@Composable
+private fun NumberedButton(
+    number: Int,
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+    height: androidx.compose.ui.unit.Dp
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White
+        ),
+        border = BorderStroke(1.dp, Color(0xFF4A5568)), // darker gray border
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            // Number badge
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(buttonHeight)
-                    .align(Alignment.CenterHorizontally),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    contentColor = Color.White
-                ),
-                border = BorderStroke(1.dp, Color.White),
-                shape = RoundedCornerShape(12.dp),
+                    .size(32.dp)
+                    .background(Color(0xFF87CEEB), RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = "About App",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                Text(
+                    text = number.toString(),
+                    color = Color.Black,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "About App", color = Color.White, fontSize = 18.sp)
             }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Icon
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Title
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
