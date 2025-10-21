@@ -71,6 +71,7 @@ fun PlanScreen(
     var gridAngle by remember { mutableStateOf(0f) }
     var surveySpeed by remember { mutableStateOf(10f) }
     var surveyAltitude by remember { mutableStateOf(60f) }
+    var holdNosePosition by remember { mutableStateOf(false) }
 
     // Grid state
     var surveyPolygon by remember { mutableStateOf<List<LatLng>>(emptyList()) }
@@ -388,7 +389,13 @@ fun PlanScreen(
                                 val homeLat = telemetryState.latitude ?: 0.0
                                 val homeLon = telemetryState.longitude ?: 0.0
                                 val homePosition = LatLng(homeLat, homeLon)
-                                val builtMission = GridMissionConverter.convertToMissionItems(gridResult!!, homePosition)
+                                val currentHeading = telemetryState.heading ?: 0f
+                                val builtMission = GridMissionConverter.convertToMissionItems(
+                                    gridResult = gridResult!!,
+                                    homePosition = homePosition,
+                                    holdNosePosition = holdNosePosition,
+                                    initialYaw = currentHeading
+                                )
 
                                 telemetryViewModel.uploadMission(builtMission) { success, error ->
                                     if (success) {
@@ -715,6 +722,29 @@ fun PlanScreen(
                                     activeTrackColor = MaterialTheme.colorScheme.primary,
                                     inactiveTrackColor = Color.Gray
                                 )
+                            )
+                        }
+
+                        // Hold Nose Position
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Hold Nose Position", color = Color.White, modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = holdNosePosition,
+                                    onCheckedChange = { holdNosePosition = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color.Green, // Green when ON
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = Color.Red // Red when OFF
+                                    )
+                                )
+                            }
+                            Text(
+                                "Nose will hold current position during survey lines",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
                             )
                         }
 

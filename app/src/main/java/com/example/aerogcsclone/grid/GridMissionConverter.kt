@@ -13,11 +13,15 @@ object GridMissionConverter {
      * Convert grid waypoints to MAVLink mission items
      * @param gridResult Grid survey result from GridGenerator
      * @param homePosition Home position for mission
+     * @param holdNosePosition If true, adds MAV_CMD_CONDITION_YAW to maintain yaw throughout mission
+     * @param initialYaw Initial yaw angle in degrees (0-360, 0=North, 90=East)
      * @return List of MAVLink MissionItemInt objects
      */
     fun convertToMissionItems(
         gridResult: GridSurveyResult,
-        homePosition: LatLng
+        homePosition: LatLng,
+        holdNosePosition: Boolean = false,
+        initialYaw: Float = 0f
     ): List<MissionItemInt> {
         val missionItems = mutableListOf<MissionItemInt>()
 
@@ -62,6 +66,31 @@ object GridMissionConverter {
         )
 
         var sequenceNumber = 2
+
+        // Add CONDITION_YAW command right after takeoff if holdNosePosition is enabled
+        // This sets the yaw and maintains it throughout the mission
+        if (holdNosePosition) {
+            missionItems.add(
+                MissionItemInt(
+                    targetSystem = 0u,
+                    targetComponent = 0u,
+                    seq = sequenceNumber.toUShort(),
+                    frame = MavEnumValue.of(MavFrame.MISSION),
+                    command = MavEnumValue.of(MavCmd.CONDITION_YAW),
+                    current = 0u,
+                    autocontinue = 1u,
+                    param1 = initialYaw, // Target yaw angle in degrees (0-360)
+                    param2 = 0f, // Yaw speed (0 = maximum)
+                    param3 = 1f, // Direction: 1 = clockwise, -1 = counter-clockwise
+                    param4 = 0f, // 0 = absolute angle, 1 = relative angle
+                    x = 0,
+                    y = 0,
+                    z = 0f
+                )
+            )
+            sequenceNumber++
+        }
+
         var lastLineIndex = -1
         var isFirstWaypoint = true
 

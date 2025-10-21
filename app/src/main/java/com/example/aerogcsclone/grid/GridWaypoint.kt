@@ -22,7 +22,8 @@ data class GridSurveyParams(
     val gridAngle: Float = 0f,        // degrees from north
     val speed: Float = 10f,           // m/s
     val altitude: Float = 60f,        // meters
-    val includeSpeedCommands: Boolean = true
+    val includeSpeedCommands: Boolean = true,
+    val holdNosePosition: Boolean = false  // Hold yaw throughout mission for battery efficiency
 )
 
 /**
