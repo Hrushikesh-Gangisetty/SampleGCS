@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import com.divpundir.mavlink.api.MavFrame
 import com.divpundir.mavlink.api.MavMessage
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicLong
 
 // MAVLink flight modes (ArduPilot values)
 object MavMode {
@@ -56,6 +57,10 @@ class MavlinkTelemetryRepository(
     val connection = provider.createConnection()
     lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
         private set
+
+    // Track last heartbeat time from FCU (thread-safe using AtomicLong)
+    private val lastFcuHeartbeatTime = AtomicLong(0L)
+    private val HEARTBEAT_TIMEOUT_MS = 3000L // 3 seconds timeout
 
     // MAVLink command value for MISSION_CLEAR_ALL
     private val MISSION_CLEAR_ALL_CMD: UInt = 45u
@@ -112,16 +117,31 @@ class MavlinkTelemetryRepository(
             connection.streamState.collect { st ->
                 when (st) {
                     is StreamState.Active -> {
-                        if (!state.value.connected) {
-                            Log.i("MavlinkRepo", "Connection Active")
-                            _state.update { it.copy(connected = true) }
-                        }
+                        // Don't set connected=true here anymore
+                        // Connection will be marked as true only when FCU heartbeat is received
+                        Log.i("MavlinkRepo", "Stream Active - waiting for FCU heartbeat")
                     }
                     is StreamState.Inactive -> {
+                        Log.i("MavlinkRepo", "Stream Inactive, reconnecting...")
+                        _state.update { it.copy(connected = false, fcuDetected = false) }
+                        lastFcuHeartbeatTime.set(0L)
+                        reconnect(this)
+                    }
+                }
+            }
+        }
+
+        // Monitor FCU heartbeat timeout
+        scope.launch {
+            while (isActive) {
+                delay(1000) // Check every second
+                if (state.value.fcuDetected && lastFcuHeartbeatTime.get() > 0L) {
+                    val timeSinceLastHeartbeat = System.currentTimeMillis() - lastFcuHeartbeatTime.get()
+                    if (timeSinceLastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
                         if (state.value.connected) {
-                            Log.i("MavlinkRepo", "Connection Inactive, reconnecting...")
+                            Log.w("MavlinkRepo", "FCU heartbeat timeout - marking as disconnected")
                             _state.update { it.copy(connected = false, fcuDetected = false) }
-                            reconnect(this)
+                            lastFcuHeartbeatTime.set(0L)
                         }
                     }
                 }
@@ -138,13 +158,12 @@ class MavlinkTelemetryRepository(
                 mavlinkVersion = 3u
             )
             while (isActive) {
-                if (state.value.connected) {
-                    try {
-                        connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, heartbeat)
-                    } catch (e: Exception) {
-                        Log.e("MavlinkRepo", "Failed to send heartbeat", e)
-                        _lastFailure.value = e
-                    }
+                // Send heartbeat even if not fully connected (to allow FCU detection)
+                try {
+                    connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, heartbeat)
+                } catch (e: Exception) {
+                    Log.e("MavlinkRepo", "Failed to send heartbeat", e)
+                    _lastFailure.value = e
                 }
                 delay(1000)
             }
@@ -161,16 +180,19 @@ class MavlinkTelemetryRepository(
             }
         }
 
-        // Detect FCU
+        // Detect FCU and set connected state based on FCU heartbeat
         scope.launch {
             mavFrame
                 .filter { it.message is Heartbeat && (it.message as Heartbeat).type != MavType.GCS.wrap() }
                 .collect {
+                    // Update heartbeat timestamp
+                    lastFcuHeartbeatTime.set(System.currentTimeMillis())
+
                     if (!state.value.fcuDetected) {
                         fcuSystemId = it.systemId
                         fcuComponentId = it.componentId
                         Log.i("MavlinkRepo", "FCU detected sysId=$fcuSystemId compId=$fcuComponentId")
-                        _state.update { it.copy(fcuDetected = true) }
+                        _state.update { state -> state.copy(fcuDetected = true, connected = true) }
 
                         // Set message intervals
                         launch {
@@ -203,6 +225,10 @@ class MavlinkTelemetryRepository(
                             setMessageRate(74u, 5f)  // VFR_HUD
                             setMessageRate(147u, 1f) // BATTERY_STATUS
                         }
+                    } else if (!state.value.connected) {
+                        // FCU was detected before but connection was lost, now it's back
+                        Log.i("MavlinkRepo", "FCU heartbeat resumed - marking as connected")
+                        _state.update { state -> state.copy(connected = true) }
                     }
                 }
         }
