@@ -336,6 +336,7 @@ class CompassCalibrationViewModel(private val sharedViewModel: SharedViewModel) 
                 }
 
                 stopAllListeners()
+                stopMagCalMessageStreaming() // FIXED: Also stop message streaming from autopilot
 
             } catch (e: Exception) {
                 Log.e("CompassCalVM", "Failed to cancel compass calibration", e)

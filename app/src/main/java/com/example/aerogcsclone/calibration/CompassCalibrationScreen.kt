@@ -28,6 +28,29 @@ fun CompassCalibrationScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Cancel confirmation dialog
+    if (uiState.showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.showCancelDialog(false) },
+            title = { Text("Cancel Calibration?") },
+            text = { Text("Are you sure you want to cancel the compass calibration? All progress will be lost.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.cancelCalibration()
+                    }
+                ) {
+                    Text("Yes, Cancel", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.showCancelDialog(false) }) {
+                    Text("Continue Calibration")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -879,7 +902,7 @@ private fun CompassCalibrationActions(
             }
             is CompassCalibrationState.Starting,
             is CompassCalibrationState.InProgress -> {
-                // Start button is disabled, Accept and Cancel are enabled
+                // Start button is disabled, Accept and Cancel are both enabled during calibration
                 Button(
                     onClick = onStart,
                     enabled = false,
@@ -901,7 +924,7 @@ private fun CompassCalibrationActions(
 
                 Button(
                     onClick = onAccept,
-                    enabled = calibrationComplete,
+                    enabled = true,  // Changed: Always enabled during calibration
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF4CAF50),
