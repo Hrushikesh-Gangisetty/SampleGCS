@@ -3,6 +3,8 @@ package com.example.aerogcsclone.calibration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -10,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.aerogcsclone.navigation.Screen
 
 @Composable
 fun BarometerCalibrationScreen(
@@ -24,6 +27,20 @@ fun BarometerCalibrationScreen(
             .background(Color(0xFF535350)),
         contentAlignment = Alignment.Center
     ) {
+        // Top-left back button to navigate to Settings
+        IconButton(
+            onClick = { navController.navigate(Screen.Settings.route) },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = "Back to Settings",
+                tint = Color.White
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(24.dp)
@@ -40,33 +57,27 @@ fun BarometerCalibrationScreen(
                 fontSize = 16.sp,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
-            if (!uiState.isFlatSurface || !uiState.isWindGood) {
-                if (!uiState.isFlatSurface && !uiState.isWindGood) {
-                    Text(
-                        text = "Place the drone on a flat surface.\nWind condition is not good. It is better to stop flying and calibrating the drone.",
-                        color = Color.Red,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                } else if (!uiState.isFlatSurface) {
-                    Text(
-                        text = "Place the drone on a flat surface.",
-                        color = Color.Red,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                } else if (!uiState.isWindGood) {
-                    Text(
-                        text = "Wind condition is not good. It is better to stop flying and calibrating the drone.",
-                        color = Color.Red,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                }
+            // Show warnings independently so each message is explicit
+            if (!uiState.isFlatSurface) {
+                Text(
+                    text = "Place the drone on a flat surface.",
+                    color = Color.Red,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            if (!uiState.isWindGood) {
+                Text(
+                    text = "Wind condition is not good. It is better to stop flying and calibrating the drone.",
+                    color = Color.Red,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
             }
             if (uiState.isCalibrating) {
+                // Use the lambda overload to avoid deprecated API
                 LinearProgressIndicator(
-                    progress = uiState.progress / 100f,
+                    progress = { uiState.progress / 100f },
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .height(8.dp)
