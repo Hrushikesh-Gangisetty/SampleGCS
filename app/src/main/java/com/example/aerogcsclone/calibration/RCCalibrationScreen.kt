@@ -9,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -161,12 +160,6 @@ fun RCCalibrationScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Instruction Card
-            InstructionCard(
-                state = uiState.calibrationState,
-                statusText = uiState.statusText
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
 
             // Main RC Channels Display (Roll, Pitch, Throttle, Yaw)
@@ -297,70 +290,6 @@ private fun ConnectionStatusCard(isConnected: Boolean) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
-        }
-    }
-}
-
-@Composable
-private fun InstructionCard(
-    state: RCCalibrationState,
-    statusText: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF3A3A38)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Instructions",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = when (state) {
-                    is RCCalibrationState.Idle -> "Initializing..."
-                    is RCCalibrationState.LoadingParameters -> "Loading RC channel configuration from vehicle..."
-                    is RCCalibrationState.Ready -> state.instruction
-                    is RCCalibrationState.CapturingMinMax -> state.instruction
-                    is RCCalibrationState.CapturingCenter -> state.instruction
-                    is RCCalibrationState.Saving -> "Saving calibration to vehicle. Please wait..."
-                    is RCCalibrationState.Success -> "Calibration complete! Your RC is now calibrated."
-                    is RCCalibrationState.Failed -> "Calibration failed. Please try again."
-                },
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-
-            if (statusText.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = statusText,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
-            }
         }
     }
 }
