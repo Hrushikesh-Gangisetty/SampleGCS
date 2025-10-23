@@ -168,7 +168,7 @@ fun RCCalibrationScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFF535350))
-                .padding(16.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             RCCalibrationHeader(
                 onBackClick = {
@@ -184,6 +184,13 @@ fun RCCalibrationScreen(
                 }
             )
         }
+
+        // thin green divider under header to match screenshots
+        HorizontalDivider(
+            color = Color(0xFF2E7D32),
+            thickness = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // Content
         Column(
@@ -214,7 +221,15 @@ fun RCCalibrationScreen(
                 pitchChannel = uiState.pitchChannel,
                 throttleChannel = uiState.throttleChannel,
                 yawChannel = uiState.yawChannel,
-                calibrationState = uiState.calibrationState
+                calibrationState = uiState.calibrationState,
+                onCalibrate = {
+                    // use the same logic used by the main CalibrationButton
+                    if (uiState.calibrationState is RCCalibrationState.Ready) {
+                        showSafetyDialog = true
+                    } else {
+                        viewModel.onButtonClick()
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -270,25 +285,31 @@ fun RCCalibrationScreen(
     }
 }
 
+// Replace header implementation with centered title and left back button
 @Composable
 private fun RCCalibrationHeader(onBackClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
     ) {
-        IconButton(onClick = onBackClick) {
+        IconButton(
+            onClick = onBackClick,
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+
         Text(
-            text = "RC Calibration",
+            text = "Remote Controller Calibration",
             color = Color.White,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.Center)
         )
     }
 }
@@ -396,7 +417,8 @@ private fun MainControlsCard(
     pitchChannel: Int,
     throttleChannel: Int,
     yawChannel: Int,
-    calibrationState: RCCalibrationState
+    calibrationState: RCCalibrationState,
+    onCalibrate: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -410,16 +432,28 @@ private fun MainControlsCard(
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
-            Text(
-                text = "Main Flight Controls",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Main Flight Controls",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // small Calibrate button on the right of the card (visual only, same action)
+                Button(
+                    onClick = onCalibrate,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF616161)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(text = "Calibrate", color = Color.White)
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Roll
             RCChannelBar(
                 label = "Roll (CH$rollChannel)",
                 channel = channels.getOrNull(rollChannel - 1),
@@ -428,7 +462,6 @@ private fun MainControlsCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Pitch
             RCChannelBar(
                 label = "Pitch (CH$pitchChannel)",
                 channel = channels.getOrNull(pitchChannel - 1),
@@ -437,7 +470,6 @@ private fun MainControlsCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Throttle
             RCChannelBar(
                 label = "Throttle (CH$throttleChannel)",
                 channel = channels.getOrNull(throttleChannel - 1),
@@ -446,7 +478,6 @@ private fun MainControlsCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Yaw
             RCChannelBar(
                 label = "Yaw (CH$yawChannel)",
                 channel = channels.getOrNull(yawChannel - 1),
@@ -474,7 +505,7 @@ private fun AllChannelsCard(
                 .padding(20.dp)
         ) {
             Text(
-                text = "All RC Channels (1-16)",
+                text = "Channel Monitor",
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -482,102 +513,104 @@ private fun AllChannelsCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            channels.forEachIndexed { index, channel ->
-                if (index > 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
+            val left = channels.take(8)
+            val right = channels.drop(8)
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    left.forEach { channel ->
+                        RCChannelBar(
+                            label = "Channel ${channel.channelNumber}",
+                            channel = channel,
+                            isCapturing = calibrationState is RCCalibrationState.CapturingMinMax
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
-                RCChannelBar(
-                    label = "CH${channel.channelNumber}",
-                    channel = channel,
-                    isCapturing = calibrationState is RCCalibrationState.CapturingMinMax,
-                    compact = true
-                )
+
+                Spacer(modifier = Modifier.width(24.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    right.forEach { channel ->
+                        RCChannelBar(
+                            label = "Channel ${channel.channelNumber}",
+                            channel = channel,
+                            isCapturing = calibrationState is RCCalibrationState.CapturingMinMax
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
             }
         }
     }
 }
 
+// Update RCChannelBar to always render compact horizontal layout (no 'compact' parameter)
 @Composable
 private fun RCChannelBar(
     label: String,
     channel: RCChannelData?,
-    isCapturing: Boolean,
-    compact: Boolean = false
+    isCapturing: Boolean
 ) {
     if (channel == null) return
 
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                color = Color.White,
-                fontSize = if (compact) 13.sp else 14.sp,
-                fontWeight = if (compact) FontWeight.Normal else FontWeight.Medium
-            )
-            Text(
-                text = channel.currentValue.toString(),
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = if (compact) 13.sp else 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+    // Always render compact horizontal layout to match screenshots
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 14.sp,
+            modifier = Modifier.width(110.dp)
+        )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
+        // two-segment bar container
+        val progress = ((channel.currentValue - 800f) / (2200f - 800f)).coerceIn(0f, 1f)
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 20.dp else 32.dp)
+                .height(16.dp)
+                .weight(1f)
+                .background(Color(0xFF2A2A28), RoundedCornerShape(6.dp))
+                .padding(2.dp)
         ) {
-            // Background
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF2A2A28), RoundedCornerShape(4.dp))
-            )
-
-            // Current value bar (drawn first, underneath)
-            val progress = ((channel.currentValue - 800f) / (2200f - 800f)).coerceIn(0f, 1f)
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progress)
-                    .background(
-                        MaterialTheme.colorScheme.primary,
-                        RoundedCornerShape(4.dp)
+            Row(modifier = Modifier.fillMaxSize()) {
+                val fillColor = if (isCapturing) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                if (progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(progress)
+                            .background(fillColor, RoundedCornerShape(4.dp))
                     )
-            )
-
-            // Min marker (red line) - drawn on top
-            if (isCapturing && channel.minValue < 2000) {
-                val minPosition = ((channel.minValue - 800f) / (2200f - 800f)).coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(3.dp)
-                        .align(Alignment.CenterStart)
-                        .fillMaxWidth(minPosition)
-                        .background(Color.Red)
-                )
-            }
-
-            // Max marker (red line) - drawn on top
-            if (isCapturing && channel.maxValue > 1000) {
-                val maxPosition = ((channel.maxValue - 800f) / (2200f - 800f)).coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(3.dp)
-                        .align(Alignment.CenterStart)
-                        .fillMaxWidth(maxPosition)
-                        .background(Color.Red)
-                )
+                }
+                val rem = (1f - progress).coerceAtLeast(0f)
+                if (rem > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(rem)
+                            .background(Color.White, RoundedCornerShape(4.dp))
+                    )
+                }
             }
         }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = channel.currentValue.toString(),
+            color = Color.White,
+            fontSize = 14.sp,
+            modifier = Modifier.width(56.dp)
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Checkbox(checked = false, onCheckedChange = null, enabled = false)
     }
 }
 
