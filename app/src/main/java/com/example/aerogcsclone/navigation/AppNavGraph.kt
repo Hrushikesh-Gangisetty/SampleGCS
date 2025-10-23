@@ -131,20 +131,14 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Screen.Plan.route) {
             val missionTemplateViewModel: MissionTemplateViewModel = viewModel()
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlanScreen(
-                    navController = navController,
-                    authViewModel = authViewModel,
-                    telemetryViewModel = sharedViewModel,
-                    missionTemplateViewModel = missionTemplateViewModel
-                )
-            }
+
+            // Render PlanScreen without the TopNavBar so the map can use the full screen
+            PlanScreen(
+                navController = navController,
+                authViewModel = authViewModel,
+                telemetryViewModel = sharedViewModel,
+                missionTemplateViewModel = missionTemplateViewModel
+            )
         }
 
         composable(Screen.PlotTemplates.route) {
@@ -152,43 +146,30 @@ fun AppNavGraph(navController: NavHostController) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
             val templates by missionTemplateViewModel.templates.collectAsState(initial = emptyList())
 
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlotTemplatesScreen(
-                    templates = templates,
-                    onLoadTemplate = { template ->
-                        missionTemplateViewModel.loadTemplate(template.id)
-                        navController.navigate(Screen.Plan.route)
-                    },
-                    onDeleteTemplate = { template ->
-                        missionTemplateViewModel.deleteTemplate(template)
-                    }
-                )
-            }
+            // TopNavBar removed - show only the plot templates screen
+            PlotTemplatesScreen(
+                templates = templates,
+                onLoadTemplate = { template ->
+                    missionTemplateViewModel.loadTemplate(template.id)
+                    navController.navigate(Screen.Plan.route)
+                },
+                onDeleteTemplate = { template ->
+                    missionTemplateViewModel.deleteTemplate(template)
+                }
+            )
         }
 
         composable(Screen.Logs.route) {
             val tlogViewModel: TlogViewModel = viewModel()
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                LogsScreen(
-                    navController = navController,
-                    authViewModel = authViewModel,
-                    telemetryViewModel = sharedViewModel,
-                    tlogViewModel = tlogViewModel
-                )
-            }
+
+            // TopNavBar removed - show logs screen directly
+            LogsScreen(
+                navController = navController,
+                authViewModel = authViewModel,
+                telemetryViewModel = sharedViewModel,
+                tlogViewModel = tlogViewModel
+            )
         }
 
         composable(Screen.SelectMethod.route) {
@@ -197,154 +178,93 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(Screen.Calibrations.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                CalibrationsScreen(
-                    navController = navController,
-                    sharedViewModel = sharedViewModel
-                )
-            }
+
+            // TopNavBar removed - show calibrations screen directly
+            CalibrationsScreen(
+                navController = navController,
+                sharedViewModel = sharedViewModel
+            )
         }
 
         composable(Screen.CompassCalibration.route) {
             // Create CompassCalibrationViewModel with SharedViewModel for TTS announcements
             val compassCalibrationViewModel: CompassCalibrationViewModel = viewModel { CompassCalibrationViewModel(sharedViewModel) }
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                CompassCalibrationScreen(
-                    navController = navController,
-                    viewModel = compassCalibrationViewModel
-                )
-            }
+
+            // TopNavBar removed - show compass calibration directly
+            CompassCalibrationScreen(
+                navController = navController,
+                viewModel = compassCalibrationViewModel
+            )
         }
 
         composable(Screen.AccelerometerCalibration.route) {
             // Create CalibrationViewModel with SharedViewModel for TTS announcements and IMU calibration
             val calibrationViewModel: CalibrationViewModel = viewModel { CalibrationViewModel(sharedViewModel) }
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                CalibrationScreen(
-                    viewModel = calibrationViewModel,
-                    navController = navController
-                )
-            }
+
+            // TopNavBar removed - show accelerometer calibration directly
+            CalibrationScreen(
+                viewModel = calibrationViewModel,
+                navController = navController
+            )
         }
 
         composable(Screen.Settings.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                SettingsScreen(navController = navController)
-            }
+
+            // TopNavBar removed - show settings directly
+            SettingsScreen(navController = navController)
         }
 
         // Actual screens for Barometer Calibration and Remote Controller
         composable(Screen.BarometerCalibration.route) {
             val barometerCalibrationViewModel: BarometerCalibrationViewModel = viewModel { BarometerCalibrationViewModel(sharedViewModel) }
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                BarometerCalibrationScreen(
-                    navController = navController,
-                    viewModel = barometerCalibrationViewModel
-                )
-            }
+
+            // TopNavBar removed - show barometer calibration directly
+            BarometerCalibrationScreen(
+                navController = navController,
+                viewModel = barometerCalibrationViewModel
+            )
         }
 
         composable(Screen.SprayingSystem.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlaceholderScreen("Spraying System", "Spraying system configuration coming soon!")
-            }
+
+            // TopNavBar removed
+            PlaceholderScreen("Spraying System", "Spraying system configuration coming soon!")
         }
 
         composable(Screen.RemoteController.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                // Use actual screen for RC Calibration
-                RCCalibrationScreen(
-                    viewModel = remember(sharedViewModel) { RCCalibrationViewModel(sharedViewModel) },
-                    navController = navController
-                )
-            }
+
+            // TopNavBar removed - show RC Calibration directly
+            RCCalibrationScreen(
+                viewModel = remember(sharedViewModel) { RCCalibrationViewModel(sharedViewModel) },
+                navController = navController
+            )
         }
 
         composable(Screen.Aircraft.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlaceholderScreen("Aircraft", "Aircraft configuration coming soon!")
-            }
+
+            // TopNavBar removed
+            PlaceholderScreen("Aircraft", "Aircraft configuration coming soon!")
         }
 
         composable(Screen.RangeFinderSettings.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlaceholderScreen("RangeFinder Settings", "RangeFinder configuration coming soon!")
-            }
+
+            // TopNavBar removed
+            PlaceholderScreen("RangeFinder Settings", "RangeFinder configuration coming soon!")
         }
 
         composable(Screen.AboutApp.route) {
             val telemetryState by sharedViewModel.telemetryState.collectAsState()
-            Column {
-                TopNavBar(
-                    telemetryState = telemetryState,
-                    authViewModel = authViewModel,
-                    navController = navController,
-                    onToggleNotificationPanel = { }
-                )
-                PlaceholderScreen("About App", "Ground Control Station v1.0\nDeveloped for drone operations")
-            }
+
+            // TopNavBar removed
+            PlaceholderScreen("About App", "Ground Control Station v1.0\nDeveloped for drone operations")
         }
     }
 }
