@@ -27,7 +27,6 @@ fun RCCalibrationScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showSafetyDialog by remember { mutableStateOf(false) }
-    var showInstructionDialog by remember { mutableStateOf(false) }
     var safetyWarningRead by remember { mutableStateOf(false) }
 
     // Announce safety warning when dialog is shown
@@ -89,9 +88,10 @@ fun RCCalibrationScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        // start calibration directly (instruction dialog removed)
                         showSafetyDialog = false
-                        showInstructionDialog = true
                         safetyWarningRead = false
+                        viewModel.startCalibration()
                     },
                     enabled = safetyWarningRead,
                     colors = ButtonDefaults.buttonColors(
@@ -107,51 +107,6 @@ fun RCCalibrationScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSafetyDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // Instruction Dialog
-    if (showInstructionDialog) {
-        AlertDialog(
-            onDismissRequest = { showInstructionDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "Calibration Instructions",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            text = {
-                Text(
-                    text = "Click OK and move all RC sticks and switches to their extreme positions so the red bars hit the limits.",
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showInstructionDialog = false
-                        viewModel.startCalibration()
-                    }
-                ) {
-                    Text("OK - Start Calibration", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showInstructionDialog = false }) {
                     Text("Cancel")
                 }
             }
