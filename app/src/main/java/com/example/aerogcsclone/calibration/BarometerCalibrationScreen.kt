@@ -21,7 +21,7 @@ fun BarometerCalibrationScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF23272A)),
+            .background(Color(0xFF535350)),
         contentAlignment = Alignment.Center
     ) {
         Column(
