@@ -4,12 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,10 +17,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.navigation.Screen
+import com.example.aerogcsclone.telemetry.SharedViewModel
 
 @Composable
 fun TopNavBar(
@@ -30,11 +31,17 @@ fun TopNavBar(
     authViewModel: AuthViewModel,
     navController: NavHostController,
     onToggleNotificationPanel: () -> Unit,
+    telemetryViewModel: SharedViewModel, // Added SharedViewModel parameter
     modifier: Modifier = Modifier // added modifier parameter with default
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
+    var showGeofenceSlider by remember { mutableStateOf(false) } // Added geofence slider state
+
+    // Collect geofence state from viewmodel
+    val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
+    val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
 
     // Set nav bar gradient colors based on connection status
     val navBarAlpha = 0.5f // decreased alpha for more transparency
@@ -162,7 +169,26 @@ fun TopNavBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ConnectionStatusWidget(isConnected = telemetryState.connected)
                 DividerBlock()
-                InfoBlock(Icons.Default.Flight, "13%")
+                // Clickable geofence icon
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .clickable { showGeofenceSlider = !showGeofenceSlider },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.Fence,
+                        contentDescription = "Geofence",
+                        tint = if (geofenceEnabled) Color.Green else Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        if (geofenceEnabled) "ON" else "OFF",
+                        color = if (geofenceEnabled) Color.Green else Color.White,
+                        fontSize = 9.sp
+                    )
+                }
                 DividerBlock()
                 InfoBlock(Icons.Default.BatteryFull, "${telemetryState.batteryPercent ?: "N/A"}%")
                 DividerBlock()
@@ -259,6 +285,104 @@ fun TopNavBar(
                                 }
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        // Geofence slider popup
+        if (showGeofenceSlider) {
+            Popup(
+                onDismissRequest = { showGeofenceSlider = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF23232B).copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .width(300.dp) // Fixed width for better layout
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Geofence Settings",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+
+                        Divider(color = Color.White.copy(alpha = 0.3f))
+
+                        // Geofence Enable/Disable Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Enable Geofence",
+                                color = Color.White,
+                                modifier = Modifier.weight(1f),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Switch(
+                                checked = geofenceEnabled,
+                                onCheckedChange = { telemetryViewModel.setGeofenceEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Color.Green, // Green when ON
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = Color.Red // Red when OFF
+                                )
+                            )
+                        }
+
+                        // Status text based on geofence state
+                        if (geofenceEnabled) {
+                            Text(
+                                "Polygon fence active around mission plan",
+                                color = Color.Green,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                "Geofence disabled",
+                                color = Color.Red,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        // Buffer Distance Slider (only shown when geofence is enabled)
+                        if (geofenceEnabled) {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Buffer Distance", color = Color.White, modifier = Modifier.weight(1f))
+                                    Text("${fenceRadius.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = fenceRadius,
+                                    onValueChange = { telemetryViewModel.setFenceRadius(it) },
+                                    valueRange = -4f..50f, // Same range as PlanScreen
+                                    steps = 50, // Same steps as PlanScreen
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.Green,
+                                        activeTrackColor = Color.Green,
+                                        inactiveTrackColor = Color.Gray
+                                    )
+                                )
+                                Text(
+                                    "Adjust polygon buffer distance around mission plan",
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

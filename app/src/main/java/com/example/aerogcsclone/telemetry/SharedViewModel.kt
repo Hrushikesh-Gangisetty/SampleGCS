@@ -510,12 +510,39 @@ class SharedViewModel : ViewModel() {
         allWaypoints.addAll(_gridWaypoints.value)
 
         if (allWaypoints.isNotEmpty()) {
+            // Use mission waypoints if available
             val bufferDistance = _fenceRadius.value.toDouble()
             val polygonBuffer = GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
             _geofencePolygon.value = polygonBuffer
         } else {
-            _geofencePolygon.value = emptyList()
+            // Create default square geofence around drone position when no mission plan
+            val droneLatitude = _telemetryState.value.latitude
+            val droneLongitude = _telemetryState.value.longitude
+
+            if (droneLatitude != null && droneLongitude != null) {
+                val dronePosition = LatLng(droneLatitude, droneLongitude)
+                val fenceRadius = if (_fenceRadius.value <= 0) 5.0 else _fenceRadius.value.toDouble() // Default 5m
+                val squareGeofence = createSquareGeofence(dronePosition, fenceRadius)
+                _geofencePolygon.value = squareGeofence
+            } else {
+                _geofencePolygon.value = emptyList()
+            }
         }
+    }
+
+    private fun createSquareGeofence(center: LatLng, radiusMeters: Double): List<LatLng> {
+        // Convert meters to approximate degrees (rough approximation)
+        val latOffset = radiusMeters / 111111.0 // 1 degree latitude ≈ 111,111 meters
+        val lngOffset = radiusMeters / (111111.0 * kotlin.math.cos(Math.toRadians(center.latitude)))
+
+        // Create square corners around the center point
+        return listOf(
+            LatLng(center.latitude + latOffset, center.longitude - lngOffset), // Top-left
+            LatLng(center.latitude + latOffset, center.longitude + lngOffset), // Top-right
+            LatLng(center.latitude - latOffset, center.longitude + lngOffset), // Bottom-right
+            LatLng(center.latitude - latOffset, center.longitude - lngOffset), // Bottom-left
+            LatLng(center.latitude + latOffset, center.longitude - lngOffset)  // Close the polygon
+        )
     }
 
     // --- MAVLink Actions ---
@@ -866,6 +893,8 @@ class SharedViewModel : ViewModel() {
         viewModelScope.launch {
             telemetryState.collect { state ->
                 checkGeofenceViolation(state)
+                // Update geofence polygon when drone position changes (for default square geofence)
+                updateGeofencePolygon()
             }
         }
 

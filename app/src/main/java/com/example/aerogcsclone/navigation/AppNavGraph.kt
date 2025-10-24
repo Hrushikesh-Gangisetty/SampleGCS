@@ -118,7 +118,8 @@ fun AppNavGraph(navController: NavHostController) {
                     telemetryState = telemetryState,
                     authViewModel = authViewModel,
                     navController = navController,
-                    onToggleNotificationPanel = { sharedViewModel.toggleNotificationPanel() }
+                    onToggleNotificationPanel = { sharedViewModel.toggleNotificationPanel() },
+                    telemetryViewModel = sharedViewModel // Added SharedViewModel parameter
                 )
                 MainPage(
                     navController = navController,
