@@ -27,6 +27,11 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
         const val MSG_CALIBRATION_FAILED = "కేలిబ్రేష్ విఫలమైంది" // Calibration failed (note: preserved meaning)
         const val MSG_SELECTED_AUTOMATIC = "ఆటోమేటిక్ ఎంచుకున్నారు" // Selected automatic
         const val MSG_SELECTED_MANUAL = "మాన్యువల్ ఎంచుకున్నారు" // Selected manual
+        const val MSG_DRONE_ARMED = "డ్రోన్ ఆర్మ్ అయింది" // Drone armed
+        const val MSG_DRONE_DISARMED = "డ్రోన్ డిసార్మ్ అయింది" // Drone disarmed
+        const val MSG_COMPASS_CALIBRATION_STARTED = "కంపాస్ కేలిబ్రేషన్ ప్రారంభమైంది" // Compass calibration started
+        const val MSG_COMPASS_CALIBRATION_COMPLETED = "కంపాస్ కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది" // Compass calibration completed successfully
+        const val MSG_COMPASS_CALIBRATION_FAILED = "కంపాస్ కేలిబ్రేషన్ విఫలమైంది" // Compass calibration failed
 
         // --- Shared deduplication state so repeated TTS is suppressed across instances ---
         private val dedupeLock = Any()
@@ -210,6 +215,41 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      */
     fun announceSelectedManual() {
         speak(MSG_SELECTED_MANUAL)
+    }
+
+    /**
+     * Announces drone armed status
+     */
+    fun announceDroneArmed() {
+        speak(MSG_DRONE_ARMED)
+    }
+
+    /**
+     * Announces drone disarmed status
+     */
+    fun announceDroneDisarmed() {
+        speak(MSG_DRONE_DISARMED)
+    }
+
+    /**
+     * Announces compass calibration started
+     */
+    fun announceCompassCalibrationStarted() {
+        speakImmediate(MSG_COMPASS_CALIBRATION_STARTED)
+    }
+
+    /**
+     * Announces compass calibration completed successfully
+     */
+    fun announceCompassCalibrationCompleted() {
+        speak(MSG_COMPASS_CALIBRATION_COMPLETED)
+    }
+
+    /**
+     * Announces compass calibration failed
+     */
+    fun announceCompassCalibrationFailed() {
+        speak(MSG_COMPASS_CALIBRATION_FAILED)
     }
 
     /**
