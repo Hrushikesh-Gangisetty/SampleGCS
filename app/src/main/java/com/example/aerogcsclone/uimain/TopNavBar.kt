@@ -122,6 +122,21 @@ fun TopNavBar(
                                 navController.navigate(Screen.PlotTemplates.route)
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("Reconnect", color = Color.White) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Reconnect",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                telemetryViewModel.connect()
+                            }
+                        )
                     }
                 }
             }
