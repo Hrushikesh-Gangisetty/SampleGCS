@@ -158,7 +158,29 @@ class SharedViewModel : ViewModel() {
 
     @SuppressLint("MissingPermission")
     fun setPairedDevices(devices: Set<BluetoothDevice>) {
-        _pairedDevices.value = devices.map { PairedDevice(it) }
+        // Sort devices: T12_ devices first, then others
+        val sortedDevices = devices.map { PairedDevice(it) }.sortedWith(
+            compareByDescending<PairedDevice> { it.name.startsWith("T12_", ignoreCase = true) }
+                .thenBy { it.name }
+        )
+        _pairedDevices.value = sortedDevices
+    }
+
+    @SuppressLint("MissingPermission")
+    fun refreshPairedDevices(context: Context) {
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+        val bluetoothAdapter = bluetoothManager?.adapter
+        if (bluetoothAdapter != null) {
+            try {
+                val pairedBtDevices = bluetoothAdapter.bondedDevices
+                setPairedDevices(pairedBtDevices)
+                Log.d("SharedVM", "Refreshed ${pairedBtDevices.size} paired Bluetooth devices")
+            } catch (se: SecurityException) {
+                Log.e("SharedVM", "Bluetooth permission missing: ${se.message}")
+            }
+        } else {
+            Log.e("SharedVM", "Bluetooth adapter not available")
+        }
     }
 
     fun onDeviceSelected(device: PairedDevice) {

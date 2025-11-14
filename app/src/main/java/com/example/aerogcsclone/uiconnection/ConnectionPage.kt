@@ -1,9 +1,6 @@
 package com.example.aerogcsclone.uiconnection
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -39,16 +36,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
 
     // When the page is shown, get the paired Bluetooth devices
     LaunchedEffect(Unit) {
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?
-        val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
-        if (bluetoothAdapter != null) {
-            try {
-                val pairedBtDevices = bluetoothAdapter.bondedDevices
-                viewModel.setPairedDevices(pairedBtDevices)
-            } catch (se: SecurityException) {
-                errorMessage = "Bluetooth permission missing."
-            }
-        }
+        viewModel.refreshPairedDevices(context)
     }
 
     // React to connection state changes from the ViewModel
@@ -124,7 +112,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = connectionType.ordinal == index,
-                        onClick = { viewModel.onConnectionTypeChange(ConnectionType.values()[index]) },
+                        onClick = { viewModel.onConnectionTypeChange(ConnectionType.entries[index]) },
                         text = { Text(title, color = Color.White) }
                     )
                 }
@@ -206,6 +194,7 @@ fun TcpConnectionContent(viewModel: SharedViewModel) {
 fun BluetoothConnectionContent(viewModel: SharedViewModel) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val selectedDevice by viewModel.selectedDevice
+    val context = LocalContext.current
 
     if (pairedDevices.isEmpty()) {
         Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
@@ -221,6 +210,19 @@ fun BluetoothConnectionContent(viewModel: SharedViewModel) {
                 )
             }
         }
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    Button(
+        onClick = { viewModel.refreshPairedDevices(context) },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF00796B),
+            contentColor = Color.White
+        )
+    ) {
+        Text("Refresh Devices")
     }
 }
 
