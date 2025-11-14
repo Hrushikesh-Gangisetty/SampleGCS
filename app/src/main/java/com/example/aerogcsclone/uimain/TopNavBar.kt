@@ -153,9 +153,7 @@ fun TopNavBar(
                 contentDescription = "Home",
                 tint = Color.White,
                 modifier = Modifier.clickable {
-                    if (!telemetryState.connected) {
-                        telemetryViewModel.connect()
-                    }
+                    navController.navigate(Screen.SelectMethod.route)
                 }
             )
 
