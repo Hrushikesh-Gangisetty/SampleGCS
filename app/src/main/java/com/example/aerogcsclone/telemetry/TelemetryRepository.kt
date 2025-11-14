@@ -393,7 +393,11 @@ class MavlinkTelemetryRepository(
                         27u -> "Auto_RTL"
                         else -> "Unknown"
                     }
-                    _state.update { it.copy(armed = armed, mode = mode) }
+
+                    // Only update state if mode or armed status actually changed
+                    if (mode != state.value.mode || armed != state.value.armed) {
+                        _state.update { it.copy(armed = armed, mode = mode) }
+                    }
 
                     // Arm/Disarm Notifications
                     if (lastArmed != null && armed != lastArmed) {

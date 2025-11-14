@@ -36,7 +36,6 @@ fun TopNavBar(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
-    var selectedMode by remember { mutableStateOf<String?>(null) } // null by default
     var showGeofenceSlider by remember { mutableStateOf(false) } // Added geofence slider state
 
     // Collect geofence state from viewmodel
@@ -101,7 +100,6 @@ fun TopNavBar(
                                 )
                             },
                             onClick = {
-                                selectedMode = "Plan Mission"
                                 menuExpanded = false
                                 navController.navigate(Screen.Plan.route)
                             }
@@ -117,7 +115,6 @@ fun TopNavBar(
                                 )
                             },
                             onClick = {
-                                selectedMode = "Templates"
                                 menuExpanded = false
                                 navController.navigate(Screen.PlotTemplates.route)
                             }
@@ -159,7 +156,7 @@ fun TopNavBar(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Title & Mode
+            // Title only - flight mode is shown in telemetry section on the right
             Column(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
@@ -172,14 +169,6 @@ fun TopNavBar(
                     fontSize = 25.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                // Show selected mode only if not null
-                selectedMode?.let {
-                    Text(
-                        text = it,
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 15.sp
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
