@@ -183,7 +183,8 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
                 // Announce remote connected on first RC_CHANNELS message
                 if (!firstMessageReceived) {
                     firstMessageReceived = true
-                    sharedViewModel.speak("Remote is connected")
+                    // Speak in Telugu: "Remote is connected"
+                    sharedViewModel.speak("రిమోట్ కనెక్ట్ అయింది")
                     Log.d("RCCalVM", "✓ Remote controller connected - receiving RC_CHANNELS")
                 }
 
@@ -269,7 +270,8 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
             }
 
             // Announce the instruction
-            sharedViewModel.speak(instruction)
+            // Speak the same instruction in Telugu
+            sharedViewModel.speak("అన్ని స్టిక్స్ మరియు స్విచ్‌లను వారి అత్యంత పరిమిత స్థితులకు కదిలించండి")
 
             Log.d("RCCalVM", "✓ Capturing min/max values - move all controls to extremes")
         }
@@ -310,12 +312,16 @@ class RCCalibrationViewModel(private val sharedViewModel: SharedViewModel) : Vie
             _uiState.update {
                 it.copy(
                     calibrationState = RCCalibrationState.CapturingCenter(
-                        "Center all sticks and set throttle to minimum, then click 'Save Calibration'"
+                        // Telugu instruction for center capture
+                        "అన్ని స్టిక్స్‌ను మధ్యస్థితికి తీసుకువెళ్లండి మరియు థ్రాటిల్‌ను కనిష్ట స్థాయికి ఉంచండి; ఆ తర్వాత 'సేవ్ కాలిబ్రేషన్' క్లిక్ చేయండి"
                     ),
                     statusText = "Center sticks and set throttle down...",
                     buttonText = "Save Calibration"
                 )
             }
+
+            // Announce center capture instruction in Telugu
+            sharedViewModel.speak("అన్ని స్టిక్స్‌ను మధ్యస్థితికి తీసుకువెళ్లండి మరియు థ్రాటిల్‌ను కనిష్ట స్థాయికి ఉంచండి")
 
             // Give user time to center sticks
             delay(500)

@@ -92,11 +92,20 @@ class SharedViewModel : ViewModel() {
     }
 
     fun announceIMUPosition(position: String) {
-        ttsManager?.announceIMUPosition(position)
+        // Use the once-per-key announcement to avoid repeated playback when UI triggers multiple events
+        ttsManager?.announceIMUPositionOnce(position)
     }
 
     fun speak(text: String) {
         ttsManager?.speak(text)
+    }
+
+    /**
+     * Reset TTS "spoken keys" so speakOnce can be used again for the same logical keys.
+     * Call this at the start or end of a calibration run to allow announcements to replay.
+     */
+    fun resetTtsSpokenKeys() {
+        ttsManager?.resetAllSpoken()
     }
 
     // --- Area (survey / mission) state ---

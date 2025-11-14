@@ -92,6 +92,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
         }
 
         viewModelScope.launch {
+            // Reset any "spoken once" keys so announcements for this calibration run will play
+            sharedViewModel.resetTtsSpokenKeys()
+
             // Announce calibration started via TTS
             sharedViewModel.announceCalibrationStarted()
 
@@ -287,6 +290,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 }
                 _inCalibration = false
                 stopMessageListeners()
+                // Reset spoken keys so next calibration run can re-announce positions
+                sharedViewModel.resetTtsSpokenKeys()
             }
 
             lower.contains("calibration failed") -> {
@@ -303,6 +308,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 }
                 _inCalibration = false
                 stopMessageListeners()
+                // Reset spoken keys so next calibration run can re-announce positions
+                sharedViewModel.resetTtsSpokenKeys()
             }
 
             // Try to parse position from STATUSTEXT (fallback if FC doesn't send COMMAND_LONG)
@@ -359,6 +366,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
             count = 0
             currentPosition = null
             stopMessageListeners()
+            // Reset spoken keys after cancel so future runs can re-announce
+            sharedViewModel.resetTtsSpokenKeys()
         }
     }
 
@@ -376,6 +385,8 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 buttonText = "Start Calibration"
             )
         }
+        // Reset spoken keys when resetting calibration UI
+        sharedViewModel.resetTtsSpokenKeys()
     }
 
     fun showCancelDialog(show: Boolean) {

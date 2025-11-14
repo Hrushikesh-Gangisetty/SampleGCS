@@ -19,14 +19,27 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
 
         // Voice messages (Telugu)
         const val MSG_CONNECTED = "కనెక్ట్ అయింది" // Connected
-        const val MSG_DISCONNECTED = "డిస్కనెక్ట్ అయింది" // Disconnected
+        const val MSG_DISCONNECTED = "డిస్కనెక్టర్ అయింది" // Disconnected
         const val MSG_CONNECTION_FAILED = "కనెక్షన్ విఫలమైంది" // Connection failed
         const val MSG_CALIBRATION_STARTED = "కేలిబ్రేషన్ ప్రారంభమైంది" // Calibration started
         const val MSG_CALIBRATION_FINISHED = "కేలిబ్రేషన్ ముగిసింది" // Calibration finished
         const val MSG_CALIBRATION_SUCCESS = "కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది" // Calibration completed successfully
-        const val MSG_CALIBRATION_FAILED = "కేలిబ్రేషన్ విఫలమైంది" // Calibration failed
+        const val MSG_CALIBRATION_FAILED = "కేలిబ్రేష్ విఫలమైంది" // Calibration failed (note: preserved meaning)
         const val MSG_SELECTED_AUTOMATIC = "ఆటోమేటిక్ ఎంచుకున్నారు" // Selected automatic
         const val MSG_SELECTED_MANUAL = "మాన్యువల్ ఎంచుకున్నారు" // Selected manual
+
+        // --- Shared deduplication state so repeated TTS is suppressed across instances ---
+        private val dedupeLock = Any()
+        @JvmStatic
+        private var lastSpokenText: String? = null
+        @JvmStatic
+        private var lastSpokenAt: Long = 0L
+        @JvmStatic
+        private val dedupeWindowMillis: Long = 2000L // 2 seconds cooldown for the same message
+
+        // Per-key tracking to guarantee a message is spoken only once per logical key
+        @JvmStatic
+        private val spokenKeys: MutableSet<String> = Collections.synchronizedSet(HashSet())
     }
 
     init {
@@ -45,7 +58,7 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
         if (status == TextToSpeech.SUCCESS) {
             textToSpeech?.let { tts ->
                 // Prefer Telugu locale, fall back to US English if Telugu is not supported
-                val telugu = Locale("te", "IN")
+                val telugu = Locale.forLanguageTag("te-IN")
                 var result = tts.setLanguage(telugu)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                     Log.w(TAG, "Telugu not supported on this device, falling back to US English")
@@ -71,14 +84,78 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
     }
 
     /**
-     * Speaks the given text if TTS is ready
+     * Speaks the given text if TTS is ready. Prevents repeating the exact same message within a short window.
      */
     fun speak(text: String) {
-        if (isReady && textToSpeech != null) {
-            Log.d(TAG, "Speaking: $text")
-            textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, System.currentTimeMillis().toString())
-        } else {
+        // Quick ready check
+        if (!isReady || textToSpeech == null) {
             Log.w(TAG, "TTS not ready or not initialized. Cannot speak: $text")
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        synchronized(dedupeLock) {
+            if (text == lastSpokenText && (now - lastSpokenAt) < dedupeWindowMillis) {
+                // Ignore repeated request within cooldown
+                Log.d(TAG, "Ignoring repeated TTS for: $text")
+                return
+            }
+
+            lastSpokenText = text
+            lastSpokenAt = now
+        }
+
+        Log.d(TAG, "Speaking: $text")
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, System.currentTimeMillis().toString())
+    }
+
+    /**
+     * Speak the given text only once per key. Subsequent calls with the same key will be ignored
+     * until the key is reset via resetSpokenKey or resetAllSpoken.
+     */
+    fun speakOnce(key: String, text: String) {
+        if (!isReady || textToSpeech == null) {
+            Log.w(TAG, "TTS not ready or not initialized. Cannot speak: $text")
+            return
+        }
+
+        synchronized(dedupeLock) {
+            if (spokenKeys.contains(key)) {
+                Log.d(TAG, "speakOnce: already spoken for key=$key")
+                return
+            }
+            spokenKeys.add(key)
+        }
+
+        speak(text)
+    }
+
+    /**
+     * Reset a specific spoken key so speakOnce can be used again for that key.
+     */
+    fun resetSpokenKey(key: String) {
+        synchronized(dedupeLock) {
+            spokenKeys.remove(key)
+        }
+    }
+
+    /**
+     * Clears all spoken keys so speakOnce can be used again for any key.
+     */
+    fun resetAllSpoken() {
+        synchronized(dedupeLock) {
+            spokenKeys.clear()
+        }
+    }
+
+    /**
+     * Allows callers to reset the dedupe state so the same message can be spoken again immediately.
+     * Useful when calibration finishes or different calibration steps should re-announce the same phrase.
+     */
+    fun resetLastSpoken() {
+        synchronized(dedupeLock) {
+            lastSpokenText = null
+            lastSpokenAt = 0L
         }
     }
 
@@ -94,7 +171,9 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      * Announces calibration started
      */
     fun announceCalibrationStarted() {
-        speak(MSG_CALIBRATION_STARTED)
+        // Use immediate speak for calibration start to guarantee audible feedback even if dedupe
+        // would otherwise suppress it (e.g., UI pressed multiple times).
+        speakImmediate(MSG_CALIBRATION_STARTED)
     }
 
     /**
@@ -138,7 +217,8 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      */
     fun announceCalibration(calibrationType: String) {
         // Speak in Telugu: append the translated word for "calibration" (కేలిబ్రేషన్)
-        speak("$calibrationType కేలిబ్రేషన్")
+        // Use grammatically correct Telugu: "<type> కేలిబ్రేషన్ ప్రారంభమైంది"
+        speak("$calibrationType కేలిబ్రేషన్ ప్రారంభమైంది")
     }
 
     /**
@@ -147,17 +227,38 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      */
     fun announceIMUPosition(position: String) {
         val spokenText = when (position.uppercase(Locale.US)) {
-            "LEVEL" -> "సమంగా" // Level
+            "LEVEL" -> "అన్ని వైపులా సమానంగా పెంటండి" // Level
             "LEFT" -> "ఎడమ" // Left
             "RIGHT" -> "కుడి" // Right
-            "NOSEDOWN", "NOSE_DOWN" -> "నోస్ దిగింది" // Nose down
-            "NOSEUP", "NOSE_UP" -> "నోస్ పైకి" // Nose up
-            "BACK" -> "తిరగబడిన స్థితి" // Inverted down/back
+            "NOSEDOWN", "NOSE_DOWN" -> "నోస్ కిందకి పెంటండి" // Nose down
+            "NOSEUP", "NOSE_UP" -> "నోస్ పైకి పెంటండి" // Nose up
+            "BACK" -> "వెనక్కి తిప్పండి" // Inverted down/back
             else -> position.replace("_", " ")
                 .lowercase(Locale.US)
                 .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
         }
         speak(spokenText)
+    }
+
+    /**
+     * Announces IMU calibration position only once per position key.
+     * Useful to avoid repeated announcements when user clicks Next/Start multiple times.
+     */
+    fun announceIMUPositionOnce(position: String) {
+        val spokenText = when (position.uppercase(Locale.US)) {
+            "LEVEL" -> "అన్ని వైపులా సమానంగా పెంటండి" // Level
+            "LEFT" -> "ఎడమ వైపు పెంటండి " // Left
+            "RIGHT" -> "కుడి వైపు పెంటండి" // Right
+            "NOSEDOWN", "NOSE_DOWN" -> "నోస్ కిందకి పెంటండి" // Nose down
+            "NOSEUP", "NOSE_UP" -> "నోస్ పైకి పెంటండి" // Nose up
+            "BACK" -> "వెనక్కి తిప్పండి" // Inverted down/back
+            else -> position.replace("_", " ")
+                .lowercase(Locale.US)
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        }
+        // Use a stable key per position so repeated UI actions won't replay the same phrase
+        val key = "IMU_POS_${position.uppercase(Locale.US)}"
+        speakOnce(key, spokenText)
     }
 
     /**
@@ -182,4 +283,31 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      * Checks if TTS is ready to use
      */
     fun isReady(): Boolean = isReady
+
+    /**
+     * Speak immediately bypassing the time-based and key-based dedupe logic.
+     * This still updates the dedupe state so subsequent calls in the short cooldown
+     * won't cause another immediate playback.
+     */
+    fun speakImmediate(text: String) {
+        if (!isReady || textToSpeech == null) {
+            Log.w(TAG, "TTS not ready or not initialized. Cannot speak immediate: $text")
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        // Update dedupe state to reflect this utterance, so normal speak() won't replay it
+        synchronized(dedupeLock) {
+            lastSpokenText = text
+            lastSpokenAt = now
+            // Also mark a generic spoken key so speakOnce won't replay same logical key
+            try {
+                spokenKeys.add(text)
+            } catch (_: Exception) {
+            }
+        }
+
+        Log.d(TAG, "Speaking immediately: $text")
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, System.currentTimeMillis().toString())
+    }
 }
