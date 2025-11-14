@@ -134,7 +134,11 @@ fun TopNavBar(
                             },
                             onClick = {
                                 menuExpanded = false
-                                telemetryViewModel.connect()
+                                if (telemetryState.connected) {
+                                    telemetryViewModel.connect()
+                                } else {
+                                    navController.navigate(Screen.Connection.route)
+                                }
                             }
                         )
                     }
