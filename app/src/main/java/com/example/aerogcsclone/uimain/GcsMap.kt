@@ -2,6 +2,7 @@ package com.example.aerogcsclone.uimain
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,8 +13,45 @@ import com.example.aerogcsclone.R
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.maps.android.compose.*
+
+// Helper function to create medium-sized marker icons for waypoints
+private fun createMediumMarker(hue: Float): BitmapDescriptor {
+    // Create a medium-sized bitmap (50% of original marker size)
+    val scale = 0.5f
+    val width = (64 * scale).toInt() // Default marker is ~64px
+    val height = (64 * scale).toInt()
+
+    // Create a medium-sized colored circle as marker
+    val mediumBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(mediumBitmap)
+
+    // Draw a medium-sized colored circle
+    val paint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = when (hue) {
+            BitmapDescriptorFactory.HUE_AZURE -> android.graphics.Color.CYAN
+            BitmapDescriptorFactory.HUE_VIOLET -> android.graphics.Color.MAGENTA
+            BitmapDescriptorFactory.HUE_GREEN -> android.graphics.Color.GREEN
+            BitmapDescriptorFactory.HUE_RED -> android.graphics.Color.RED
+            BitmapDescriptorFactory.HUE_ORANGE -> android.graphics.Color.rgb(255, 165, 0)
+            else -> android.graphics.Color.BLUE
+        }
+        style = android.graphics.Paint.Style.FILL
+    }
+
+    canvas.drawCircle(width / 2f, height / 2f, width / 2f - 1, paint)
+
+    // Add a border for visibility
+    paint.style = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 2f
+    paint.color = android.graphics.Color.WHITE
+    canvas.drawCircle(width / 2f, height / 2f, width / 2f - 2, paint)
+
+    return BitmapDescriptorFactory.fromBitmap(mediumBitmap)
+}
 
 @Composable
 fun GcsMap(
@@ -47,6 +85,13 @@ fun GcsMap(
             BitmapDescriptorFactory.fromBitmap(scaled)
         }.getOrNull()
     }
+
+    // Create medium-sized marker icons for waypoints (50% of default size)
+    val mediumBlueMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_AZURE) }
+    val mediumVioletMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_VIOLET) }
+    val mediumGreenMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_GREEN) }
+    val mediumRedMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_RED) }
+    val mediumOrangeMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_ORANGE) }
 
     val lat = telemetryState.latitude
     val lon = telemetryState.longitude
@@ -111,7 +156,12 @@ fun GcsMap(
         // Regular waypoint markers and planned route (blue)
         if (points.isNotEmpty() && surveyPolygon.isEmpty()) {
             points.forEachIndexed { index, point ->
-                Marker(state = MarkerState(position = point), title = "WP ${index + 1}")
+                Marker(
+                    state = MarkerState(position = point),
+                    title = "WP ${index + 1}",
+                    icon = mediumBlueMarker,
+                    anchor = Offset(0.5f, 0.5f)
+                )
             }
             if (points.size > 1) {
                 key(points) {
@@ -126,7 +176,8 @@ fun GcsMap(
                 Marker(
                     state = MarkerState(position = point),
                     title = "P${index + 1}",
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)
+                    icon = mediumVioletMarker,
+                    anchor = Offset(0.5f, 0.5f)
                 )
             }
 
@@ -156,9 +207,9 @@ fun GcsMap(
                 val isFirst = index == 0
                 val isLast = index == gridWaypoints.lastIndex
                 val (title, color) = when {
-                    isFirst -> "S" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                    isLast -> "E" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
-                    else -> "G${index + 1}" to BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                    isFirst -> "S" to mediumGreenMarker
+                    isLast -> "E" to mediumRedMarker
+                    else -> "G${index + 1}" to mediumOrangeMarker
                 }
                 Marker(
                     state = MarkerState(position = waypoint),
