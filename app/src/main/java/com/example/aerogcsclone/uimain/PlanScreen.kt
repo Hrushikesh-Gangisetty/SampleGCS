@@ -53,7 +53,7 @@ fun PlanScreen(
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val geofencePolygon by telemetryViewModel.geofencePolygon.collectAsState()
     val context = LocalContext.current
-
+    val uploadProgress by telemetryViewModel.missionUploadProgress.collectAsState()
 
     // State management
     var isGridSurveyMode by remember { mutableStateOf(false) }
@@ -927,84 +927,86 @@ fun PlanScreen(
         }
     }
 
-    // Dialogs
-    if (showMissionChoiceDialog && !hasStartedPlanning) {
-        MissionChoiceDialog(
-            onDismiss = {
-                showMissionChoiceDialog = false
-                hasStartedPlanning = true
-            },
-            onLoadExisting = {
-                showMissionChoiceDialog = false
-                showTemplateSelectionDialog = true
-            },
-            onCreateNew = {
-                showMissionChoiceDialog = false
-                hasStartedPlanning = true
-            },
-            hasTemplates = templates.isNotEmpty()
-        )
-    }
-
-    if (showTemplateSelectionDialog) {
-        TemplateSelectionDialog(
-            templates = templates,
-            onDismiss = {
-                showTemplateSelectionDialog = false
-                hasStartedPlanning = true
-            },
-            onSelectTemplate = { template ->
-                showTemplateSelectionDialog = false
-                hasStartedPlanning = true
-                missionTemplateViewModel.loadTemplate(template.id)
-            },
-            isLoading = missionTemplateUiState.isLoading
-        )
-    }
-
-    if (showSaveMissionDialog) {
-        SaveMissionDialog(
-            onDismiss = { showSaveMissionDialog = false },
-            onSave = { projectName, plotName ->
-                val currentGridParams = if (isGridSurveyMode) {
-                    GridParameters(
-                        lineSpacing = lineSpacing,
-                        gridAngle = gridAngle,
-                        surveySpeed = surveySpeed,
-                        surveyAltitude = surveyAltitude,
-                        surveyPolygon = surveyPolygon
-                    )
-                } else null
-
-                val waypointsToSave = if (isGridSurveyMode && gridResult != null) {
-                    gridResult!!.waypoints.mapIndexed { index, gridWaypoint ->
-                        buildMissionItemFromLatLng(
-                            gridWaypoint.position,
-                            index,
-                            index == 0,
-                            gridWaypoint.altitude
-                        )
-                    }
-                } else {
-                    waypoints.toList()
-                }
-
-                val positionsToSave = if (isGridSurveyMode && gridResult != null) {
-                    gridResult!!.waypoints.map { it.position }
-                } else {
-                    points.toList()
-                }
-
-                missionTemplateViewModel.saveTemplate(
-                    projectName = projectName,
-                    plotName = plotName,
-                    waypoints = waypointsToSave,
-                    waypointPositions = positionsToSave,
-                    isGridSurvey = isGridSurveyMode,
-                    gridParameters = currentGridParams
+    // Mission Upload Progress Dialog
+    uploadProgress?.let { progress ->
+        AlertDialog(
+            onDismissRequest = { /* Prevent dismissing during upload */ },
+            title = {
+                Text(
+                    text = "Uploading Mission",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
             },
-            isLoading = missionTemplateUiState.isLoading
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Stage indicator
+                    Text(
+                        text = progress.stage,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = when (progress.stage) {
+                            "Complete" -> Color.Green
+                            "Failed", "Error" -> Color.Red
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                    )
+
+                    // Progress bar
+                    LinearProgressIndicator(
+                        progress = progress.percentage / 100f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                        color = when (progress.stage) {
+                            "Complete" -> Color.Green
+                            "Failed", "Error" -> Color.Red
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                    )
+
+                    // Progress text
+                    Text(
+                        text = "${progress.percentage}%",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Current item / total items
+                    Text(
+                        text = "${progress.currentItem} / ${progress.totalItems} waypoints",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Progress message
+                    Text(
+                        text = progress.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    // Loading indicator (except for Complete/Failed/Error)
+                    if (progress.stage !in listOf("Complete", "Failed", "Error")) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .padding(top = 8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                // No confirm button during upload
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
