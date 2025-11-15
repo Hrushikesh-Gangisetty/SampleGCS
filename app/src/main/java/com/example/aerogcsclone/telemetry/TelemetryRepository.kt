@@ -766,8 +766,22 @@ class MavlinkTelemetryRepository(
         // Validate target IDs are set
         val invalidItems = missionItems.filter { it.targetSystem == 0u.toUByte() || it.targetComponent == 0u.toUByte() }
         if (invalidItems.isNotEmpty()) {
-            Log.w("MavlinkRepo", "[Mission Upload] Warning: ${invalidItems.size} mission items have targetSystem/Component set to 0")
-            Log.w("MavlinkRepo", "[Mission Upload] This may cause issues on real hardware. FCU IDs should be: sys=$fcuSystemId comp=$fcuComponentId")
+            Log.e("MavlinkRepo", "[Mission Upload] ERROR: ${invalidItems.size} mission items have targetSystem/Component set to 0!")
+            Log.e("MavlinkRepo", "[Mission Upload] This WILL fail on real hardware. Correcting to: sys=$fcuSystemId comp=$fcuComponentId")
+            
+            // Fix mission items by setting correct IDs
+            val correctedMissionItems = missionItems.map { item ->
+                if (item.targetSystem == 0u.toUByte() || item.targetComponent == 0u.toUByte()) {
+                    item.copy(
+                        targetSystem = fcuSystemId,
+                        targetComponent = fcuComponentId
+                    )
+                } else {
+                    item
+                }
+            }
+            // Use corrected items for the rest of the function
+            return uploadMissionWithAck(correctedMissionItems, timeoutMs)
         }
 
         // Log mission structure for debugging
@@ -926,7 +940,7 @@ class MavlinkTelemetryRepository(
             }
 
             // Wait a short period for first request; if none, fallback to sending all items
-            val firstRequestTimeout = 10000L
+            val firstRequestTimeout = 15000L  // Increased for telemetry radio links
             val startWait = System.currentTimeMillis()
             while (!firstRequestReceived && !ackDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
                 delay(100)

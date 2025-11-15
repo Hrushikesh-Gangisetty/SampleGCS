@@ -392,6 +392,15 @@ fun PlanScreen(
                                 val currentHeading = telemetryState.heading ?: 0f
                                 val fcuSystemId = telemetryViewModel.getFcuSystemId()
                                 val fcuComponentId = telemetryViewModel.getFcuComponentId()
+                                
+                                // Validate FCU detection before proceeding
+                                if (fcuSystemId == 0u.toUByte() || fcuComponentId == 0u.toUByte()) {
+                                    Toast.makeText(context, "FCU not properly detected. System ID: $fcuSystemId, Component ID: $fcuComponentId", Toast.LENGTH_LONG).show()
+                                    Log.e("PlanScreen", "Cannot upload mission: FCU not properly detected")
+                                    return@ElevatedButton
+                                }
+                                Log.i("PlanScreen", "Building mission for FCU sys=$fcuSystemId comp=$fcuComponentId")
+                                
                                 val builtMission = GridMissionConverter.convertToMissionItems(
                                     gridResult = gridResult!!,
                                     homePosition = homePosition,
@@ -429,6 +438,14 @@ fun PlanScreen(
                                  val homeAlt = telemetryState.altitudeMsl ?: 10f
                                  val fcuSystemId = telemetryViewModel.getFcuSystemId()
                                  val fcuComponentId = telemetryViewModel.getFcuComponentId()
+
+                                // Validate FCU detection before proceeding
+                                if (fcuSystemId == 0u.toUByte() || fcuComponentId == 0u.toUByte()) {
+                                    Toast.makeText(context, "FCU not properly detected. System ID: $fcuSystemId, Component ID: $fcuComponentId", Toast.LENGTH_LONG).show()
+                                    Log.e("PlanScreen", "Cannot upload mission: FCU not properly detected")
+                                    return@ElevatedButton
+                                }
+                                Log.i("PlanScreen", "Building mission for FCU sys=$fcuSystemId comp=$fcuComponentId")
 
                                 // Add home location as first waypoint
                                 builtMission.add(

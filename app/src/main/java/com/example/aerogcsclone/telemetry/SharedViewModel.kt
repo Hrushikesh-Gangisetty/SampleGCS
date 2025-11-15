@@ -718,6 +718,18 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
+                // Validate FCU is properly detected with valid IDs
+                if (repo?.fcuSystemId == 0u.toUByte() || repo?.fcuComponentId == 0u.toUByte()) {
+                    Log.e("SharedVM", "FCU system/component ID not properly detected! sys=${repo?.fcuSystemId} comp=${repo?.fcuComponentId}")
+                    _missionUploaded.value = false
+                    lastUploadedCount = 0
+                    onResult(false, "FCU not properly detected. Please reconnect and try again.")
+                    return@launch
+                }
+
+                // Log FCU IDs for debugging
+                Log.i("SharedVM", "Uploading to FCU: sys=${repo?.fcuSystemId} comp=${repo?.fcuComponentId}")
+
                 Log.i("SharedVM", "Starting mission upload to FCU...")
                 val success = repo?.uploadMissionWithAck(missionItems) ?: false
                 _missionUploaded.value = success
