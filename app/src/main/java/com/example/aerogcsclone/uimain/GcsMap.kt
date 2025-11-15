@@ -68,7 +68,9 @@ fun GcsMap(
     heading: Float? = null,
     // Geofence parameters - now using polygon instead of circle
     geofencePolygon: List<LatLng> = emptyList(),
-    geofenceEnabled: Boolean = false
+    geofenceEnabled: Boolean = false,
+    // Waypoint drag callback
+    onWaypointDrag: (index: Int, newPosition: LatLng) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -156,11 +158,25 @@ fun GcsMap(
         // Regular waypoint markers and planned route (blue)
         if (points.isNotEmpty() && surveyPolygon.isEmpty()) {
             points.forEachIndexed { index, point ->
+                val markerState = rememberMarkerState(position = point)
+
+                // Listen to marker position changes for drag events
+                LaunchedEffect(markerState.position, point) {
+                    if (markerState.position != point) {
+                        onWaypointDrag(index, markerState.position)
+                    }
+                }
+
                 Marker(
-                    state = MarkerState(position = point),
+                    state = markerState,
                     title = "WP ${index + 1}",
                     icon = mediumBlueMarker,
-                    anchor = Offset(0.5f, 0.5f)
+                    anchor = Offset(0.5f, 0.5f),
+                    draggable = true,  // Enable dragging
+                    onClick = {
+                        // Marker clicked, can be dragged now
+                        true
+                    }
                 )
             }
             if (points.size > 1) {

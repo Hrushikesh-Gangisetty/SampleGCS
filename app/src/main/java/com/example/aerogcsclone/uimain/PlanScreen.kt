@@ -206,31 +206,15 @@ fun PlanScreen(
     // Map click handler
     val onMapClick: (LatLng) -> Unit = { latLng ->
         if (isGridSurveyMode) {
+            // Grid mode: clicking on map adds polygon points
             surveyPolygon = surveyPolygon + latLng
             if (surveyPolygon.size >= 3) {
                 regenerateGrid()
             }
         } else {
-            val seq = waypoints.size
-            val isTakeoff = seq == 0
-            val item = buildMissionItemFromLatLng(latLng, seq, isTakeoff)
-            points.add(latLng)
-            waypoints.add(item)
-            Toast.makeText(context, "Waypoints: ${points.joinToString { "(${it.latitude},${it.longitude})" }}", Toast.LENGTH_SHORT).show()
-
-            // Previously we updated SharedViewModel planning waypoints here which caused the planned
-            // mission to be displayed across the app immediately. Remove that so the mission stays
-            // local to the Plan screen until the user explicitly uploads it.
-
-            // Recompute local geofence polygon for waypoint planning preview
-            if (geofenceEnabled) {
-                if (points.isNotEmpty()) {
-                    val bufferDistance = fenceRadius.toDouble()
-                    localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), bufferDistance)
-                } else {
-                    localGeofencePolygon = emptyList()
-                }
-            }
+            // Regular waypoint mode: Disable map click for adding waypoints
+            // User must use "Add Point" button instead
+            // Map click does nothing in waypoint mode now
         }
     }
 
@@ -293,7 +277,28 @@ fun PlanScreen(
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
                 // Use local geofence preview while planning; otherwise use the shared geofence
                 geofencePolygon = if (hasStartedPlanning) localGeofencePolygon else geofencePolygon,
-                geofenceEnabled = geofenceEnabled
+                geofenceEnabled = geofenceEnabled,
+                // Handle waypoint dragging
+                onWaypointDrag = { index, newPosition ->
+                    if (index in points.indices) {
+                        // Update the waypoint position
+                        points[index] = newPosition
+                        // Update the mission item
+                        val updatedItem = waypoints[index].copy(
+                            x = (newPosition.latitude * 1E7).toInt(),
+                            y = (newPosition.longitude * 1E7).toInt()
+                        )
+                        waypoints[index] = updatedItem
+
+                        // Update local geofence if enabled
+                        if (geofenceEnabled && points.isNotEmpty()) {
+                            localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(
+                                points.toList(),
+                                fenceRadius.toDouble()
+                            )
+                        }
+                    }
+                }
             )
 
             // Status indicator
