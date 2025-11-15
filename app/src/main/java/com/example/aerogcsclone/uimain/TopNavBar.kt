@@ -177,6 +177,14 @@ fun TopNavBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ConnectionStatusWidget(isConnected = telemetryState.connected)
                 DividerBlock()
+                // Spray icon
+                Icon(
+                    Icons.Default.Shower,
+                    contentDescription = "Spray",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                DividerBlock()
                 // Clickable geofence icon
                 Column(
                     modifier = Modifier
