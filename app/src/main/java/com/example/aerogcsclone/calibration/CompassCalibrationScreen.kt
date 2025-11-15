@@ -902,7 +902,7 @@ private fun CompassCalibrationActions(
             }
             is CompassCalibrationState.Starting,
             is CompassCalibrationState.InProgress -> {
-                // Start button is disabled, Accept and Cancel are both enabled during calibration
+                // Start button is disabled, Accept is only enabled when calibration completes, Cancel is enabled
                 Button(
                     onClick = onStart,
                     enabled = false,
@@ -924,7 +924,7 @@ private fun CompassCalibrationActions(
 
                 Button(
                     onClick = onAccept,
-                    enabled = true,  // Changed: Always enabled during calibration
+                    enabled = calibrationComplete,  // Only enabled when calibration is complete
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF4CAF50),
