@@ -390,11 +390,15 @@ fun PlanScreen(
                                 val homeLon = telemetryState.longitude ?: 0.0
                                 val homePosition = LatLng(homeLat, homeLon)
                                 val currentHeading = telemetryState.heading ?: 0f
+                                val fcuSystemId = telemetryViewModel.getFcuSystemId()
+                                val fcuComponentId = telemetryViewModel.getFcuComponentId()
                                 val builtMission = GridMissionConverter.convertToMissionItems(
                                     gridResult = gridResult!!,
                                     homePosition = homePosition,
                                     holdNosePosition = holdNosePosition,
-                                    initialYaw = currentHeading
+                                    initialYaw = currentHeading,
+                                    fcuSystemId = fcuSystemId,
+                                    fcuComponentId = fcuComponentId
                                 )
 
                                 telemetryViewModel.uploadMission(builtMission) { success, error ->
@@ -423,11 +427,13 @@ fun PlanScreen(
                                  val homeLat = telemetryState.latitude ?: 0.0
                                  val homeLon = telemetryState.longitude ?: 0.0
                                  val homeAlt = telemetryState.altitudeMsl ?: 10f
+                                 val fcuSystemId = telemetryViewModel.getFcuSystemId()
+                                 val fcuComponentId = telemetryViewModel.getFcuComponentId()
 
                                 // Add home location as first waypoint
                                 builtMission.add(
                                     MissionItemInt(
-                                        targetSystem = 0u, targetComponent = 0u, seq = 0u,
+                                        targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = 0u,
                                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                         command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
                                         current = 1u, autocontinue = 1u,
@@ -439,7 +445,7 @@ fun PlanScreen(
                                 // Add takeoff command as second waypoint
                                 builtMission.add(
                                     MissionItemInt(
-                                        targetSystem = 0u, targetComponent = 0u, seq = 1u,
+                                        targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = 1u,
                                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                         command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
                                         current = 0u, autocontinue = 1u,
@@ -454,7 +460,7 @@ fun PlanScreen(
                                     val isLast = idx == points.lastIndex
                                     builtMission.add(
                                         MissionItemInt(
-                                            targetSystem = 0u, targetComponent = 0u, seq = seq.toUShort(),
+                                            targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = seq.toUShort(),
                                             frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                             command = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
                                             current = 0u, autocontinue = 1u,

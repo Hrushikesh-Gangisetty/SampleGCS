@@ -15,21 +15,25 @@ object GridMissionConverter {
      * @param homePosition Home position for mission
      * @param holdNosePosition If true, adds MAV_CMD_CONDITION_YAW to maintain yaw throughout mission
      * @param initialYaw Initial yaw angle in degrees (0-360, 0=North, 90=East)
+     * @param fcuSystemId Target FCU system ID (defaults to 0 for compatibility)
+     * @param fcuComponentId Target FCU component ID (defaults to 0 for compatibility)
      * @return List of MAVLink MissionItemInt objects
      */
     fun convertToMissionItems(
         gridResult: GridSurveyResult,
         homePosition: LatLng,
         holdNosePosition: Boolean = false,
-        initialYaw: Float = 0f
+        initialYaw: Float = 0f,
+        fcuSystemId: UByte = 0u,
+        fcuComponentId: UByte = 0u
     ): List<MissionItemInt> {
         val missionItems = mutableListOf<MissionItemInt>()
 
         // Sequence 0: Home position as NAV_WAYPOINT
         missionItems.add(
             MissionItemInt(
-                targetSystem = 0u,
-                targetComponent = 0u,
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
                 seq = 0u,
                 frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                 command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
@@ -48,8 +52,8 @@ object GridMissionConverter {
         // Sequence 1: Takeoff at home position
         missionItems.add(
             MissionItemInt(
-                targetSystem = 0u,
-                targetComponent = 0u,
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
                 seq = 1u,
                 frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                 command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
@@ -72,8 +76,8 @@ object GridMissionConverter {
         if (holdNosePosition) {
             missionItems.add(
                 MissionItemInt(
-                    targetSystem = 0u,
-                    targetComponent = 0u,
+                    targetSystem = fcuSystemId,
+                    targetComponent = fcuComponentId,
                     seq = sequenceNumber.toUShort(),
                     frame = MavEnumValue.of(MavFrame.MISSION),
                     command = MavEnumValue.of(MavCmd.CONDITION_YAW),
@@ -101,8 +105,8 @@ object GridMissionConverter {
             if (isFirstWaypoint && waypoint.speed != null) {
                 missionItems.add(
                     MissionItemInt(
-                        targetSystem = 0u,
-                        targetComponent = 0u,
+                        targetSystem = fcuSystemId,
+                        targetComponent = fcuComponentId,
                         seq = sequenceNumber.toUShort(),
                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                         command = MavEnumValue.of(MavCmd.DO_CHANGE_SPEED),
@@ -125,8 +129,8 @@ object GridMissionConverter {
             else if (!isFirstWaypoint && waypoint.isLineStart && waypoint.speed != null && waypoint.lineIndex != lastLineIndex) {
                 missionItems.add(
                     MissionItemInt(
-                        targetSystem = 0u,
-                        targetComponent = 0u,
+                        targetSystem = fcuSystemId,
+                        targetComponent = fcuComponentId,
                         seq = sequenceNumber.toUShort(),
                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                         command = MavEnumValue.of(MavCmd.DO_CHANGE_SPEED),
@@ -148,8 +152,8 @@ object GridMissionConverter {
             // Add the actual waypoint
             missionItems.add(
                 MissionItemInt(
-                    targetSystem = 0u,
-                    targetComponent = 0u,
+                    targetSystem = fcuSystemId,
+                    targetComponent = fcuComponentId,
                     seq = sequenceNumber.toUShort(),
                     frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                     command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
@@ -174,8 +178,8 @@ object GridMissionConverter {
         // Add RTL (Return to Launch) at the end
         missionItems.add(
             MissionItemInt(
-                targetSystem = 0u,
-                targetComponent = 0u,
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
                 seq = sequenceNumber.toUShort(),
                 frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                 command = MavEnumValue.of(MavCmd.NAV_RETURN_TO_LAUNCH),
