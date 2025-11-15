@@ -746,7 +746,7 @@ class MavlinkTelemetryRepository(
      * Returns true if ACK received, false otherwise.
      */
     @Suppress("DEPRECATION")
-    suspend fun uploadMissionWithAck(missionItems: List<MissionItemInt>, timeoutMs: Long = 15000): Boolean {
+    suspend fun uploadMissionWithAck(missionItems: List<MissionItemInt>, timeoutMs: Long = 35000): Boolean {
         if (!state.value.fcuDetected) {
             Log.e("MavlinkRepo", "FCU not detected, cannot upload mission")
             throw IllegalStateException("FCU not detected")
@@ -756,29 +756,71 @@ class MavlinkTelemetryRepository(
             return false
         }
 
+        // Validate sequence numbering
+        val sequences = missionItems.map { it.seq.toInt() }.sorted()
+        val expectedSequences = (0 until missionItems.size).toList()
+        if (sequences != expectedSequences) {
+            Log.e("MavlinkRepo", "[Mission Upload] Invalid sequence numbering detected!")
+            Log.e("MavlinkRepo", "Expected: $expectedSequences")
+            Log.e("MavlinkRepo", "Got: $sequences")
+            throw IllegalStateException("Invalid mission sequence: gaps or duplicates detected")
+        }
+
+        // Validate target IDs are set
+        val invalidItems = missionItems.filter { it.targetSystem == 0u.toUByte() || it.targetComponent == 0u.toUByte() }
+        if (invalidItems.isNotEmpty()) {
+            Log.w("MavlinkRepo", "[Mission Upload] Warning: ${invalidItems.size} mission items have targetSystem/Component set to 0")
+            Log.w("MavlinkRepo", "[Mission Upload] This may cause issues on real hardware. FCU IDs should be: sys=$fcuSystemId comp=$fcuComponentId")
+        }
+
+        // Log mission structure for debugging
+        Log.i("MavlinkRepo", "[Mission Upload] Mission structure:")
+        missionItems.forEachIndexed { idx, item ->
+            Log.i("MavlinkRepo", "  [$idx] seq=${item.seq} cmd=${item.command.value} current=${item.current} " +
+                    "target=${item.targetSystem}/${item.targetComponent} " +
+                    "pos=${item.x / 1e7},${item.y / 1e7},${item.z}")
+        }
+
         try {
-            // Step 0: Clear previous mission
+            // Step 0: Clear previous mission with retry logic
             Log.i("MavlinkRepo", "[Mission Upload] Sending MISSION_CLEAR_ALL...")
-            val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
-            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
-            // Wait for COMMAND_ACK for MISSION_CLEAR_ALL
-            val clearAckDeferred = CompletableDeferred<Boolean>()
-            val clearJob = AppScope.launch {
-                connection.mavFrame
-                    .filter { it.systemId == fcuSystemId }
-                    .map { it.message }
-                    .filterIsInstance<CommandAck>()
-                    .collect { ack ->
-                        if (ack.command.value == MISSION_CLEAR_ALL_CMD && ack.result.value == MavResult.ACCEPTED.value) {
-                            Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL acknowledged by FCU")
-                            clearAckDeferred.complete(true)
+            var clearAck = false
+            val maxClearAttempts = 3
+            
+            for (attempt in 1..maxClearAttempts) {
+                Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL attempt $attempt/$maxClearAttempts")
+                val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
+                
+                // Wait for COMMAND_ACK for MISSION_CLEAR_ALL
+                val clearAckDeferred = CompletableDeferred<Boolean>()
+                val clearJob = AppScope.launch {
+                    connection.mavFrame
+                        .filter { it.systemId == fcuSystemId }
+                        .map { it.message }
+                        .filterIsInstance<CommandAck>()
+                        .collect { ack ->
+                            if (ack.command.value == MISSION_CLEAR_ALL_CMD && ack.result.value == MavResult.ACCEPTED.value) {
+                                Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL acknowledged by FCU")
+                                clearAckDeferred.complete(true)
+                            }
                         }
-                    }
+                }
+                clearAck = withTimeoutOrNull(5000L) { clearAckDeferred.await() } ?: false
+                clearJob.cancel()
+                
+                if (clearAck) {
+                    Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL successful on attempt $attempt")
+                    break
+                } else if (attempt < maxClearAttempts) {
+                    Log.w("MavlinkRepo", "[Mission Upload] No ACK for MISSION_CLEAR_ALL on attempt $attempt, retrying...")
+                    delay(1000L) // Wait 1 second before retry
+                }
             }
-            val clearAck = withTimeoutOrNull(3000L) { clearAckDeferred.await() } ?: false
-            clearJob.cancel()
+            
             if (!clearAck) {
-                Log.w("MavlinkRepo", "[Mission Upload] No ACK for MISSION_CLEAR_ALL; proceeding anyway")
+                Log.e("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL failed after $maxClearAttempts attempts")
+                return false
             }
 
             Log.i("MavlinkRepo", "[Mission Upload] Starting upload of ${missionItems.size} items...")
@@ -797,14 +839,17 @@ class MavlinkTelemetryRepository(
 
             // Resend MISSION_COUNT periodically until first request or timeout
             val resendJob = AppScope.launch {
-                while (isActive && !firstRequestReceived && !ackDeferred.isCompleted) {
+                var resendCount = 0
+                val maxResendAttempts = 6
+                while (isActive && !firstRequestReceived && !ackDeferred.isCompleted && resendCount < maxResendAttempts) {
                     try {
                         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
-                        Log.d("MavlinkRepo", "Resent MISSION_COUNT")
+                        resendCount++
+                        Log.d("MavlinkRepo", "Resent MISSION_COUNT (attempt $resendCount/$maxResendAttempts)")
                     } catch (e: Exception) {
                         Log.e("MavlinkRepo", "Failed to resend MISSION_COUNT", e)
                     }
-                    delay(700)
+                    delay(1000)
                 }
             }
 
@@ -874,7 +919,7 @@ class MavlinkTelemetryRepository(
             }
 
             // Wait a short period for first request; if none, fallback to sending all items
-            val firstRequestTimeout = 5000L
+            val firstRequestTimeout = 8000L
             val startWait = System.currentTimeMillis()
             while (!firstRequestReceived && !ackDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
                 delay(100)

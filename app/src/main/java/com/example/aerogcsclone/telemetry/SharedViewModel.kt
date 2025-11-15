@@ -900,6 +900,10 @@ class SharedViewModel : ViewModel() {
         }
     }
 
+    // Expose FCU system and component IDs for mission building
+    fun getFcuSystemId(): UByte = repo?.fcuSystemId ?: 0u
+    fun getFcuComponentId(): UByte = repo?.fcuComponentId ?: 0u
+
     suspend fun cancelConnection() {
         repo?.let {
             try {
