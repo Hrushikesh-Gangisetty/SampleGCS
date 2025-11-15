@@ -62,9 +62,6 @@ class MavlinkTelemetryRepository(
     private val lastFcuHeartbeatTime = AtomicLong(0L)
     private val HEARTBEAT_TIMEOUT_MS = 3000L // 3 seconds timeout
 
-    // MAVLink command value for MISSION_CLEAR_ALL
-    private val MISSION_CLEAR_ALL_CMD: UInt = 45u
-
     // For total distance tracking
     private val positionHistory = mutableListOf<Pair<Double, Double>>()
     private var totalDistanceMeters: Float = 0f
@@ -792,15 +789,16 @@ class MavlinkTelemetryRepository(
                 val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
                 connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
                 
-                // Wait for COMMAND_ACK for MISSION_CLEAR_ALL
+                // Wait for MISSION_ACK for MISSION_CLEAR_ALL (not COMMAND_ACK)
                 val clearAckDeferred = CompletableDeferred<Boolean>()
                 val clearJob = AppScope.launch {
                     connection.mavFrame
                         .filter { it.systemId == fcuSystemId }
                         .map { it.message }
-                        .filterIsInstance<CommandAck>()
+                        .filterIsInstance<MissionAck>()
                         .collect { ack ->
-                            if (ack.command.value == MISSION_CLEAR_ALL_CMD && ack.result.value == MavResult.ACCEPTED.value) {
+                            Log.i("MavlinkRepo", "[Mission Upload] MISSION_ACK received: type=${ack.type.entry?.name ?: ack.type.value}")
+                            if (ack.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) {
                                 Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL acknowledged by FCU")
                                 clearAckDeferred.complete(true)
                             }
