@@ -285,6 +285,7 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                     it.copy(
                         calibrationState = CalibrationState.Success("Calibration completed successfully!"),
                         statusText = "Success! Calibration completed.",
+                        showRebootDialog = true,
                         buttonText = "Start Calibration"
                     )
                 }
@@ -391,6 +392,10 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
 
     fun showCancelDialog(show: Boolean) {
         _uiState.update { it.copy(showCancelDialog = show) }
+    }
+
+    fun dismissRebootDialog() {
+        _uiState.update { it.copy(showRebootDialog = false) }
     }
 
     // Legacy method for compatibility with existing UI

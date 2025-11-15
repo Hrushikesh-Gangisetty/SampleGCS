@@ -52,6 +52,45 @@ fun CalibrationScreen(
         )
     }
 
+    // Show reboot dialog after successful calibration
+    if (uiState.showRebootDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissRebootDialog() },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Reboot Your Drone",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "IMU calibration completed successfully!\n\nPlease reboot your drone for the calibration settings to take effect.",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.dismissRebootDialog()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
