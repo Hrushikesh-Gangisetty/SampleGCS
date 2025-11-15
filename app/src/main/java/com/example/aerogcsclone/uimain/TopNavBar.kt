@@ -284,6 +284,21 @@ fun TopNavBar(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text("Disconnect") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.LinkOff,
+                                    contentDescription = "Disconnect",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                kebabMenuExpanded = false
+                                navController.navigate(Screen.Connection.route)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Logout") },
                             leadingIcon = {
                                 Icon(
