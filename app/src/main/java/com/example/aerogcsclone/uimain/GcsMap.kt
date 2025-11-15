@@ -53,6 +53,48 @@ private fun createMediumMarker(hue: Float): BitmapDescriptor {
     return BitmapDescriptorFactory.fromBitmap(mediumBitmap)
 }
 
+// Helper function to create markers with text labels
+private fun createMarkerWithText(text: String, backgroundColor: Int): BitmapDescriptor {
+    val size = 80 // Larger size to accommodate text
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    // Draw the colored circle background
+    val circlePaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = backgroundColor
+        style = android.graphics.Paint.Style.FILL
+    }
+    canvas.drawCircle(size / 2f, size / 2f, size / 2f - 4, circlePaint)
+
+    // Draw white border
+    val borderPaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = android.graphics.Color.WHITE
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 4f
+    }
+    canvas.drawCircle(size / 2f, size / 2f, size / 2f - 4, borderPaint)
+
+    // Draw the text
+    val textPaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = android.graphics.Color.WHITE
+        textSize = 48f
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+
+    // Center the text vertically
+    val textBounds = android.graphics.Rect()
+    textPaint.getTextBounds(text, 0, text.length, textBounds)
+    val textY = size / 2f + textBounds.height() / 2f - textBounds.bottom
+
+    canvas.drawText(text, size / 2f, textY, textPaint)
+
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
 @Composable
 fun GcsMap(
     telemetryState: TelemetryState,
@@ -91,9 +133,11 @@ fun GcsMap(
     // Create medium-sized marker icons for waypoints (50% of default size)
     val mediumBlueMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_AZURE) }
     val mediumVioletMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_VIOLET) }
-    val mediumGreenMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_GREEN) }
-    val mediumRedMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_RED) }
     val mediumOrangeMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_ORANGE) }
+
+    // Markers with text labels for grid waypoints
+    val startMarker = remember { createMarkerWithText("S", android.graphics.Color.GREEN) }
+    val endMarker = remember { createMarkerWithText("E", android.graphics.Color.RED) }
 
     val lat = telemetryState.latitude
     val lon = telemetryState.longitude
@@ -217,22 +261,41 @@ fun GcsMap(
             }
         }
 
-        // Grid waypoints (first: S/green, last: E/red, others: orange)
+        // Grid waypoints (first: S/green with text, last: E/red with text, others: orange)
         if (gridWaypoints.isNotEmpty()) {
             gridWaypoints.forEachIndexed { index, waypoint ->
                 val isFirst = index == 0
                 val isLast = index == gridWaypoints.lastIndex
-                val (title, color) = when {
-                    isFirst -> "S" to mediumGreenMarker
-                    isLast -> "E" to mediumRedMarker
-                    else -> "G${index + 1}" to mediumOrangeMarker
+
+                when {
+                    isFirst -> {
+                        // Start marker - Green with "S" text
+                        Marker(
+                            state = MarkerState(position = waypoint),
+                            title = "Start",
+                            icon = startMarker,
+                            anchor = Offset(0.5f, 0.5f)
+                        )
+                    }
+                    isLast -> {
+                        // End marker - Red with "E" text
+                        Marker(
+                            state = MarkerState(position = waypoint),
+                            title = "End",
+                            icon = endMarker,
+                            anchor = Offset(0.5f, 0.5f)
+                        )
+                    }
+                    else -> {
+                        // Intermediate waypoints - Orange
+                        Marker(
+                            state = MarkerState(position = waypoint),
+                            title = "G${index + 1}",
+                            icon = mediumOrangeMarker,
+                            anchor = Offset(0.5f, 0.5f)
+                        )
+                    }
                 }
-                Marker(
-                    state = MarkerState(position = waypoint),
-                    title = title,
-                    icon = color,
-                    anchor = Offset(0.5f, 0.5f)
-                )
             }
         }
 
