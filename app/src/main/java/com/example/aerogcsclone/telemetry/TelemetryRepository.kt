@@ -743,7 +743,7 @@ class MavlinkTelemetryRepository(
      * Returns true if ACK received, false otherwise.
      */
     @Suppress("DEPRECATION")
-    suspend fun uploadMissionWithAck(missionItems: List<MissionItemInt>, timeoutMs: Long = 35000): Boolean {
+    suspend fun uploadMissionWithAck(missionItems: List<MissionItemInt>, timeoutMs: Long = 45000): Boolean {
         if (!state.value.fcuDetected) {
             Log.e("MavlinkRepo", "FCU not detected, cannot upload mission")
             throw IllegalStateException("FCU not detected")
@@ -771,6 +771,8 @@ class MavlinkTelemetryRepository(
         }
 
         // Log mission structure for debugging
+        Log.i("MavlinkRepo", "[Mission Upload] FCU IDs: sys=$fcuSystemId comp=$fcuComponentId")
+        Log.i("MavlinkRepo", "[Mission Upload] GCS IDs: sys=$gcsSystemId comp=$gcsComponentId")
         Log.i("MavlinkRepo", "[Mission Upload] Mission structure:")
         missionItems.forEachIndexed { idx, item ->
             Log.i("MavlinkRepo", "  [$idx] seq=${item.seq} cmd=${item.command.value} current=${item.current} " +
@@ -786,7 +788,11 @@ class MavlinkTelemetryRepository(
             
             for (attempt in 1..maxClearAttempts) {
                 Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL attempt $attempt/$maxClearAttempts")
-                val clearAll = MissionClearAll(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                val clearAll = MissionClearAll(
+                    targetSystem = fcuSystemId, 
+                    targetComponent = fcuComponentId,
+                    missionType = MavEnumValue.of(MavMissionType.MISSION)
+                )
                 connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
                 
                 // Wait for MISSION_ACK for MISSION_CLEAR_ALL (not COMMAND_ACK)
@@ -804,7 +810,7 @@ class MavlinkTelemetryRepository(
                             }
                         }
                 }
-                clearAck = withTimeoutOrNull(5000L) { clearAckDeferred.await() } ?: false
+                clearAck = withTimeoutOrNull(7000L) { clearAckDeferred.await() } ?: false
                 clearJob.cancel()
                 
                 if (clearAck) {
@@ -812,7 +818,7 @@ class MavlinkTelemetryRepository(
                     break
                 } else if (attempt < maxClearAttempts) {
                     Log.w("MavlinkRepo", "[Mission Upload] No ACK for MISSION_CLEAR_ALL on attempt $attempt, retrying...")
-                    delay(1000L) // Wait 1 second before retry
+                    delay(1500L) // Wait 1.5 seconds before retry
                 }
             }
             
@@ -826,7 +832,8 @@ class MavlinkTelemetryRepository(
             val missionCount = MissionCount(
                 targetSystem = fcuSystemId,
                 targetComponent = fcuComponentId,
-                count = missionItems.size.toUShort()
+                count = missionItems.size.toUShort(),
+                missionType = MavEnumValue.of(MavMissionType.MISSION)
             )
             connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
             Log.i("MavlinkRepo", "[Mission Upload] Sent MISSION_COUNT=${missionItems.size}")
@@ -838,7 +845,7 @@ class MavlinkTelemetryRepository(
             // Resend MISSION_COUNT periodically until first request or timeout
             val resendJob = AppScope.launch {
                 var resendCount = 0
-                val maxResendAttempts = 6
+                val maxResendAttempts = 8
                 while (isActive && !firstRequestReceived && !ackDeferred.isCompleted && resendCount < maxResendAttempts) {
                     try {
                         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
@@ -847,7 +854,7 @@ class MavlinkTelemetryRepository(
                     } catch (e: Exception) {
                         Log.e("MavlinkRepo", "Failed to resend MISSION_COUNT", e)
                     }
-                    delay(1000)
+                    delay(1500)
                 }
             }
 
@@ -859,6 +866,7 @@ class MavlinkTelemetryRepository(
                         val senderComp = frame.componentId
                         when (val msg = frame.message) {
                             is MissionRequestInt -> {
+                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequestInt from sys=$senderSys comp=$senderComp")
                                 Log.d("MavlinkRepo", "[Mission Upload] Received MissionRequestInt seq=${msg.seq}")
                                 firstRequestReceived = true
                                 val seq = msg.seq.toInt()
@@ -869,8 +877,8 @@ class MavlinkTelemetryRepository(
                                 val item = missionItems[seq]
                                 Log.i("MavlinkRepo", "[Mission Upload] Sending waypoint seq=$seq: ${item.command} lat=${item.x / 1e7} lon=${item.y / 1e7} alt=${item.z}")
                                 val missionItem = item.copy(
-                                    targetSystem = senderSys.toUByte(),
-                                    targetComponent = senderComp.toUByte(),
+                                    targetSystem = fcuSystemId,
+                                    targetComponent = fcuComponentId,
                                     seq = seq.toUShort()
                                 )
                                 try {
@@ -882,6 +890,7 @@ class MavlinkTelemetryRepository(
                                 }
                             }
                             is MissionRequest -> {
+                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequest from sys=$senderSys comp=$senderComp")
                                 Log.d("MavlinkRepo", "[Mission Upload] Received MissionRequest seq=${msg.seq}")
                                 firstRequestReceived = true
                                 val seq = msg.seq.toInt()
@@ -892,8 +901,8 @@ class MavlinkTelemetryRepository(
                                 val itemInt = missionItems[seq]
                                 Log.i("MavlinkRepo", "[Mission Upload] Sending waypoint seq=$seq: ${itemInt.command} lat=${itemInt.x / 1e7} lon=${itemInt.y / 1e7} alt=${itemInt.z}")
                                 val missionItemInt = itemInt.copy(
-                                    targetSystem = senderSys.toUByte(),
-                                    targetComponent = senderComp.toUByte(),
+                                    targetSystem = fcuSystemId,
+                                    targetComponent = fcuComponentId,
                                     seq = seq.toUShort()
                                 )
                                 try {
@@ -917,7 +926,7 @@ class MavlinkTelemetryRepository(
             }
 
             // Wait a short period for first request; if none, fallback to sending all items
-            val firstRequestTimeout = 8000L
+            val firstRequestTimeout = 10000L
             val startWait = System.currentTimeMillis()
             while (!firstRequestReceived && !ackDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
                 delay(100)
@@ -939,7 +948,7 @@ class MavlinkTelemetryRepository(
                         connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
                         sentSeqs.add(seq)
                         Log.i("MavlinkRepo", "Fallback: Sent MISSION_ITEM_INT seq=$seq")
-                        delay(300)
+                        delay(500)
                     } catch (e: Exception) {
                         Log.e("MavlinkRepo", "Fallback: Failed to send mission item seq=$seq", e)
                     }
