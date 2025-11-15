@@ -281,6 +281,9 @@ class CalibrationViewModel(private val sharedViewModel: SharedViewModel) : ViewM
                 // Announce calibration success via TTS
                 sharedViewModel.announceCalibrationFinished(isSuccess = true)
 
+                // Announce reboot drone message
+                sharedViewModel.announceRebootDrone()
+
                 _uiState.update {
                     it.copy(
                         calibrationState = CalibrationState.Success("Calibration completed successfully!"),

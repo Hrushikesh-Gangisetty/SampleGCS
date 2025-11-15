@@ -32,6 +32,7 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
         const val MSG_COMPASS_CALIBRATION_STARTED = "కంపాస్ కేలిబ్రేషన్ ప్రారంభమైంది" // Compass calibration started
         const val MSG_COMPASS_CALIBRATION_COMPLETED = "కంపాస్ కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది" // Compass calibration completed successfully
         const val MSG_COMPASS_CALIBRATION_FAILED = "కంపాస్ కేలిబ్రేషన్ విఫలమైంది" // Compass calibration failed
+        const val MSG_REBOOT_DRONE = "దయచేసి మీ డ్రోన్ రీబూట్ చేయండి" // Please reboot your drone
 
         // --- Shared deduplication state so repeated TTS is suppressed across instances ---
         private val dedupeLock = Any()
@@ -250,6 +251,13 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      */
     fun announceCompassCalibrationFailed() {
         speak(MSG_COMPASS_CALIBRATION_FAILED)
+    }
+
+    /**
+     * Announces reboot drone message
+     */
+    fun announceRebootDrone() {
+        speak(MSG_REBOOT_DRONE)
     }
 
     /**

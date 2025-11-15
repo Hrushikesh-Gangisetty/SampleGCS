@@ -106,6 +106,10 @@ class SharedViewModel : ViewModel() {
         ttsManager?.announceIMUPositionOnce(position)
     }
 
+    fun announceRebootDrone() {
+        ttsManager?.announceRebootDrone()
+    }
+
     fun speak(text: String) {
         ttsManager?.speak(text)
     }
