@@ -405,7 +405,11 @@ class MavlinkTelemetryRepository(
         var lastArmed: Boolean? = null
         scope.launch {
             mavFrame
-                .filter { frame -> state.value.fcuDetected && frame.systemId == fcuSystemId }
+                .filter { frame ->
+                    state.value.fcuDetected &&
+                    frame.systemId == fcuSystemId &&
+                    frame.componentId == fcuComponentId  // Only process heartbeats from the main FCU component
+                }
                 .map { frame -> frame.message }
                 .filterIsInstance<Heartbeat>()
                 .collect { hb ->
@@ -442,6 +446,7 @@ class MavlinkTelemetryRepository(
                     // Only update state if mode or armed status actually changed
                     if (mode != state.value.mode || armed != state.value.armed) {
                         _state.update { it.copy(armed = armed, mode = mode) }
+                        Log.d("MavlinkRepo", "Mode updated to: $mode, Armed: $armed")
                     }
 
                     // Arm/Disarm Notifications

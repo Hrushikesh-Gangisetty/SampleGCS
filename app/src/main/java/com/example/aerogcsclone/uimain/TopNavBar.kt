@@ -46,6 +46,11 @@ fun TopNavBar(
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
 
+    // Remember the mode to prevent flickering due to recomposition
+    val displayMode by remember(telemetryState.mode) {
+        derivedStateOf { telemetryState.mode ?: "N/A" }
+    }
+
     // Set nav bar gradient colors based on connection status
     val navBarAlpha = 0.5f // decreased alpha for more transparency
     val navBarColors = if (telemetryState.connected) {
@@ -232,7 +237,7 @@ fun TopNavBar(
                 DividerBlock()
                 InfoBlockGroup(
                     Icons.Default.Sync,
-                    listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed")
+                    listOf(displayMode, if (telemetryState.armed) "Armed" else "Disarmed")
                 )
                 DividerBlock()
 
