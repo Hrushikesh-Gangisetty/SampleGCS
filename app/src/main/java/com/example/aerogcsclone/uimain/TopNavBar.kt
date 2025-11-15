@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.navigation.Screen
@@ -37,6 +39,8 @@ fun TopNavBar(
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var showGeofenceSlider by remember { mutableStateOf(false) } // Added geofence slider state
+
+    val coroutineScope = rememberCoroutineScope()
 
     // Collect geofence state from viewmodel
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
@@ -295,7 +299,12 @@ fun TopNavBar(
                             },
                             onClick = {
                                 kebabMenuExpanded = false
+                                // Disconnect from flight controller
                                 navController.navigate(Screen.Connection.route)
+                                // Launch coroutine to disconnect
+                                coroutineScope.launch {
+                                    telemetryViewModel.cancelConnection()
+                                }
                             }
                         )
                         DropdownMenuItem(

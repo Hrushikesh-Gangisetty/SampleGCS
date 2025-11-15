@@ -49,6 +49,9 @@ class MavlinkTelemetryRepository(
     var fcuSystemId: UByte = 0u
     var fcuComponentId: UByte = 0u
 
+    // Track if disconnection was intentional (user-initiated)
+    private var intentionalDisconnect = false
+
     // Diagnostic info
     private val _lastFailure = MutableStateFlow<Throwable?>(null)
     val lastFailure: StateFlow<Throwable?> = _lastFailure.asStateFlow()
@@ -119,12 +122,20 @@ class MavlinkTelemetryRepository(
                         // Don't set connected=true here anymore
                         // Connection will be marked as true only when FCU heartbeat is received
                         Log.i("MavlinkRepo", "Stream Active - waiting for FCU heartbeat")
+                        // Reset intentional disconnect flag when connection becomes active
+                        intentionalDisconnect = false
                     }
                     is StreamState.Inactive -> {
-                        Log.i("MavlinkRepo", "Stream Inactive, reconnecting...")
+                        Log.i("MavlinkRepo", "Stream Inactive")
                         _state.update { it.copy(connected = false, fcuDetected = false) }
                         lastFcuHeartbeatTime.set(0L)
-                        reconnect(this)
+                        // Only reconnect if disconnection was NOT intentional
+                        if (!intentionalDisconnect) {
+                            Log.i("MavlinkRepo", "Accidental disconnect detected, reconnecting...")
+                            reconnect(this)
+                        } else {
+                            Log.i("MavlinkRepo", "Intentional disconnect - not reconnecting")
+                        }
                     }
                 }
             }
@@ -1175,6 +1186,9 @@ class MavlinkTelemetryRepository(
 
     suspend fun closeConnection() {
         try {
+            // Mark this as an intentional disconnect to prevent auto-reconnect
+            intentionalDisconnect = true
+            Log.i("MavlinkRepo", "User-initiated disconnect - auto-reconnect disabled")
             // Attempt to close the TCP connection gracefully
             connection.close()
         } catch (e: Exception) {
