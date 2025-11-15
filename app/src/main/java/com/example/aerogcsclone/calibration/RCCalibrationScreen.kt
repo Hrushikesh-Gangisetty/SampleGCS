@@ -85,23 +85,42 @@ fun RCCalibrationScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        // start calibration directly (instruction dialog removed)
-                        showSafetyDialog = false
-                        safetyWarningRead = false
-                        viewModel.startCalibration()
-                    },
-                    enabled = safetyWarningRead,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF9800),
-                        disabledContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f)
-                    )
-                ) {
-                    Text(
-                        if (safetyWarningRead) "I Understand" else "Please wait...",
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Skip button - always enabled
+                    OutlinedButton(
+                        onClick = {
+                            showSafetyDialog = false
+                            safetyWarningRead = false
+                            viewModel.startCalibration()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF9800)
+                        )
+                    ) {
+                        Text(
+                            "Skip",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // I Understand button - enabled after delay
+                    Button(
+                        onClick = {
+                            showSafetyDialog = false
+                            safetyWarningRead = false
+                            viewModel.startCalibration()
+                        },
+                        enabled = safetyWarningRead,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF9800),
+                            disabledContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Text(
+                            if (safetyWarningRead) "I Understand" else "Please wait...",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             },
             dismissButton = {
