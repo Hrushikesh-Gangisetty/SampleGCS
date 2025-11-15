@@ -660,7 +660,7 @@ fun PlanScreen(
                             Slider(
                                 value = lineSpacing,
                                 onValueChange = { lineSpacing = it },
-                                valueRange = 10f..100f,
+                                valueRange = 1f..30f,
                                 steps = 17,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
@@ -701,7 +701,7 @@ fun PlanScreen(
                                 value = surveySpeed,
                                 onValueChange = { surveySpeed = it },
                                 valueRange = 1f..20f,
-                                steps = 18,
+                                steps = 40,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
@@ -720,8 +720,8 @@ fun PlanScreen(
                             Slider(
                                 value = surveyAltitude,
                                 onValueChange = { surveyAltitude = it },
-                                valueRange = 10f..120f,
-                                steps = 21,
+                                valueRange = 1f..30f,
+                                steps = 60,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
