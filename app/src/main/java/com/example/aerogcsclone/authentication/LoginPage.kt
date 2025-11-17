@@ -51,7 +51,7 @@ fun LoginPage(modifier: Modifier = Modifier, navController: NavController, authV
 
     LaunchedEffect(authState.value) {
         when (val state = authState.value) {
-            is AuthState.Authenticated -> navController.navigate(Screen.Connection.route) {
+            is AuthState.Authenticated -> navController.navigate(Screen.LanguageSelection.route) {
                 popUpTo(Screen.Login.route) { inclusive = true }
             }
             is AuthState.Error -> Toast.makeText(context, state.message, Toast.LENGTH_SHORT).show()

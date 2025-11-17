@@ -13,26 +13,10 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
 
     private var textToSpeech: TextToSpeech? = null
     private var isReady = false
+    private var currentLanguage: String = "te" // Default to Telugu
 
     companion object {
         private const val TAG = "TextToSpeechManager"
-
-        // Voice messages (Telugu)
-        const val MSG_CONNECTED = "కనెక్ట్ అయింది" // Connected
-        const val MSG_DISCONNECTED = "డిస్కనెక్టర్ అయింది" // Disconnected
-        const val MSG_CONNECTION_FAILED = "కనెక్షన్ విఫలమైంది" // Connection failed
-        const val MSG_CALIBRATION_STARTED = "కేలిబ్రేషన్ ప్రారంభమైంది" // Calibration started
-        const val MSG_CALIBRATION_FINISHED = "కేలిబ్రేషన్ ముగిసింది" // Calibration finished
-        const val MSG_CALIBRATION_SUCCESS = "కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది" // Calibration completed successfully
-        const val MSG_CALIBRATION_FAILED = "కేలిబ్రేష్ విఫలమైంది" // Calibration failed (note: preserved meaning)
-        const val MSG_SELECTED_AUTOMATIC = "ఆటోమేటిక్ ఎంచుకున్నారు" // Selected automatic
-        const val MSG_SELECTED_MANUAL = "మాన్యువల్ ఎంచుకున్నారు" // Selected manual
-        const val MSG_DRONE_ARMED = "డ్రోన్ ఆర్మ్ అయింది" // Drone armed
-        const val MSG_DRONE_DISARMED = "డ్రోన్ డిసార్మ్ అయింది" // Drone disarmed
-        const val MSG_COMPASS_CALIBRATION_STARTED = "కంపాస్ కేలిబ్రేషన్ ప్రారంభమైంది" // Compass calibration started
-        const val MSG_COMPASS_CALIBRATION_COMPLETED = "కంపాస్ కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది" // Compass calibration completed successfully
-        const val MSG_COMPASS_CALIBRATION_FAILED = "కంపాస్ కేలిబ్రేషన్ విఫలమైంది" // Compass calibration failed
-        const val MSG_REBOOT_DRONE = "దయచేసి మీ డ్రోన్ రీబూట్ చేయండి" // Please reboot your drone
 
         // --- Shared deduplication state so repeated TTS is suppressed across instances ---
         private val dedupeLock = Any()
@@ -60,15 +44,40 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
         }
     }
 
+    /**
+     * Set the language for TTS output
+     * @param languageCode "en" for English, "te" for Telugu
+     */
+    fun setLanguage(languageCode: String) {
+        currentLanguage = languageCode
+        textToSpeech?.let { tts ->
+            val locale = if (languageCode == "en") {
+                Locale.US
+            } else {
+                Locale.forLanguageTag("te-IN")
+            }
+
+            val result = tts.setLanguage(locale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Language $languageCode not supported, falling back to English")
+                tts.setLanguage(Locale.US)
+                currentLanguage = "en"
+            } else {
+                Log.d(TAG, "Language set to: $languageCode")
+            }
+        }
+    }
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             textToSpeech?.let { tts ->
-                // Prefer Telugu locale, fall back to US English if Telugu is not supported
+                // Start with Telugu by default
                 val telugu = Locale.forLanguageTag("te-IN")
                 var result = tts.setLanguage(telugu)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                     Log.w(TAG, "Telugu not supported on this device, falling back to US English")
                     result = tts.setLanguage(Locale.US)
+                    currentLanguage = "en"
                     if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                         Log.e(TAG, "Fallback language (en-US) not supported")
                         isReady = false
@@ -169,8 +178,8 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      * Announces connection status
      */
     fun announceConnectionStatus(isConnected: Boolean) {
-        val message = if (isConnected) MSG_CONNECTED else MSG_DISCONNECTED
-        speak(message)
+        val message = if (isConnected) "connected" else "disconnected"
+        speak(getMessage(message))
     }
 
     /**
@@ -179,85 +188,85 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
     fun announceCalibrationStarted() {
         // Use immediate speak for calibration start to guarantee audible feedback even if dedupe
         // would otherwise suppress it (e.g., UI pressed multiple times).
-        speakImmediate(MSG_CALIBRATION_STARTED)
+        speakImmediate(getMessage("calibration_started"))
     }
 
     /**
      * Announces calibration finished with success/failure status
      */
     fun announceCalibrationFinished(isSuccess: Boolean) {
-        val message = if (isSuccess) MSG_CALIBRATION_SUCCESS else MSG_CALIBRATION_FAILED
-        speak(message)
+        val message = if (isSuccess) "calibration_success" else "calibration_failed"
+        speak(getMessage(message))
     }
 
     /**
      * Announces general calibration finished message
      */
     fun announceCalibrationFinished() {
-        speak(MSG_CALIBRATION_FINISHED)
+        speak(getMessage("calibration_finished"))
     }
 
     /**
      * Announces connection failed status
      */
     fun announceConnectionFailed() {
-        speak(MSG_CONNECTION_FAILED)
+        speak(getMessage("connection_failed"))
     }
 
     /**
      * Announces automatic mode selection
      */
     fun announceSelectedAutomatic() {
-        speak(MSG_SELECTED_AUTOMATIC)
+        speak(getMessage("selected_automatic"))
     }
 
     /**
      * Announces manual mode selection
      */
     fun announceSelectedManual() {
-        speak(MSG_SELECTED_MANUAL)
+        speak(getMessage("selected_manual"))
     }
 
     /**
      * Announces drone armed status
      */
     fun announceDroneArmed() {
-        speak(MSG_DRONE_ARMED)
+        speak(getMessage("drone_armed"))
     }
 
     /**
      * Announces drone disarmed status
      */
     fun announceDroneDisarmed() {
-        speak(MSG_DRONE_DISARMED)
+        speak(getMessage("drone_disarmed"))
     }
 
     /**
      * Announces compass calibration started
      */
     fun announceCompassCalibrationStarted() {
-        speakImmediate(MSG_COMPASS_CALIBRATION_STARTED)
+        speakImmediate(getMessage("compass_calibration_started"))
     }
 
     /**
      * Announces compass calibration completed successfully
      */
     fun announceCompassCalibrationCompleted() {
-        speak(MSG_COMPASS_CALIBRATION_COMPLETED)
+        speak(getMessage("compass_calibration_completed"))
     }
 
     /**
      * Announces compass calibration failed
      */
     fun announceCompassCalibrationFailed() {
-        speak(MSG_COMPASS_CALIBRATION_FAILED)
+        speak(getMessage("compass_calibration_failed"))
     }
 
     /**
      * Announces reboot drone message
      */
     fun announceRebootDrone() {
-        speak(MSG_REBOOT_DRONE)
+        speak(getMessage("reboot_drone"))
     }
 
     /**
@@ -294,12 +303,12 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
      */
     fun announceIMUPositionOnce(position: String) {
         val spokenText = when (position.uppercase(Locale.US)) {
-            "LEVEL" -> "అన్ని వైపులా సమానంగా పెంటండి" // Level
-            "LEFT" -> "ఎడమ వైపు పెంటండి " // Left
-            "RIGHT" -> "కుడి వైపు పెంటండి" // Right
-            "NOSEDOWN", "NOSE_DOWN" -> "నోస్ కిందకి పెంటండి" // Nose down
-            "NOSEUP", "NOSE_UP" -> "నోస్ పైకి పెంటండి" // Nose up
-            "BACK" -> "వెనక్కి తిప్పండి" // Inverted down/back
+            "LEVEL" -> AppStrings.imuLevel
+            "LEFT" -> AppStrings.imuLeft
+            "RIGHT" -> AppStrings.imuRight
+            "NOSEDOWN", "NOSE_DOWN" -> AppStrings.imuNoseDown
+            "NOSEUP", "NOSE_UP" -> AppStrings.imuNoseUp
+            "BACK" -> AppStrings.imuBack
             else -> position.replace("_", " ")
                 .lowercase(Locale.US)
                 .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
@@ -357,5 +366,26 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
 
         Log.d(TAG, "Speaking immediately: $text")
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, System.currentTimeMillis().toString())
+    }
+
+    private fun getMessage(key: String): String {
+        return when (key) {
+            "connected" -> if (currentLanguage == "en") "Connected" else "కనెక్ట్ అయింది"
+            "disconnected" -> if (currentLanguage == "en") "Disconnected" else "డిస్కనెక్టర్ అయింది"
+            "connection_failed" -> if (currentLanguage == "en") "Connection failed" else "కనెక్షన్ విఫలమైంది"
+            "calibration_started" -> if (currentLanguage == "en") "Calibration started" else "కేలిబ్రేషన్ ప్రారంభమైంది"
+            "calibration_finished" -> if (currentLanguage == "en") "Calibration finished" else "కేలిబ్రేషన్ ముగిసింది"
+            "calibration_success" -> if (currentLanguage == "en") "Calibration completed successfully" else "కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది"
+            "calibration_failed" -> if (currentLanguage == "en") "Calibration failed" else "కేలిబ్రేష్ విఫలమైంది"
+            "selected_automatic" -> if (currentLanguage == "en") "Selected automatic" else "ఆటోమేటిక్ ఎంచుకున్నారు"
+            "selected_manual" -> if (currentLanguage == "en") "Selected manual" else "మాన్యువల్ ఎంచుకున్నారు"
+            "drone_armed" -> if (currentLanguage == "en") "Drone armed" else "డ్రోన్ ఆర్మ్ అయింది"
+            "drone_disarmed" -> if (currentLanguage == "en") "Drone disarmed" else "డ్రోన్ డిసార్మ్ అయింది"
+            "compass_calibration_started" -> if (currentLanguage == "en") "Compass calibration started" else "కంపాస్ కేలిబ్రేషన్ ప్రారంభమైంది"
+            "compass_calibration_completed" -> if (currentLanguage == "en") "Compass calibration completed successfully" else "కంపాస్ కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది"
+            "compass_calibration_failed" -> if (currentLanguage == "en") "Compass calibration failed" else "కంపాస్ కేలిబ్రేషన్ విఫలమైంది"
+            "reboot_drone" -> if (currentLanguage == "en") "Please reboot your drone" else "దయచేసి మీ డ్రోన్ రీబూట్ చేయండి"
+            else -> key
+        }
     }
 }

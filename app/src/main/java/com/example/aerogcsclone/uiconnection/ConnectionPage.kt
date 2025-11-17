@@ -20,6 +20,7 @@ import com.example.aerogcsclone.navigation.Screen
 import com.example.aerogcsclone.telemetry.ConnectionType
 import com.example.aerogcsclone.telemetry.PairedDevice
 import com.example.aerogcsclone.telemetry.SharedViewModel
+import com.example.aerogcsclone.utils.AppStrings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -67,7 +68,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             // If we are still in a 'connecting' state after the timeout, it failed.
             if (isConnecting) {
                 isConnecting = false
-                errorMessage = "Connection timed out. Please check your settings and try again."
+                errorMessage = AppStrings.connectionTimedOut
                 showPopup = true
                 viewModel.cancelConnection() // Clean up the failed attempt
                 // Announce connection failure via TTS
@@ -105,14 +106,14 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "Connect to Drone",
+                AppStrings.connectionTitle,
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val tabs = listOf("TCP/IP", "Bluetooth")
+            val tabs = listOf(AppStrings.tcp, AppStrings.bluetooth)
             TabRow(selectedTabIndex = connectionType.ordinal, containerColor = Color(0xFF333330)) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -138,7 +139,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                     modifier = Modifier.weight(1f),
                     enabled = isConnectEnabled
                 ) {
-                    Text(if (isConnecting) "Connecting..." else "Connect")
+                    Text(if (isConnecting) AppStrings.connecting else AppStrings.connect)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Button(
@@ -146,7 +147,7 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
                     modifier = Modifier.weight(1f),
                     enabled = isConnecting
                 ) {
-                    Text("Cancel")
+                    Text(AppStrings.cancel)
                 }
             }
 
@@ -159,11 +160,11 @@ fun ConnectionPage(navController: NavController, viewModel: SharedViewModel) {
         if (showPopup) {
             AlertDialog(
                 onDismissRequest = { showPopup = false },
-                title = { Text("Connection Failed") },
+                title = { Text(AppStrings.connectionFailed) },
                 text = { Text(errorMessage) },
                 confirmButton = {
                     Button(onClick = { showPopup = false }) {
-                        Text("OK")
+                        Text(AppStrings.ok)
                     }
                 }
             )
@@ -179,7 +180,7 @@ fun TcpConnectionContent(viewModel: SharedViewModel) {
     OutlinedTextField(
         value = ipAddress,
         onValueChange = { viewModel.onIpAddressChange(it) },
-        label = { Text("IP Address", color = Color.White) },
+        label = { Text(AppStrings.ipAddress, color = Color.White) },
         modifier = Modifier.fillMaxWidth(),
         textStyle = LocalTextStyle.current.copy(color = Color.White)
     )
@@ -189,7 +190,7 @@ fun TcpConnectionContent(viewModel: SharedViewModel) {
     OutlinedTextField(
         value = port,
         onValueChange = { viewModel.onPortChange(it) },
-        label = { Text("Port", color = Color.White) },
+        label = { Text(AppStrings.port, color = Color.White) },
         modifier = Modifier.fillMaxWidth(),
         textStyle = LocalTextStyle.current.copy(color = Color.White)
     )
@@ -203,7 +204,7 @@ fun BluetoothConnectionContent(viewModel: SharedViewModel) {
 
     if (pairedDevices.isEmpty()) {
         Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-            Text("No paired Bluetooth devices found.", color = Color.White)
+            Text(AppStrings.noDevicesPaired, color = Color.White)
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxWidth().height(120.dp)) {

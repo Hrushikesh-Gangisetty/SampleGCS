@@ -72,6 +72,14 @@ class SharedViewModel : ViewModel() {
         }
     }
 
+    // Set the language for TTS
+    fun setLanguage(languageCode: String) {
+        ttsManager?.setLanguage(languageCode)
+        // Also update the app-wide language for UI strings
+        com.example.aerogcsclone.utils.AppStrings.setLanguage(languageCode)
+        Log.d("SharedVM", "Language set to: $languageCode")
+    }
+
     // TTS announcement methods
     fun announceCalibrationStarted() {
         ttsManager?.announceCalibrationStarted()

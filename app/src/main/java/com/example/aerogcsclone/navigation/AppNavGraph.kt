@@ -37,6 +37,7 @@ import com.example.aerogcsclone.uimain.SettingsScreen
 import com.example.aerogcsclone.uimain.CalibrationsScreen
 import com.example.aerogcsclone.ui.components.PlotTemplatesScreen
 import com.example.aerogcsclone.ui.logs.LogsScreen
+import com.example.aerogcsclone.ui.LanguageSelectionPage
 import com.example.aerogcsclone.uiflyingmethod.SelectFlyingMethodScreen
 import com.example.aerogcsclone.viewmodel.MissionTemplateViewModel
 import com.example.aerogcsclone.viewmodel.TlogViewModel
@@ -47,6 +48,7 @@ sealed class Screen(val route: String) {
     object Main : Screen("main")
     object Login : Screen("login")
     object Signup : Screen("signup")
+    object LanguageSelection : Screen("language_selection")
     object Plan : Screen("plan")
     object PlotTemplates : Screen("plot_templates")
     object Logs : Screen("logs")
@@ -103,6 +105,13 @@ fun AppNavGraph(navController: NavHostController) {
             SignupPage(
                 navController = navController,
                 authViewModel = authViewModel
+            )
+        }
+
+        composable(Screen.LanguageSelection.route) {
+            LanguageSelectionPage(
+                navController = navController,
+                sharedViewModel = sharedViewModel
             )
         }
 
