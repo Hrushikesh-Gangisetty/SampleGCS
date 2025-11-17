@@ -36,6 +36,16 @@ enum class ConnectionType {
     TCP, BLUETOOTH
 }
 
+data class MissionUploadProgress(
+    val stage: String,
+    val currentItem: Int,
+    val totalItems: Int,
+    val message: String
+) {
+    val percentage: Int
+        get() = if (totalItems > 0) ((currentItem.toFloat() / totalItems) * 100).toInt() else 0
+}
+
 @SuppressLint("MissingPermission")
 data class PairedDevice(
     val name: String,
@@ -96,6 +106,10 @@ class SharedViewModel : ViewModel() {
         ttsManager?.announceIMUPositionOnce(position)
     }
 
+    fun announceRebootDrone() {
+        ttsManager?.announceRebootDrone()
+    }
+
     fun speak(text: String) {
         ttsManager?.speak(text)
     }
@@ -123,6 +137,10 @@ class SharedViewModel : ViewModel() {
 
     private val _missionAreaFormatted = MutableStateFlow("0 acres")
     val missionAreaFormatted: StateFlow<String> = _missionAreaFormatted.asStateFlow()
+
+    // Mission upload progress state
+    private val _missionUploadProgress = MutableStateFlow<MissionUploadProgress?>(null)
+    val missionUploadProgress: StateFlow<MissionUploadProgress?> = _missionUploadProgress.asStateFlow()
 
     private fun updateSurveyArea() {
         val polygon = _surveyPolygon.value
@@ -702,6 +720,9 @@ class SharedViewModel : ViewModel() {
             try {
                 Log.i("SharedVM", "Request to upload mission with ${missionItems.size} items")
 
+                // Reset progress at start
+                _missionUploadProgress.value = null
+
                 if (repo == null) {
                     Log.w("SharedVM", "No repo available, cannot upload mission")
                     _missionUploaded.value = false
@@ -718,8 +739,46 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
+                // Emit progress: Initializing
+                _missionUploadProgress.value = MissionUploadProgress(
+                    stage = "Initializing",
+                    currentItem = 0,
+                    totalItems = missionItems.size,
+                    message = "Preparing to upload ${missionItems.size} waypoints..."
+                )
+                delay(500) // Brief delay so user sees the initial message
+
+                // Emit progress: Clearing old mission
+                _missionUploadProgress.value = MissionUploadProgress(
+                    stage = "Clearing",
+                    currentItem = 0,
+                    totalItems = missionItems.size,
+                    message = "Clearing old mission from flight controller..."
+                )
+
                 Log.i("SharedVM", "Starting mission upload to FCU...")
+
+                // Emit progress: Uploading
+                _missionUploadProgress.value = MissionUploadProgress(
+                    stage = "Uploading",
+                    currentItem = 0,
+                    totalItems = missionItems.size,
+                    message = "Uploading waypoints to flight controller..."
+                )
+
                 val success = repo?.uploadMissionWithAck(missionItems) ?: false
+
+                // Emit progress: Completing
+                if (success) {
+                    _missionUploadProgress.value = MissionUploadProgress(
+                        stage = "Completing",
+                        currentItem = missionItems.size,
+                        totalItems = missionItems.size,
+                        message = "Upload complete! Verifying mission..."
+                    )
+                    delay(500)
+                }
+
                 _missionUploaded.value = success
                 if (success) {
                     lastUploadedCount = missionItems.size
@@ -746,6 +805,17 @@ class SharedViewModel : ViewModel() {
                         _missionAreaSqMeters.value = 0.0
                         _missionAreaFormatted.value = "0 acres"
                     }
+
+                    // Final success progress
+                    _missionUploadProgress.value = MissionUploadProgress(
+                        stage = "Complete",
+                        currentItem = missionItems.size,
+                        totalItems = missionItems.size,
+                        message = "Mission uploaded successfully!"
+                    )
+                    delay(1000) // Show success message briefly
+                    _missionUploadProgress.value = null // Clear progress
+
                     Log.i("SharedVM", "Mission upload succeeded (${missionItems.size})")
                     onResult(true, null)
                 } else {
@@ -755,6 +825,17 @@ class SharedViewModel : ViewModel() {
                     _missionAreaSqMeters.value = 0.0
                     _missionAreaFormatted.value = "0 acres"
                     _missionUploaded.value = false
+
+                    // Emit failure progress
+                    _missionUploadProgress.value = MissionUploadProgress(
+                        stage = "Failed",
+                        currentItem = 0,
+                        totalItems = missionItems.size,
+                        message = "Upload failed or timed out"
+                    )
+                    delay(2000) // Show error message
+                    _missionUploadProgress.value = null // Clear progress
+
                     Log.e("SharedVM", "Mission upload failed or timed out")
                     onResult(false, "Mission upload failed or timed out")
                 }
@@ -762,6 +843,17 @@ class SharedViewModel : ViewModel() {
                 _missionUploaded.value = false
                 lastUploadedCount = 0
                 _uploadedWaypoints.value = emptyList()
+
+                // Emit error progress
+                _missionUploadProgress.value = MissionUploadProgress(
+                    stage = "Error",
+                    currentItem = 0,
+                    totalItems = missionItems.size,
+                    message = "Error: ${e.message}"
+                )
+                delay(2000) // Show error message
+                _missionUploadProgress.value = null // Clear progress
+
                 Log.e("SharedVM", "Exception during mission upload", e)
                 onResult(false, e.message)
             }

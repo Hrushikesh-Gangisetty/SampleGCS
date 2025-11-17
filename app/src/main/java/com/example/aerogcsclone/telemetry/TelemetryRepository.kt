@@ -49,6 +49,9 @@ class MavlinkTelemetryRepository(
     var fcuSystemId: UByte = 0u
     var fcuComponentId: UByte = 0u
 
+    // Track if disconnection was intentional (user-initiated)
+    private var intentionalDisconnect = false
+
     // Diagnostic info
     private val _lastFailure = MutableStateFlow<Throwable?>(null)
     val lastFailure: StateFlow<Throwable?> = _lastFailure.asStateFlow()
@@ -66,6 +69,8 @@ class MavlinkTelemetryRepository(
     private val positionHistory = mutableListOf<Pair<Double, Double>>()
     private var totalDistanceMeters: Float = 0f
     private var lastMissionRunning = false
+    private var flightStartTime: Long = 0L  // Track when flight actually started
+    private var isFlightActive = false  // Track if flight is in progress
 
     // COMMAND_ACK flow for calibration and other commands
     private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
@@ -117,12 +122,20 @@ class MavlinkTelemetryRepository(
                         // Don't set connected=true here anymore
                         // Connection will be marked as true only when FCU heartbeat is received
                         Log.i("MavlinkRepo", "Stream Active - waiting for FCU heartbeat")
+                        // Reset intentional disconnect flag when connection becomes active
+                        intentionalDisconnect = false
                     }
                     is StreamState.Inactive -> {
-                        Log.i("MavlinkRepo", "Stream Inactive, reconnecting...")
+                        Log.i("MavlinkRepo", "Stream Inactive")
                         _state.update { it.copy(connected = false, fcuDetected = false) }
                         lastFcuHeartbeatTime.set(0L)
-                        reconnect(this)
+                        // Only reconnect if disconnection was NOT intentional
+                        if (!intentionalDisconnect) {
+                            Log.i("MavlinkRepo", "Accidental disconnect detected, reconnecting...")
+                            reconnect(this)
+                        } else {
+                            Log.i("MavlinkRepo", "Intentional disconnect - not reconnecting")
+                        }
                     }
                 }
             }
@@ -302,41 +315,76 @@ class MavlinkTelemetryRepository(
                     val lat = gp.lat.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
                     val lon = gp.lon.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
 
-                    val missionRunning = state.value.mode?.equals("Auto", ignoreCase = true) == true && state.value.armed
-                    if (missionRunning) {
-                        if (!lastMissionRunning) {
-                            positionHistory.clear()
-                            totalDistanceMeters = 0f
-                        }
-                        if (lat != null && lon != null) {
-                            if (positionHistory.isNotEmpty()) {
-                                val (prevLat, prevLon) = positionHistory.last()
-                                val dist = haversine(prevLat, prevLon, lat, lon)
-                                totalDistanceMeters += dist
-                            }
-                            positionHistory.add(lat to lon)
-                        }
-                        _state.update {
-                            it.copy(
-                                altitudeMsl = altAMSLm,
-                                altitudeRelative = relAltM,
-                                latitude = lat,
-                                longitude = lon,
-                                totalDistanceMeters = totalDistanceMeters
-                            )
-                        }
-                    } else {
-                        _state.update {
-                            it.copy(
-                                altitudeMsl = altAMSLm,
-                                altitudeRelative = relAltM,
-                                latitude = lat,
-                                longitude = lon,
-                                totalDistanceMeters = if (positionHistory.isNotEmpty()) totalDistanceMeters else null
-                            )
-                        }
+                    // NEW LOGIC: Track distance/time based on armed + altitude, not just AUTO mode
+                    val currentArmed = state.value.armed
+                    val altitudeThreshold = 0.5f  // Consider flight active when altitude > 0.5m
+                    val landingThreshold = 0.5f   // Consider landed when altitude < 0.5m
+
+                    // Check if flight should be active (armed AND altitude > threshold)
+                    val shouldBeActive = currentArmed && (relAltM ?: 0f) > altitudeThreshold
+
+                    // Start flight tracking
+                    if (shouldBeActive && !isFlightActive) {
+                        Log.i("MavlinkRepo", "[Flight Tracking] Flight started - Armed and altitude > ${altitudeThreshold}m")
+                        positionHistory.clear()
+                        totalDistanceMeters = 0f
+                        flightStartTime = System.currentTimeMillis()
+                        isFlightActive = true
                     }
-                    lastMissionRunning = missionRunning
+
+                    // Track distance during active flight
+                    if (isFlightActive && lat != null && lon != null) {
+                        if (positionHistory.isNotEmpty()) {
+                            val (prevLat, prevLon) = positionHistory.last()
+                            val dist = haversine(prevLat, prevLon, lat, lon)
+                            totalDistanceMeters += dist
+                        }
+                        positionHistory.add(lat to lon)
+                    }
+
+                    // End flight tracking when altitude returns to near 0
+                    if (isFlightActive && (relAltM ?: 0f) <= landingThreshold) {
+                        Log.i("MavlinkRepo", "[Flight Tracking] Flight ended - Altitude returned to ~0m")
+                        val flightDuration = (System.currentTimeMillis() - flightStartTime) / 1000L
+                        isFlightActive = false
+
+                        // Store final values and mark mission as completed
+                        _state.update {
+                            it.copy(
+                                altitudeMsl = altAMSLm,
+                                altitudeRelative = relAltM,
+                                latitude = lat,
+                                longitude = lon,
+                                totalDistanceMeters = totalDistanceMeters,
+                                missionElapsedSec = null,
+                                missionCompleted = true,
+                                lastMissionElapsedSec = flightDuration
+                            )
+                        }
+
+                        // Show completion notification
+                        sharedViewModel.addNotification(
+                            Notification(
+                                "Flight completed! Time: ${formatTime(flightDuration)}, Distance: ${formatDistance(totalDistanceMeters)}",
+                                NotificationType.SUCCESS
+                            )
+                        )
+                        return@collect
+                    }
+
+                    // Update state with current values
+                    _state.update {
+                        it.copy(
+                            altitudeMsl = altAMSLm,
+                            altitudeRelative = relAltM,
+                            latitude = lat,
+                            longitude = lon,
+                            totalDistanceMeters = if (isFlightActive) totalDistanceMeters else null,
+                            missionElapsedSec = if (isFlightActive) (System.currentTimeMillis() - flightStartTime) / 1000L else null
+                        )
+                    }
+
+                    lastMissionRunning = shouldBeActive
                 }
         }
 
@@ -357,7 +405,11 @@ class MavlinkTelemetryRepository(
         var lastArmed: Boolean? = null
         scope.launch {
             mavFrame
-                .filter { frame -> state.value.fcuDetected && frame.systemId == fcuSystemId }
+                .filter { frame ->
+                    state.value.fcuDetected &&
+                    frame.systemId == fcuSystemId &&
+                    frame.componentId == fcuComponentId  // Only process heartbeats from the main FCU component
+                }
                 .map { frame -> frame.message }
                 .filterIsInstance<Heartbeat>()
                 .collect { hb ->
@@ -394,6 +446,7 @@ class MavlinkTelemetryRepository(
                     // Only update state if mode or armed status actually changed
                     if (mode != state.value.mode || armed != state.value.armed) {
                         _state.update { it.copy(armed = armed, mode = mode) }
+                        Log.d("MavlinkRepo", "Mode updated to: $mode, Armed: $armed")
                     }
 
                     // Arm/Disarm Notifications
@@ -1219,6 +1272,9 @@ class MavlinkTelemetryRepository(
 
     suspend fun closeConnection() {
         try {
+            // Mark this as an intentional disconnect to prevent auto-reconnect
+            intentionalDisconnect = true
+            Log.i("MavlinkRepo", "User-initiated disconnect - auto-reconnect disabled")
             // Attempt to close the TCP connection gracefully
             connection.close()
         } catch (e: Exception) {
@@ -1242,12 +1298,25 @@ class MavlinkTelemetryRepository(
     private fun formatSpeed(speed: Float?): String? {
         if (speed == null) return null
         return when {
-//            speed >= 1000f -> String.format("%.2f km/s", speed / 1000f)
-            speed >= 1f -> String.format("%.2f m/s", speed)
+//            speed >= 1000f -> String.format("%.3f km/s", speed / 1000f)
+            speed >= 1f -> String.format("%.3f m/s", speed)
 //            speed >= 0.01f -> String.format("%.1f cm/s", speed * 100f)
 //            speed > 0f -> String.format("%.1f mm/s", speed * 1000f)
             else -> "0 m/s"
         }
+    }
+
+    // Format time for human-readable display
+    private fun formatTime(seconds: Long): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+        return String.format("%02d:%02d:%02d", hours, minutes, secs)
+    }
+
+    // Format distance for human-readable display
+    private fun formatDistance(meters: Float): String {
+        return String.format("%.1f m", meters)
     }
 
     suspend fun sendCommandLong(command: CommandLong) {

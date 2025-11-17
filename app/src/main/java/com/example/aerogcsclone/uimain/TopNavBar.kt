@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.example.aerogcsclone.Telemetry.TelemetryState
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.navigation.Screen
@@ -38,9 +40,16 @@ fun TopNavBar(
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var showGeofenceSlider by remember { mutableStateOf(false) } // Added geofence slider state
 
+    val coroutineScope = rememberCoroutineScope()
+
     // Collect geofence state from viewmodel
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
+
+    // Remember the mode to prevent flickering due to recomposition
+    val displayMode by remember(telemetryState.mode) {
+        derivedStateOf { telemetryState.mode ?: "N/A" }
+    }
 
     // Set nav bar gradient colors based on connection status
     val navBarAlpha = 0.5f // decreased alpha for more transparency
@@ -177,6 +186,14 @@ fun TopNavBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ConnectionStatusWidget(isConnected = telemetryState.connected)
                 DividerBlock()
+                // Spray icon
+                Icon(
+                    Icons.Default.Shower,
+                    contentDescription = "Spray",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                DividerBlock()
                 // Clickable geofence icon
                 Column(
                     modifier = Modifier
@@ -220,7 +237,7 @@ fun TopNavBar(
                 DividerBlock()
                 InfoBlockGroup(
                     Icons.Default.Sync,
-                    listOf("${telemetryState.mode}", if (telemetryState.armed) "Armed" else "Disarmed")
+                    listOf(displayMode, if (telemetryState.armed) "Armed" else "Disarmed")
                 )
                 DividerBlock()
 
@@ -273,6 +290,26 @@ fun TopNavBar(
                             onClick = {
                                 kebabMenuExpanded = false
                                 navController.navigate(Screen.Settings.route)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Disconnect") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.LinkOff,
+                                    contentDescription = "Disconnect",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                kebabMenuExpanded = false
+                                // Disconnect from flight controller
+                                navController.navigate(Screen.Connection.route)
+                                // Launch coroutine to disconnect
+                                coroutineScope.launch {
+                                    telemetryViewModel.cancelConnection()
+                                }
                             }
                         )
                         DropdownMenuItem(

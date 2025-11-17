@@ -73,5 +73,6 @@ data class CalibrationUiState(
     val totalPositions: Int = 6,
     val isConnected: Boolean = false,
     val showCancelDialog: Boolean = false,
+    val showRebootDialog: Boolean = false,
     val buttonText: String = "Start Calibration"
 )

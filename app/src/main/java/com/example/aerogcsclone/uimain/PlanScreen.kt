@@ -53,7 +53,7 @@ fun PlanScreen(
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val geofencePolygon by telemetryViewModel.geofencePolygon.collectAsState()
     val context = LocalContext.current
-
+    val uploadProgress by telemetryViewModel.missionUploadProgress.collectAsState()
 
     // State management
     var isGridSurveyMode by remember { mutableStateOf(false) }
@@ -206,31 +206,15 @@ fun PlanScreen(
     // Map click handler
     val onMapClick: (LatLng) -> Unit = { latLng ->
         if (isGridSurveyMode) {
+            // Grid mode: clicking on map adds polygon points
             surveyPolygon = surveyPolygon + latLng
             if (surveyPolygon.size >= 3) {
                 regenerateGrid()
             }
         } else {
-            val seq = waypoints.size
-            val isTakeoff = seq == 0
-            val item = buildMissionItemFromLatLng(latLng, seq, isTakeoff)
-            points.add(latLng)
-            waypoints.add(item)
-            Toast.makeText(context, "Waypoints: ${points.joinToString { "(${it.latitude},${it.longitude})" }}", Toast.LENGTH_SHORT).show()
-
-            // Previously we updated SharedViewModel planning waypoints here which caused the planned
-            // mission to be displayed across the app immediately. Remove that so the mission stays
-            // local to the Plan screen until the user explicitly uploads it.
-
-            // Recompute local geofence polygon for waypoint planning preview
-            if (geofenceEnabled) {
-                if (points.isNotEmpty()) {
-                    val bufferDistance = fenceRadius.toDouble()
-                    localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), bufferDistance)
-                } else {
-                    localGeofencePolygon = emptyList()
-                }
-            }
+            // Regular waypoint mode: Disable map click for adding waypoints
+            // User must use "Add Point" button instead
+            // Map click does nothing in waypoint mode now
         }
     }
 
@@ -293,7 +277,28 @@ fun PlanScreen(
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
                 // Use local geofence preview while planning; otherwise use the shared geofence
                 geofencePolygon = if (hasStartedPlanning) localGeofencePolygon else geofencePolygon,
-                geofenceEnabled = geofenceEnabled
+                geofenceEnabled = geofenceEnabled,
+                // Handle waypoint dragging
+                onWaypointDrag = { index, newPosition ->
+                    if (index in points.indices) {
+                        // Update the waypoint position
+                        points[index] = newPosition
+                        // Update the mission item
+                        val updatedItem = waypoints[index].copy(
+                            x = (newPosition.latitude * 1E7).toInt(),
+                            y = (newPosition.longitude * 1E7).toInt()
+                        )
+                        waypoints[index] = updatedItem
+
+                        // Update local geofence if enabled
+                        if (geofenceEnabled && points.isNotEmpty()) {
+                            localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(
+                                points.toList(),
+                                fenceRadius.toDouble()
+                            )
+                        }
+                    }
+                }
             )
 
             // Status indicator
@@ -660,7 +665,7 @@ fun PlanScreen(
                             Slider(
                                 value = lineSpacing,
                                 onValueChange = { lineSpacing = it },
-                                valueRange = 10f..100f,
+                                valueRange = 1f..30f,
                                 steps = 17,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
@@ -701,7 +706,7 @@ fun PlanScreen(
                                 value = surveySpeed,
                                 onValueChange = { surveySpeed = it },
                                 valueRange = 1f..20f,
-                                steps = 18,
+                                steps = 40,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
@@ -720,8 +725,8 @@ fun PlanScreen(
                             Slider(
                                 value = surveyAltitude,
                                 onValueChange = { surveyAltitude = it },
-                                valueRange = 10f..120f,
-                                steps = 21,
+                                valueRange = 1f..30f,
+                                steps = 60,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
@@ -922,84 +927,86 @@ fun PlanScreen(
         }
     }
 
-    // Dialogs
-    if (showMissionChoiceDialog && !hasStartedPlanning) {
-        MissionChoiceDialog(
-            onDismiss = {
-                showMissionChoiceDialog = false
-                hasStartedPlanning = true
-            },
-            onLoadExisting = {
-                showMissionChoiceDialog = false
-                showTemplateSelectionDialog = true
-            },
-            onCreateNew = {
-                showMissionChoiceDialog = false
-                hasStartedPlanning = true
-            },
-            hasTemplates = templates.isNotEmpty()
-        )
-    }
-
-    if (showTemplateSelectionDialog) {
-        TemplateSelectionDialog(
-            templates = templates,
-            onDismiss = {
-                showTemplateSelectionDialog = false
-                hasStartedPlanning = true
-            },
-            onSelectTemplate = { template ->
-                showTemplateSelectionDialog = false
-                hasStartedPlanning = true
-                missionTemplateViewModel.loadTemplate(template.id)
-            },
-            isLoading = missionTemplateUiState.isLoading
-        )
-    }
-
-    if (showSaveMissionDialog) {
-        SaveMissionDialog(
-            onDismiss = { showSaveMissionDialog = false },
-            onSave = { projectName, plotName ->
-                val currentGridParams = if (isGridSurveyMode) {
-                    GridParameters(
-                        lineSpacing = lineSpacing,
-                        gridAngle = gridAngle,
-                        surveySpeed = surveySpeed,
-                        surveyAltitude = surveyAltitude,
-                        surveyPolygon = surveyPolygon
-                    )
-                } else null
-
-                val waypointsToSave = if (isGridSurveyMode && gridResult != null) {
-                    gridResult!!.waypoints.mapIndexed { index, gridWaypoint ->
-                        buildMissionItemFromLatLng(
-                            gridWaypoint.position,
-                            index,
-                            index == 0,
-                            gridWaypoint.altitude
-                        )
-                    }
-                } else {
-                    waypoints.toList()
-                }
-
-                val positionsToSave = if (isGridSurveyMode && gridResult != null) {
-                    gridResult!!.waypoints.map { it.position }
-                } else {
-                    points.toList()
-                }
-
-                missionTemplateViewModel.saveTemplate(
-                    projectName = projectName,
-                    plotName = plotName,
-                    waypoints = waypointsToSave,
-                    waypointPositions = positionsToSave,
-                    isGridSurvey = isGridSurveyMode,
-                    gridParameters = currentGridParams
+    // Mission Upload Progress Dialog
+    uploadProgress?.let { progress ->
+        AlertDialog(
+            onDismissRequest = { /* Prevent dismissing during upload */ },
+            title = {
+                Text(
+                    text = "Uploading Mission",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
             },
-            isLoading = missionTemplateUiState.isLoading
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Stage indicator
+                    Text(
+                        text = progress.stage,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = when (progress.stage) {
+                            "Complete" -> Color.Green
+                            "Failed", "Error" -> Color.Red
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                    )
+
+                    // Progress bar
+                    LinearProgressIndicator(
+                        progress = progress.percentage / 100f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                        color = when (progress.stage) {
+                            "Complete" -> Color.Green
+                            "Failed", "Error" -> Color.Red
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                    )
+
+                    // Progress text
+                    Text(
+                        text = "${progress.percentage}%",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Current item / total items
+                    Text(
+                        text = "${progress.currentItem} / ${progress.totalItems} waypoints",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Progress message
+                    Text(
+                        text = progress.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    // Loading indicator (except for Complete/Failed/Error)
+                    if (progress.stage !in listOf("Complete", "Failed", "Error")) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .padding(top = 8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                // No confirm button during upload
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
