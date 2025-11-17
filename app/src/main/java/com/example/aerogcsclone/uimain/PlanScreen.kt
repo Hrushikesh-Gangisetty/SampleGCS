@@ -389,10 +389,22 @@ fun PlanScreen(
                     // Upload Mission button - now dark
                     ElevatedButton(
                         onClick = {
+                            // CRITICAL FIX: Validate GPS position before upload
+                            val homeLat = telemetryState.latitude
+                            val homeLon = telemetryState.longitude
+
+                            // Check if we have valid GPS coordinates
+                            if (homeLat == null || homeLon == null || (homeLat == 0.0 && homeLon == 0.0)) {
+                                Toast.makeText(
+                                    context,
+                                    "Cannot upload mission: Invalid GPS position. Please wait for valid GPS fix.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                return@ElevatedButton
+                            }
+
                             if (isGridSurveyMode && gridResult != null) {
                                 // Grid survey mission upload
-                                val homeLat = telemetryState.latitude ?: 0.0
-                                val homeLon = telemetryState.longitude ?: 0.0
                                 val homePosition = LatLng(homeLat, homeLon)
                                 val currentHeading = telemetryState.heading ?: 0f
                                 val fcuSystemId = telemetryViewModel.getFcuSystemId()
@@ -429,39 +441,52 @@ fun PlanScreen(
                              } else if (points.isNotEmpty()) {
                                  // Regular waypoint mission upload
                                  val builtMission = mutableListOf<MissionItemInt>()
-                                 val homeLat = telemetryState.latitude ?: 0.0
-                                 val homeLon = telemetryState.longitude ?: 0.0
                                  val homeAlt = telemetryState.altitudeMsl ?: 10f
                                  val fcuSystemId = telemetryViewModel.getFcuSystemId()
                                  val fcuComponentId = telemetryViewModel.getFcuComponentId()
 
-                                // Add home location as first waypoint
+                                // CRITICAL FIX: Correct MAVLink mission structure for ArduPilot
+                                // seq: 0 = HOME position (NAV_WAYPOINT with current=1)
+                                // seq: 1 = TAKEOFF
+                                // seq: 2+ = Mission waypoints
+
+                                // Sequence 0: Home position as NAV_WAYPOINT (current=1)
                                 builtMission.add(
                                     MissionItemInt(
                                         targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = 0u,
                                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                         command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-                                        current = 1u, autocontinue = 1u,
-                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
-                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = homeAlt
+                                        current = 1u, // MUST be 1 for first item (home)
+                                        autocontinue = 1u,
+                                        param1 = 0f, // Hold time
+                                        param2 = 0f, // Acceptance radius
+                                        param3 = 0f, // Pass through waypoint
+                                        param4 = 0f, // Yaw
+                                        x = (homeLat * 1E7).toInt(),
+                                        y = (homeLon * 1E7).toInt(),
+                                        z = 0f  // Home altitude (relative)
                                     )
                                 )
 
-                                // Add takeoff command as second waypoint
+                                // Sequence 1: Takeoff command
                                 builtMission.add(
                                     MissionItemInt(
                                         targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = 1u,
                                         frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                         command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
                                         current = 0u, autocontinue = 1u,
-                                        param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
-                                        x = (homeLat * 1E7).toInt(), y = (homeLon * 1E7).toInt(), z = 10f
+                                        param1 = 0f, // Pitch angle
+                                        param2 = 0f, param3 = 0f,
+                                        param4 = 0f, // Yaw angle
+                                        x = (homeLat * 1E7).toInt(),
+                                        y = (homeLon * 1E7).toInt(),
+                                        z = 10f  // Takeoff altitude
                                     )
                                 )
 
-                                // Add user-defined waypoints
+                                // Sequence 2+: User-defined waypoints
                                 points.forEachIndexed { idx, latLng ->
-                                    val seq = idx + 2
+                                    val seq = idx + 2  // Start from seq=2 (0=home, 1=takeoff)
                                     val isLast = idx == points.lastIndex
                                     builtMission.add(
                                         MissionItemInt(
@@ -469,9 +494,11 @@ fun PlanScreen(
                                             frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                                             command = if (isLast) MavEnumValue.of(MavCmd.NAV_LAND) else MavEnumValue.of(MavCmd.NAV_WAYPOINT),
                                             current = 0u, autocontinue = 1u,
-                                            param1 = 0f, param2 = 0f, param3 = 0f, param4 = 0f,
+                                            param1 = 0f, // Loiter time (for waypoint)
+                                            param2 = 0f, param3 = 0f, param4 = 0f,
                                             x = (latLng.latitude * 1E7).toInt(),
-                                            y = (latLng.longitude * 1E7).toInt(), z = 10f
+                                            y = (latLng.longitude * 1E7).toInt(),
+                                            z = 10f  // Waypoint altitude
                                         )
                                     )
                                 }

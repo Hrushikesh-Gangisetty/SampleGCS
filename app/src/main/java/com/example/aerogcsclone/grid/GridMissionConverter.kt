@@ -29,7 +29,7 @@ object GridMissionConverter {
     ): List<MissionItemInt> {
         val missionItems = mutableListOf<MissionItemInt>()
 
-        // Sequence 0: Home position as NAV_WAYPOINT
+        // CRITICAL FIX: Sequence 0 = HOME position (NAV_WAYPOINT with current=1, z=0f)
         missionItems.add(
             MissionItemInt(
                 targetSystem = fcuSystemId,
@@ -37,19 +37,20 @@ object GridMissionConverter {
                 seq = 0u,
                 frame = MavEnumValue.of(MavFrame.GLOBAL_RELATIVE_ALT_INT),
                 command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
-                current = 1u, // True for first item
+                current = 1u, // MUST be 1 for first item
                 autocontinue = 1u,
-                param1 = 0f,
-                param2 = 0f,
-                param3 = 0f,
-                param4 = 0f,
+                param1 = 0f, // Hold time
+                param2 = 0f, // Acceptance radius
+                param3 = 0f, // Pass through
+                param4 = 0f, // Yaw
                 x = (homePosition.latitude * 1E7).toInt(),
                 y = (homePosition.longitude * 1E7).toInt(),
-                z = 10f // Default takeoff altitude
+                z = 0f // CRITICAL: HOME altitude must be 0 (relative)
             )
         )
 
-        // Sequence 1: Takeoff at home position
+        // Sequence 1: Takeoff at home position to survey altitude
+        val takeoffAltitude = gridResult.waypoints.firstOrNull()?.altitude ?: 15f
         missionItems.add(
             MissionItemInt(
                 targetSystem = fcuSystemId,
@@ -59,13 +60,13 @@ object GridMissionConverter {
                 command = MavEnumValue.of(MavCmd.NAV_TAKEOFF),
                 current = 0u,
                 autocontinue = 1u,
-                param1 = 0f,
+                param1 = 0f, // Minimum pitch
                 param2 = 0f,
                 param3 = 0f,
-                param4 = 0f,
+                param4 = 0f, // Yaw
                 x = (homePosition.latitude * 1E7).toInt(),
                 y = (homePosition.longitude * 1E7).toInt(),
-                z = 15f // Takeoff altitude
+                z = takeoffAltitude // Takeoff to survey altitude
             )
         )
 
@@ -98,7 +99,7 @@ object GridMissionConverter {
         var lastLineIndex = -1
         var isFirstWaypoint = true
 
-        // Convert grid waypoints to mission items
+        // Convert grid waypoints to mission items (starting from seq=2 or seq=3 if holdNosePosition)
         gridResult.waypoints.forEach { waypoint ->
             // For the first waypoint after takeoff, add speed command BEFORE the waypoint
             // This ensures we have NAV_WAYPOINT -> DO_CHANGE_SPEED -> NAV_WAYPOINT sequence

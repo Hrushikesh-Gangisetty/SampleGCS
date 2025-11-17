@@ -816,30 +816,82 @@ class MavlinkTelemetryRepository(
             throw IllegalStateException("Invalid mission sequence: gaps or duplicates detected")
         }
 
+        // NEW: Validate mission parameters to catch errors before upload
+        missionItems.forEachIndexed { idx, item ->
+            // Validate latitude/longitude for waypoint commands
+            if (item.command.value == 16u || item.command.value == 22u) { // NAV_WAYPOINT or NAV_TAKEOFF
+                val lat = item.x / 1e7
+                val lon = item.y / 1e7
+                if (lat < -90.0 || lat > 90.0) {
+                    Log.e("MavlinkRepo", "[Mission Upload] Invalid latitude at seq=$idx: $lat")
+                    throw IllegalArgumentException("Invalid latitude at waypoint $idx: $lat (must be -90 to 90)")
+                }
+                if (lon < -180.0 || lon > 180.0) {
+                    Log.e("MavlinkRepo", "[Mission Upload] Invalid longitude at seq=$idx: $lon")
+                    throw IllegalArgumentException("Invalid longitude at waypoint $idx: $lon (must be -180 to 180)")
+                }
+                if (lat == 0.0 && lon == 0.0 && item.command.value == 16u) {
+                    Log.w("MavlinkRepo", "[Mission Upload] Warning: Waypoint at seq=$idx has lat=0, lon=0 (null island)")
+                }
+            }
+
+            // Validate altitude for waypoint commands
+            if (item.command.value == 16u || item.command.value == 22u) {
+                if (item.z < 0f) {
+                    Log.e("MavlinkRepo", "[Mission Upload] Invalid altitude at seq=$idx: ${item.z} (negative altitude)")
+                    throw IllegalArgumentException("Invalid altitude at waypoint $idx: ${item.z} (cannot be negative)")
+                }
+                if (item.z > 10000f) {
+                    Log.w("MavlinkRepo", "[Mission Upload] Warning: Very high altitude at seq=$idx: ${item.z}m (>10km)")
+                }
+            }
+        }
+
         // Validate target IDs are set
         val invalidItems = missionItems.filter { it.targetSystem == 0u.toUByte() || it.targetComponent == 0u.toUByte() }
         if (invalidItems.isNotEmpty()) {
             Log.w("MavlinkRepo", "[Mission Upload] Warning: ${invalidItems.size} mission items have targetSystem/Component set to 0")
-            Log.w("MavlinkRepo", "[Mission Upload] This may cause issues on real hardware. FCU IDs should be: sys=$fcuSystemId comp=$fcuComponentId")
+            Log.w("MavlinkRepo", "[Mission Upload] These will be corrected to FCU IDs: sys=$fcuSystemId comp=$fcuComponentId")
         }
 
         // Log mission structure for debugging
+        Log.i("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
         Log.i("MavlinkRepo", "[Mission Upload] FCU IDs: sys=$fcuSystemId comp=$fcuComponentId")
         Log.i("MavlinkRepo", "[Mission Upload] GCS IDs: sys=$gcsSystemId comp=$gcsComponentId")
-        Log.i("MavlinkRepo", "[Mission Upload] Mission structure:")
+        Log.i("MavlinkRepo", "[Mission Upload] Mission structure (${missionItems.size} items):")
         missionItems.forEachIndexed { idx, item ->
-            Log.i("MavlinkRepo", "  [$idx] seq=${item.seq} cmd=${item.command.value} current=${item.current} " +
+            val cmdName = item.command.entry?.name ?: "CMD_${item.command.value}"
+            val frameName = item.frame.entry?.name ?: "FRAME_${item.frame.value}"
+            Log.i("MavlinkRepo", "  [$idx] seq=${item.seq} cmd=$cmdName frame=$frameName current=${item.current} " +
                     "target=${item.targetSystem}/${item.targetComponent} " +
-                    "frame=${item.frame.entry?.name ?: item.frame.value} " +
-                    "pos=${item.x / 1e7},${item.y / 1e7},${item.z}")
+                    "pos=${item.x / 1e7},${item.y / 1e7},${item.z}m " +
+                    "autocont=${item.autocontinue}")
         }
+        Log.i("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
 
         try {
             // Step 0: Clear previous mission with retry logic
-            Log.i("MavlinkRepo", "[Mission Upload] Sending MISSION_CLEAR_ALL...")
+            Log.i("MavlinkRepo", "[Mission Upload] Phase 1: Clearing existing mission...")
             var clearAck = false
             val maxClearAttempts = 3
-            
+
+            // CRITICAL FIX: Use a channel to collect MISSION_ACK during clear phase
+            val clearAckChannel = MutableSharedFlow<MissionAck>(replay = 0, extraBufferCapacity = 10)
+
+            // Start collector job BEFORE sending MISSION_CLEAR_ALL
+            val clearCollectorJob = AppScope.launch {
+                mavFrame
+                    .filter { frame ->
+                        frame.systemId == fcuSystemId && frame.componentId == fcuComponentId
+                    }
+                    .map { it.message }
+                    .filterIsInstance<MissionAck>()
+                    .collect { ack ->
+                        Log.i("MavlinkRepo", "[Mission Upload CLEAR] MISSION_ACK intercepted: type=${ack.type.entry?.name ?: ack.type.value}")
+                        clearAckChannel.emit(ack)
+                    }
+            }
+
             for (attempt in 1..maxClearAttempts) {
                 Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL attempt $attempt/$maxClearAttempts")
                 val clearAll = MissionClearAll(
@@ -848,45 +900,49 @@ class MavlinkTelemetryRepository(
                     missionType = MavEnumValue.of(MavMissionType.MISSION)
                 )
                 connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, clearAll)
-                
-                // Wait for MISSION_ACK for MISSION_CLEAR_ALL (not COMMAND_ACK)
-                val clearAckDeferred = CompletableDeferred<Boolean>()
-                val clearJob = AppScope.launch {
-                    connection.mavFrame
-                        .filter { it.systemId == fcuSystemId }
-                        .map { it.message }
-                        .filterIsInstance<MissionAck>()
-                        .collect { ack ->
-                            Log.i("MavlinkRepo", "[Mission Upload] MISSION_ACK received: type=${ack.type.entry?.name ?: ack.type.value}")
-                            if (ack.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) {
-                                Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL acknowledged by FCU")
-                                clearAckDeferred.complete(true)
-                            } else {
-                                Log.w("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL rejected: ${ack.type.entry?.name ?: ack.type.value}")
-                            }
+                Log.i("MavlinkRepo", "[Mission Upload] Sent MISSION_CLEAR_ALL, waiting for ACK...")
+
+                // Wait for MISSION_ACK from the channel
+                val ackReceived = withTimeoutOrNull(7000L) {
+                    clearAckChannel.first { ack ->
+                        Log.i("MavlinkRepo", "[Mission Upload] Processing MISSION_ACK: type=${ack.type.entry?.name ?: ack.type.value}")
+                        if (ack.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) {
+                            Log.i("MavlinkRepo", "[Mission Upload] ✅ MISSION_CLEAR_ALL acknowledged by FCU")
+                            true
+                        } else {
+                            Log.e("MavlinkRepo", "[Mission Upload] ❌ MISSION_CLEAR_ALL rejected: ${ack.type.entry?.name ?: ack.type.value}")
+                            false
                         }
+                    }
                 }
-                clearAck = withTimeoutOrNull(7000L) { clearAckDeferred.await() } ?: false
-                clearJob.cancel()
-                
-                if (clearAck) {
-                    Log.i("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL successful on attempt $attempt")
+
+                if (ackReceived != null && ackReceived.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) {
+                    clearAck = true
+                    Log.i("MavlinkRepo", "[Mission Upload] ✅ MISSION_CLEAR_ALL successful on attempt $attempt")
                     break
                 } else if (attempt < maxClearAttempts) {
-                    Log.w("MavlinkRepo", "[Mission Upload] No ACK for MISSION_CLEAR_ALL on attempt $attempt, retrying...")
-                    delay(1500L) // Wait 1.5 seconds before retry
+                    Log.w("MavlinkRepo", "[Mission Upload] ⚠️ No ACK for MISSION_CLEAR_ALL on attempt $attempt, retrying...")
+                    delay(1500L)
                 }
             }
             
+            // Cancel the collector job
+            clearCollectorJob.cancel()
+
             if (!clearAck) {
-                Log.e("MavlinkRepo", "[Mission Upload] MISSION_CLEAR_ALL failed after $maxClearAttempts attempts")
+                Log.e("MavlinkRepo", "[Mission Upload] ❌ MISSION_CLEAR_ALL failed after $maxClearAttempts attempts")
                 return false
             }
 
-            // Give FCU time to process the clear command
-            delay(500L)
+            // CRITICAL: Give FCU MORE time to process the clear command (real hardware needs this)
+            delay(1000L)  // Increased from 500ms to 1000ms
 
-            Log.i("MavlinkRepo", "[Mission Upload] Starting upload of ${missionItems.size} items...")
+            Log.i("MavlinkRepo", "[Mission Upload] Phase 2: Uploading ${missionItems.size} mission items...")
+            Log.i("MavlinkRepo", "[Mission Upload] Preparing MISSION_COUNT message...")
+            Log.i("MavlinkRepo", "[Mission Upload]   - Target: sys=$fcuSystemId comp=$fcuComponentId")
+            Log.i("MavlinkRepo", "[Mission Upload]   - Count: ${missionItems.size}")
+            Log.i("MavlinkRepo", "[Mission Upload]   - Sender: sys=$gcsSystemId comp=$gcsComponentId")
+
             // Send MissionCount
             val missionCount = MissionCount(
                 targetSystem = fcuSystemId,
@@ -894,32 +950,68 @@ class MavlinkTelemetryRepository(
                 count = missionItems.size.toUShort(),
                 missionType = MavEnumValue.of(MavMissionType.MISSION)
             )
-            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
-            Log.i("MavlinkRepo", "[Mission Upload] Sent MISSION_COUNT=${missionItems.size}")
 
-            val finalAckDeferred = CompletableDeferred<Pair<Boolean, String>>() // (success, errorMessage)
+            try {
+                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
+                Log.i("MavlinkRepo", "[Mission Upload] ✅ Sent MISSION_COUNT=${missionItems.size}")
+                Log.i("MavlinkRepo", "[Mission Upload] Waiting for FCU to send MISSION_REQUEST messages...")
+            } catch (e: Exception) {
+                Log.e("MavlinkRepo", "[Mission Upload] ❌ Failed to send MISSION_COUNT", e)
+                return false
+            }
+
+            val finalAckDeferred = CompletableDeferred<Pair<Boolean, String>>()
             val sentSeqs = mutableSetOf<Int>()
             var firstRequestReceived = false
             var uploadCancelled = false
-
-            // Track mission request/response state
             var lastRequestedSeq = -1
-            val maxItemRetries = 3
-            val itemRetryCount = mutableMapOf<Int, Int>()
+            var lastRequestTime = System.currentTimeMillis()
 
-            // Resend MISSION_COUNT periodically until first request or timeout
+            // NEW: Track request count per sequence to detect duplicates
+            val requestCountPerSeq = mutableMapOf<Int, Int>()
+
+            // IMPROVED: More conservative MISSION_COUNT resend
             val resendJob = AppScope.launch {
                 var resendCount = 0
-                val maxResendAttempts = 8
+                val maxResendAttempts = 3 // Reduced from 8
+                val resendInterval = 2500L // Increased from 1500ms
+
                 while (isActive && !firstRequestReceived && !finalAckDeferred.isCompleted && resendCount < maxResendAttempts) {
-                    delay(1500)
+                    delay(resendInterval)
                     if (!firstRequestReceived && !finalAckDeferred.isCompleted) {
                         try {
                             connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionCount)
                             resendCount++
-                            Log.d("MavlinkRepo", "[Mission Upload] Resent MISSION_COUNT (attempt $resendCount/$maxResendAttempts)")
+                            Log.w("MavlinkRepo", "[Mission Upload] ⚠️ FCU not responding - Resent MISSION_COUNT (attempt ${resendCount + 1}/${maxResendAttempts + 1})")
                         } catch (e: Exception) {
                             Log.e("MavlinkRepo", "[Mission Upload] Failed to resend MISSION_COUNT", e)
+                        }
+                    }
+                }
+
+                if (resendCount >= maxResendAttempts && !firstRequestReceived) {
+                    Log.e("MavlinkRepo", "[Mission Upload] ❌ FCU never responded to MISSION_COUNT after ${maxResendAttempts + 1} attempts")
+                    Log.e("MavlinkRepo", "[Mission Upload] ❌ This usually means:")
+                    Log.e("MavlinkRepo", "[Mission Upload]    1. FCU rejected the mission structure")
+                    Log.e("MavlinkRepo", "[Mission Upload]    2. Mission has invalid items (check seq 0 is HOME with z=0)")
+                    Log.e("MavlinkRepo", "[Mission Upload]    3. Communication issue with FCU")
+                }
+            }
+
+            // NEW: Watchdog to detect stalled uploads
+            val watchdogJob = AppScope.launch {
+                val itemRequestTimeout = 8000L // 8 seconds per item
+                while (isActive && !finalAckDeferred.isCompleted) {
+                    delay(1000)
+
+                    if (firstRequestReceived && !finalAckDeferred.isCompleted) {
+                        val timeSinceLastRequest = System.currentTimeMillis() - lastRequestTime
+
+                        if (timeSinceLastRequest > itemRequestTimeout) {
+                            Log.e("MavlinkRepo", "[Mission Upload] ❌ Upload stalled - no request from FCU for ${timeSinceLastRequest}ms")
+                            Log.e("MavlinkRepo", "[Mission Upload] Last requested seq=$lastRequestedSeq, sent ${sentSeqs.size}/${missionItems.size} items")
+                            finalAckDeferred.complete(false to "Upload stalled - FCU stopped requesting items after $lastRequestedSeq")
+                            break
                         }
                     }
                 }
@@ -934,22 +1026,39 @@ class MavlinkTelemetryRepository(
                         val senderSys = frame.systemId
                         val senderComp = frame.componentId
 
+                        // Only process messages from the target FCU
+                        if (senderSys != fcuSystemId || senderComp != fcuComponentId) {
+                            return@collect
+                        }
+
                         when (val msg = frame.message) {
                             is MissionRequestInt -> {
-                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequestInt from sys=$senderSys comp=$senderComp seq=${msg.seq}")
                                 firstRequestReceived = true
+                                lastRequestTime = System.currentTimeMillis()
                                 val seq = msg.seq.toInt()
+
+                                // Track duplicate requests
+                                val requestCount = requestCountPerSeq.getOrDefault(seq, 0) + 1
+                                requestCountPerSeq[seq] = requestCount
+
+                                if (requestCount > 1) {
+                                    Log.w("MavlinkRepo", "[Mission Upload] ⚠️ FCU re-requested seq=$seq (request #$requestCount) - possible packet loss")
+                                }
+
+                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequestInt seq=${msg.seq} (request #$requestCount)")
                                 lastRequestedSeq = seq
 
                                 if (seq < 0 || seq >= missionItems.size) {
-                                    Log.e("MavlinkRepo", "[Mission Upload] FC requested invalid seq=$seq (valid range: 0-${missionItems.size-1})")
+                                    Log.e("MavlinkRepo", "[Mission Upload] ❌ FCU requested invalid seq=$seq (valid: 0-${missionItems.size-1})")
+                                    finalAckDeferred.complete(false to "FCU requested invalid sequence $seq")
                                     return@collect
                                 }
 
                                 val item = missionItems[seq]
-                                Log.i("MavlinkRepo", "[Mission Upload] Sending item seq=$seq: cmd=${item.command.entry?.name ?: item.command.value} lat=${item.x / 1e7} lon=${item.y / 1e7} alt=${item.z}")
+                                val cmdName = item.command.entry?.name ?: "CMD_${item.command.value}"
+                                Log.i("MavlinkRepo", "[Mission Upload] → Sending seq=$seq: $cmdName lat=${item.x / 1e7} lon=${item.y / 1e7} alt=${item.z}m current=${item.current}")
 
-                                // Use FCU's system/component IDs as target
+                                // Ensure target IDs are correct
                                 val missionItem = item.copy(
                                     targetSystem = fcuSystemId,
                                     targetComponent = fcuComponentId,
@@ -957,32 +1066,45 @@ class MavlinkTelemetryRepository(
                                 )
 
                                 try {
+                                    // CRITICAL: Add small delay between items for Bluetooth/real hardware
+                                    if (seq > 0) {
+                                        delay(50L)  // 50ms delay between items for slower connections
+                                    }
+
                                     connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
                                     sentSeqs.add(seq)
-                                    Log.i("MavlinkRepo", "[Mission Upload] Sent MISSION_ITEM_INT seq=$seq")
+                                    Log.i("MavlinkRepo", "[Mission Upload] ✓ Sent seq=$seq (${sentSeqs.size}/${missionItems.size})")
                                 } catch (e: Exception) {
-                                    Log.e("MavlinkRepo", "[Mission Upload] Failed to send mission item seq=$seq", e)
-                                    itemRetryCount[seq] = (itemRetryCount[seq] ?: 0) + 1
-                                    if ((itemRetryCount[seq] ?: 0) >= maxItemRetries) {
-                                        Log.e("MavlinkRepo", "[Mission Upload] Max retries exceeded for seq=$seq")
-                                        finalAckDeferred.complete(false to "Failed to send item $seq after $maxItemRetries attempts")
-                                    }
+                                    Log.e("MavlinkRepo", "[Mission Upload] ❌ Failed to send seq=$seq", e)
+                                    finalAckDeferred.complete(false to "Network error sending item $seq: ${e.message}")
                                 }
                             }
 
                             is MissionRequest -> {
-                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequest from sys=$senderSys comp=$senderComp seq=${msg.seq}")
                                 firstRequestReceived = true
+                                lastRequestTime = System.currentTimeMillis()
                                 val seq = msg.seq.toInt()
+
+                                // Track duplicate requests
+                                val requestCount = requestCountPerSeq.getOrDefault(seq, 0) + 1
+                                requestCountPerSeq[seq] = requestCount
+
+                                if (requestCount > 1) {
+                                    Log.w("MavlinkRepo", "[Mission Upload] ⚠️ FCU re-requested seq=$seq (request #$requestCount) - possible packet loss")
+                                }
+
+                                Log.d("MavlinkRepo", "[Mission Upload] MissionRequest (legacy) seq=${msg.seq} (request #$requestCount)")
                                 lastRequestedSeq = seq
 
                                 if (seq < 0 || seq >= missionItems.size) {
-                                    Log.e("MavlinkRepo", "[Mission Upload] FC requested invalid seq=$seq (valid range: 0-${missionItems.size-1})")
+                                    Log.e("MavlinkRepo", "[Mission Upload] ❌ FCU requested invalid seq=$seq (valid: 0-${missionItems.size-1})")
+                                    finalAckDeferred.complete(false to "FCU requested invalid sequence $seq")
                                     return@collect
                                 }
 
                                 val item = missionItems[seq]
-                                Log.i("MavlinkRepo", "[Mission Upload] Sending item seq=$seq: cmd=${item.command.entry?.name ?: item.command.value} lat=${item.x / 1e7} lon=${item.y / 1e7} alt=${item.z}")
+                                val cmdName = item.command.entry?.name ?: "CMD_${item.command.value}"
+                                Log.i("MavlinkRepo", "[Mission Upload] → Sending seq=$seq: $cmdName lat=${item.x / 1e7} lon=${item.y / 1e7} alt=${item.z}m current=${item.current}")
 
                                 val missionItem = item.copy(
                                     targetSystem = fcuSystemId,
@@ -991,60 +1113,81 @@ class MavlinkTelemetryRepository(
                                 )
 
                                 try {
+                                    // CRITICAL: Add small delay between items for Bluetooth/real hardware
+                                    if (seq > 0) {
+                                        delay(50L)  // 50ms delay between items for slower connections
+                                    }
+
                                     connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionItem)
                                     sentSeqs.add(seq)
-                                    Log.i("MavlinkRepo", "[Mission Upload] Sent MISSION_ITEM_INT seq=$seq (responding to MissionRequest)")
+                                    Log.i("MavlinkRepo", "[Mission Upload] ✓ Sent seq=$seq (${sentSeqs.size}/${missionItems.size})")
                                 } catch (e: Exception) {
-                                    Log.e("MavlinkRepo", "[Mission Upload] Failed to send mission item seq=$seq", e)
-                                    itemRetryCount[seq] = (itemRetryCount[seq] ?: 0) + 1
-                                    if ((itemRetryCount[seq] ?: 0) >= maxItemRetries) {
-                                        Log.e("MavlinkRepo", "[Mission Upload] Max retries exceeded for seq=$seq")
-                                        finalAckDeferred.complete(false to "Failed to send item $seq after $maxItemRetries attempts")
-                                    }
+                                    Log.e("MavlinkRepo", "[Mission Upload] ❌ Failed to send seq=$seq", e)
+                                    finalAckDeferred.complete(false to "Network error sending item $seq: ${e.message}")
                                 }
                             }
 
                             is MissionAck -> {
+                                // CRITICAL: Ignore ACKs from MISSION_CLEAR_ALL phase
+                                if (!firstRequestReceived) {
+                                    Log.d("MavlinkRepo", "[Mission Upload] Ignoring MISSION_ACK before upload started (from CLEAR phase)")
+                                    return@collect
+                                }
+
                                 val ackType = msg.type.entry?.name ?: msg.type.value.toString()
-                                Log.i("MavlinkRepo", "[Mission Upload] MISSION_ACK received: type=$ackType (lastRequestedSeq=$lastRequestedSeq, sentCount=${sentSeqs.size})")
+                                Log.i("MavlinkRepo", "[Mission Upload] MISSION_ACK received: type=$ackType (sent=${sentSeqs.size}/${missionItems.size}, lastReq=$lastRequestedSeq)")
 
                                 when (msg.type.value) {
                                     MavMissionResult.MAV_MISSION_ACCEPTED.value -> {
-                                        // Only accept as final ACK if we've sent all items
-                                        if (sentSeqs.size >= missionItems.size) {
-                                            Log.i("MavlinkRepo", "[Mission Upload] Mission ACCEPTED - all items sent")
-                                            finalAckDeferred.complete(true to "")
+                                        // Only accept if ALL items requested and sent
+                                        if (sentSeqs.size == missionItems.size && lastRequestedSeq == missionItems.size - 1) {
+                                            // NEW: Verify all sequences 0 to N-1 were sent
+                                            val allSequences = (0 until missionItems.size).toSet()
+                                            if (sentSeqs == allSequences) {
+                                                Log.i("MavlinkRepo", "[Mission Upload] ✅ Mission ACCEPTED - all ${missionItems.size} items confirmed")
+                                                Log.i("MavlinkRepo", "[Mission Upload] Sequence verification: ${sentSeqs.sorted()}")
+                                                finalAckDeferred.complete(true to "")
+                                            } else {
+                                                val missing = allSequences - sentSeqs
+                                                Log.e("MavlinkRepo", "[Mission Upload] ❌ ACCEPTED but missing sequences: $missing")
+                                                finalAckDeferred.complete(false to "Mission incomplete - missing sequences: $missing")
+                                            }
                                         } else {
-                                            Log.d("MavlinkRepo", "[Mission Upload] Received ACCEPTED ACK but only sent ${sentSeqs.size}/${missionItems.size} items, continuing...")
+                                            Log.w("MavlinkRepo", "[Mission Upload] ⚠️ Premature ACCEPTED ACK - sent=${sentSeqs.size}/${missionItems.size}, lastReq=$lastRequestedSeq")
+                                            // Don't complete - wait for all items
                                         }
                                     }
                                     MavMissionResult.MAV_MISSION_INVALID_SEQUENCE.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_INVALID_SEQUENCE - FCU reports sequence error")
-                                        Log.e("MavlinkRepo", "[Mission Upload] Last requested: $lastRequestedSeq, Sent items: ${sentSeqs.sorted()}")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_INVALID_SEQUENCE")
+                                        Log.e("MavlinkRepo", "[Mission Upload] Diagnostics:")
+                                        Log.e("MavlinkRepo", "  - Last requested seq: $lastRequestedSeq")
+                                        Log.e("MavlinkRepo", "  - Sent sequences: ${sentSeqs.sorted()}")
+                                        Log.e("MavlinkRepo", "  - Expected range: 0-${missionItems.size - 1}")
+                                        Log.e("MavlinkRepo", "  - Duplicate requests: ${requestCountPerSeq.filter { it.value > 1 }}")
                                         finalAckDeferred.complete(false to "Invalid sequence error at item $lastRequestedSeq")
                                     }
                                     MavMissionResult.MAV_MISSION_DENIED.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_DENIED - FCU rejected the mission")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_DENIED")
                                         finalAckDeferred.complete(false to "Mission denied by flight controller")
                                     }
                                     MavMissionResult.MAV_MISSION_ERROR.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_ERROR - General mission error")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_ERROR")
                                         finalAckDeferred.complete(false to "Mission error reported by flight controller")
                                     }
                                     MavMissionResult.MAV_MISSION_UNSUPPORTED_FRAME.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_UNSUPPORTED_FRAME - Frame type not supported")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_UNSUPPORTED_FRAME")
                                         finalAckDeferred.complete(false to "Unsupported frame type in mission items")
                                     }
                                     MavMissionResult.MAV_MISSION_UNSUPPORTED.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_UNSUPPORTED - Mission not supported")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_UNSUPPORTED")
                                         finalAckDeferred.complete(false to "Mission type not supported by flight controller")
                                     }
                                     MavMissionResult.MAV_MISSION_NO_SPACE.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_NO_SPACE - Not enough space on FCU")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_NO_SPACE")
                                         finalAckDeferred.complete(false to "Not enough space on flight controller for mission")
                                     }
                                     MavMissionResult.MAV_MISSION_INVALID.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] MAV_MISSION_INVALID - Invalid mission")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ MAV_MISSION_INVALID")
                                         finalAckDeferred.complete(false to "Invalid mission data")
                                     }
                                     MavMissionResult.MAV_MISSION_INVALID_PARAM1.value,
@@ -1054,16 +1197,22 @@ class MavlinkTelemetryRepository(
                                     MavMissionResult.MAV_MISSION_INVALID_PARAM5_X.value,
                                     MavMissionResult.MAV_MISSION_INVALID_PARAM6_Y.value,
                                     MavMissionResult.MAV_MISSION_INVALID_PARAM7.value -> {
-                                        Log.e("MavlinkRepo", "[Mission Upload] Invalid parameter in mission item (error code: ${msg.type.value})")
-                                        finalAckDeferred.complete(false to "Invalid parameter in mission item")
+                                        Log.e("MavlinkRepo", "[Mission Upload] ❌ Invalid parameter in mission item (error: ${msg.type.value})")
+                                        Log.e("MavlinkRepo", "[Mission Upload] Problem at seq=$lastRequestedSeq")
+                                        if (lastRequestedSeq >= 0 && lastRequestedSeq < missionItems.size) {
+                                            val problemItem = missionItems[lastRequestedSeq]
+                                            Log.e("MavlinkRepo", "[Mission Upload] Item details: cmd=${problemItem.command.value} " +
+                                                    "lat=${problemItem.x / 1e7} lon=${problemItem.y / 1e7} alt=${problemItem.z}")
+                                        }
+                                        finalAckDeferred.complete(false to "Invalid parameter in mission item $lastRequestedSeq")
                                     }
                                     MavMissionResult.MAV_MISSION_OPERATION_CANCELLED.value -> {
-                                        Log.w("MavlinkRepo", "[Mission Upload] MAV_MISSION_OPERATION_CANCELLED - Upload cancelled")
+                                        Log.w("MavlinkRepo", "[Mission Upload] ⚠️ MAV_MISSION_OPERATION_CANCELLED")
                                         uploadCancelled = true
                                         finalAckDeferred.complete(false to "Mission upload cancelled")
                                     }
                                     else -> {
-                                        Log.w("MavlinkRepo", "[Mission Upload] Unknown MISSION_ACK type: ${msg.type.value}")
+                                        Log.w("MavlinkRepo", "[Mission Upload] ⚠️ Unknown MISSION_ACK type: ${msg.type.value}")
                                         finalAckDeferred.complete(false to "Unknown mission error: $ackType")
                                     }
                                 }
@@ -1077,34 +1226,46 @@ class MavlinkTelemetryRepository(
             }
 
             // Wait for first request with reasonable timeout
-            val firstRequestTimeout = 10000L
+            val firstRequestTimeout = 12000L // Increased from 10s
             val startWait = System.currentTimeMillis()
             while (!firstRequestReceived && !finalAckDeferred.isCompleted && System.currentTimeMillis() - startWait < firstRequestTimeout) {
                 delay(100)
             }
 
             if (!firstRequestReceived && !finalAckDeferred.isCompleted) {
-                Log.w("MavlinkRepo", "[Mission Upload] No MissionRequest received within ${firstRequestTimeout}ms - FCU may not support mission upload")
+                Log.e("MavlinkRepo", "[Mission Upload] ❌ No MissionRequest received within ${firstRequestTimeout}ms")
+                Log.e("MavlinkRepo", "[Mission Upload] FCU may not support mission upload or is not responding")
                 finalAckDeferred.complete(false to "No response from flight controller")
             }
 
             // Wait for final ACK or timeout
             val (success, errorMsg) = withTimeoutOrNull(timeoutMs) {
                 finalAckDeferred.await()
-            } ?: (false to "Mission upload timeout")
+            } ?: (false to "Mission upload timeout after ${timeoutMs}ms")
 
             job.cancel()
             resendJob.cancel()
+            watchdogJob.cancel()
 
             if (success) {
-                Log.i("MavlinkRepo", "[Mission Upload] ✅ Mission upload successful! Sent ${sentSeqs.size} items")
+                Log.i("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
+                Log.i("MavlinkRepo", "[Mission Upload] ✅ SUCCESS - Mission uploaded!")
+                Log.i("MavlinkRepo", "[Mission Upload] Total items: ${missionItems.size}")
+                Log.i("MavlinkRepo", "[Mission Upload] Sequences sent: ${sentSeqs.sorted()}")
+                Log.i("MavlinkRepo", "[Mission Upload] Duplicate requests: ${requestCountPerSeq.count { it.value > 1 }}")
+                Log.i("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
                 return true
             } else {
-                Log.e("MavlinkRepo", "[Mission Upload] ❌ Mission upload failed: $errorMsg")
+                Log.e("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
+                Log.e("MavlinkRepo", "[Mission Upload] ❌ FAILED - $errorMsg")
+                Log.e("MavlinkRepo", "[Mission Upload] Items sent: ${sentSeqs.size}/${missionItems.size}")
+                Log.e("MavlinkRepo", "[Mission Upload] Sequences sent: ${sentSeqs.sorted()}")
+                Log.e("MavlinkRepo", "[Mission Upload] Last requested: $lastRequestedSeq")
+                Log.e("MavlinkRepo", "[Mission Upload] ═══════════════════════════════════════")
                 return false
             }
         } catch (e: Exception) {
-            Log.e("MavlinkRepo", "[Mission Upload] Mission upload exception", e)
+            Log.e("MavlinkRepo", "[Mission Upload] ❌ Exception during upload", e)
             return false
         }
     }
