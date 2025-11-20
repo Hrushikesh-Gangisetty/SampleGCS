@@ -389,19 +389,8 @@ fun PlanScreen(
                     // Upload Mission button - now dark
                     ElevatedButton(
                         onClick = {
-                            // CRITICAL FIX: Validate GPS position before upload
-                            val homeLat = telemetryState.latitude
-                            val homeLon = telemetryState.longitude
-
-                            // Check if we have valid GPS coordinates
-                            if (homeLat == null || homeLon == null || (homeLat == 0.0 && homeLon == 0.0)) {
-                                Toast.makeText(
-                                    context,
-                                    "Cannot upload mission: Invalid GPS position. Please wait for valid GPS fix.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                return@ElevatedButton
-                            }
+                            val homeLat = telemetryState.latitude ?: 0.0
+                            val homeLon = telemetryState.longitude ?: 0.0
 
                             if (isGridSurveyMode && gridResult != null) {
                                 // Grid survey mission upload
