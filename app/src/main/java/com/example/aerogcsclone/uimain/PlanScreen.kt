@@ -67,7 +67,7 @@ fun PlanScreen(
     var hasStartedPlanning by remember { mutableStateOf(false) }
 
     // Grid survey parameters
-    var lineSpacing by remember { mutableStateOf(30f) }
+    var lineSpacing by remember { mutableStateOf(3f) }
     var gridAngle by remember { mutableStateOf(0f) }
     var surveySpeed by remember { mutableStateOf(10f) }
     var surveyAltitude by remember { mutableStateOf(60f) }
@@ -580,13 +580,7 @@ fun PlanScreen(
                         onClick = {
                             isGridSurveyMode = !isGridSurveyMode
                             showGridControls = isGridSurveyMode
-                            if (isGridSurveyMode) {
-                                points.clear()
-                                waypoints.clear()
-                            } else {
-                                surveyPolygon = emptyList()
-                                gridResult = null
-                            }
+                            // Don't clear data when toggling modes - preserve user's work
                         },
                         containerColor = if (isGridSurveyMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         modifier = Modifier.size(56.dp)
@@ -676,13 +670,13 @@ fun PlanScreen(
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Line Spacing", color = Color.White, modifier = Modifier.weight(1f))
-                                Text("${lineSpacing.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("${String.format(Locale.US, "%.1f", lineSpacing)} m", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                             Slider(
                                 value = lineSpacing,
                                 onValueChange = { lineSpacing = it },
-                                valueRange = 1f..30f,
-                                steps = 17,
+                                valueRange = 3f..5f,
+                                steps = 19,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,

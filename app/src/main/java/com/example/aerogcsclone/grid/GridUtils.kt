@@ -159,37 +159,21 @@ object GridUtils {
     }
 
     /**
-     * Calculates and formats the area of a polygon into ft², acres, or mi².
+     * Calculates and formats the area of a polygon into acres.
      * @param polygon The list of LatLng points defining the polygon.
-     * @return A formatted string representing the area.
+     * @return A formatted string representing the area in acres.
      */
     fun calculateAndFormatPolygonArea(polygon: List<LatLng>): String {
-        if (polygon.size < 3) return "0 ft²"
+        if (polygon.size < 3) return "0 acres"
 
         val areaInSqMeters = SphericalUtil.computeArea(polygon)
         val areaInSqFeet = areaInSqMeters * 10.7639
 
-        // Conversion constants
+        // Conversion constant
         val ft2PerAcre = 43560.0
-        val acresPerSqMi = 640.0
 
-        // Thresholds
-        val ft2Threshold = 21780.0 // ft²
-        val acreThreshold = 640.0   // acres
-
-        return when {
-            areaInSqFeet < ft2Threshold -> {
-                String.format(Locale.US, "%,.0f ft²", areaInSqFeet)
-            }
-            else -> {
-                val areaInAcres = areaInSqFeet / ft2PerAcre
-                if (areaInAcres < acreThreshold) {
-                    String.format(Locale.US, "%.1f acres", areaInAcres)
-                } else {
-                    val areaInSqMiles = areaInAcres / acresPerSqMi
-                    String.format(Locale.US, "%.1f mi²", areaInSqMiles)
-                }
-            }
-        }
+        // Convert to acres and format
+        val areaInAcres = areaInSqFeet / ft2PerAcre
+        return String.format(Locale.US, "%.2f acres", areaInAcres)
     }
 }
