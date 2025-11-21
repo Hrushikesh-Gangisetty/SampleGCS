@@ -80,6 +80,7 @@ class MavlinkTelemetryRepository(
     private var groundLevelAltitude: Float = 0f  // Store the starting ground level altitude
     private var previousArmedState = false  // Track previous armed state to detect transitions
     private var hasShownMissionStarted = false  // Prevent duplicate "Mission started" notifications
+    private var isMissionUploadInProgress = false  // Track if mission upload is actively in progress (not just clearing)
 
     // COMMAND_ACK flow for calibration and other commands
     private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
@@ -589,6 +590,13 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<MissionAck>()
                 .collect { missionAck ->
+                    // CRITICAL: Ignore ACKs during mission upload process
+                    // The uploadMissionWithAck function handles its own ACKs internally
+                    if (isMissionUploadInProgress) {
+                        Log.d("MissionUpload", "Global listener: Ignoring ACK during upload (handled by upload function)")
+                        return@collect
+                    }
+
                     val message = "Mission upload: ${missionAck.type.entry?.name ?: "UNKNOWN"}"
                     val type = if (missionAck.type.value == MavMissionResult.MAV_MISSION_ACCEPTED.value) NotificationType.SUCCESS else NotificationType.ERROR
                     sharedViewModel.addNotification(Notification(message, type))
@@ -839,45 +847,48 @@ class MavlinkTelemetryRepository(
      */
     @Suppress("DEPRECATION")
     suspend fun uploadMissionWithAck(missionItems: List<MissionItemInt>, timeoutMs: Long = 45000): Boolean {
-        if (!state.value.fcuDetected) {
-            Log.e("MissionUpload", "❌ FCU not detected")
-            throw IllegalStateException("FCU not detected")
-        }
-        if (missionItems.isEmpty()) {
-            Log.w("MissionUpload", "⚠️ No items to upload")
-            return false
-        }
-
-        // Validate sequence numbering
-        val sequences = missionItems.map { it.seq.toInt() }.sorted()
-        if (sequences != (0 until missionItems.size).toList()) {
-            Log.e("MissionUpload", "❌ Invalid sequence - Expected: 0-${missionItems.size-1}, Got: $sequences")
-            throw IllegalStateException("Invalid mission sequence")
-        }
-
-        // Quick validation of critical mission parameters
-        missionItems.forEachIndexed { idx, item ->
-            if (item.command.value in listOf(16u, 22u)) { // NAV_WAYPOINT or NAV_TAKEOFF
-                val lat = item.x / 1e7
-                val lon = item.y / 1e7
-                if (lat !in -90.0..90.0 || lon !in -180.0..180.0) {
-                    Log.e("MissionUpload", "❌ Invalid coords at seq=$idx: lat=$lat, lon=$lon")
-                    throw IllegalArgumentException("Invalid coordinates at waypoint $idx")
-                }
-                if (item.z < 0f || item.z > 10000f) {
-                    Log.e("MissionUpload", "❌ Invalid altitude at seq=$idx: ${item.z}m")
-                    throw IllegalArgumentException("Invalid altitude at waypoint $idx")
-                }
-            }
-        }
-
-        Log.i("MissionUpload", "═══════════════════════════════════════")
-        Log.i("MissionUpload", "Starting upload: ${missionItems.size} items")
-        Log.i("MissionUpload", "FCU: sys=$fcuSystemId comp=$fcuComponentId")
-        Log.i("MissionUpload", "GCS: sys=$gcsSystemId comp=$gcsComponentId")
-        Log.i("MissionUpload", "═══════════════════════════════════════")
+        // Mark upload as in progress to prevent global listener from showing notifications
+        isMissionUploadInProgress = true
 
         try {
+            if (!state.value.fcuDetected) {
+                Log.e("MissionUpload", "❌ FCU not detected")
+                throw IllegalStateException("FCU not detected")
+            }
+            if (missionItems.isEmpty()) {
+                Log.w("MissionUpload", "⚠️ No items to upload")
+                return false
+            }
+
+            // Validate sequence numbering
+            val sequences = missionItems.map { it.seq.toInt() }.sorted()
+            if (sequences != (0 until missionItems.size).toList()) {
+                Log.e("MissionUpload", "❌ Invalid sequence - Expected: 0-${missionItems.size-1}, Got: $sequences")
+                throw IllegalStateException("Invalid mission sequence")
+            }
+
+            // Quick validation of critical mission parameters
+            missionItems.forEachIndexed { idx, item ->
+                if (item.command.value in listOf(16u, 22u)) { // NAV_WAYPOINT or NAV_TAKEOFF
+                    val lat = item.x / 1e7
+                    val lon = item.y / 1e7
+                    if (lat !in -90.0..90.0 || lon !in -180.0..180.0) {
+                        Log.e("MissionUpload", "❌ Invalid coords at seq=$idx: lat=$lat, lon=$lon")
+                        throw IllegalArgumentException("Invalid coordinates at waypoint $idx")
+                    }
+                    if (item.z < 0f || item.z > 10000f) {
+                        Log.e("MissionUpload", "❌ Invalid altitude at seq=$idx: ${item.z}m")
+                        throw IllegalArgumentException("Invalid altitude at waypoint $idx")
+                    }
+                }
+            }
+
+            Log.i("MissionUpload", "═══════════════════════════════════════")
+            Log.i("MissionUpload", "Starting upload: ${missionItems.size} items")
+            Log.i("MissionUpload", "FCU: sys=$fcuSystemId comp=$fcuComponentId")
+            Log.i("MissionUpload", "GCS: sys=$gcsSystemId comp=$gcsComponentId")
+            Log.i("MissionUpload", "═══════════════════════════════════════")
+
             // Phase 1: Clear existing mission
             Log.i("MissionUpload", "Phase 1/2: Clearing existing mission...")
             val clearAckChannel = MutableSharedFlow<MissionAck>(replay = 0, extraBufferCapacity = 5)
@@ -1122,6 +1133,10 @@ class MavlinkTelemetryRepository(
         } catch (e: Exception) {
             Log.e("MissionUpload", "❌ Upload exception: ${e.message}", e)
             return false
+        } finally {
+            // Always reset flag when upload completes (success or failure)
+            isMissionUploadInProgress = false
+            Log.d("MissionUpload", "Upload process complete - re-enabling global ACK listener")
         }
     }
 
