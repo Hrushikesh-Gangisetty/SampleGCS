@@ -160,14 +160,28 @@ fun MainPage(
         var prevMissionCompleted by remember { mutableStateOf(false) }
         var prevMissionElapsedSec by remember { mutableStateOf<Long?>(null) }
         var missionJustCompleted by remember { mutableStateOf(false) }
-        LaunchedEffect(telemetryState.missionCompleted, telemetryState.missionElapsedSec) {
-            // Only show dialog if missionCompleted just transitioned to true AND timer is not running (i.e., mission just ended)
+        var missionWaitingForLanding by remember { mutableStateOf(false) }
+
+        LaunchedEffect(telemetryState.missionCompleted, telemetryState.missionElapsedSec, telemetryState.altitudeRelative) {
+            // Check if mission just completed (traveling done)
             val completedNow = !prevMissionCompleted && telemetryState.missionCompleted && telemetryState.missionElapsedSec == null && prevMissionElapsedSec != null
             if (completedNow) {
                 lastMissionTime = telemetryState.lastMissionElapsedSec
                 lastMissionDistance = telemetryState.totalDistanceMeters
-                missionJustCompleted = true
+                // Don't show dialog yet, wait for altitude to reach 0
+                missionWaitingForLanding = true
             }
+
+            // Check if drone has landed (altitude is 0 or very close to 0)
+            val altitude = telemetryState.altitudeRelative ?: 0f
+            val isLanded = altitude <= 0.5f // Consider landed if altitude is less than or equal to 0.5 meters
+
+            // Show dialog only when mission is waiting for landing AND altitude reaches 0
+            if (missionWaitingForLanding && isLanded) {
+                missionJustCompleted = true
+                missionWaitingForLanding = false
+            }
+
             prevMissionCompleted = telemetryState.missionCompleted
             prevMissionElapsedSec = telemetryState.missionElapsedSec
         }
