@@ -11,8 +11,8 @@ object GeofenceUtils {
     /**
      * Generates a polygon buffer around a list of waypoints
      * @param waypoints List of waypoints to create buffer around
-     * @param bufferDistanceMeters Buffer distance in meters (default 5m as requested)
-     * @return List of LatLng points forming the buffer polygon (always extends outward)
+     * @param bufferDistanceMeters Buffer distance in meters (default 5m)
+     * @return List of LatLng points forming the buffer polygon that ALWAYS includes all waypoints
      */
     fun generatePolygonBuffer(waypoints: List<LatLng>, bufferDistanceMeters: Double = 5.0): List<LatLng> {
         if (waypoints.isEmpty()) return emptyList()
@@ -22,17 +22,25 @@ object GeofenceUtils {
             return createCircularBuffer(waypoints.first(), bufferDistanceMeters)
         }
 
-        // For multiple points, create convex hull first, then buffer outward
+        // For two points, create a capsule shape
+        if (waypoints.size == 2) {
+            return createCapsuleBuffer(waypoints[0], waypoints[1], bufferDistanceMeters)
+        }
+
+        // For multiple points, create a bounding polygon with buffer
+        // Use convex hull to get the outer boundary, then expand it
         val hull = convexHull(waypoints)
         if (hull.isEmpty()) return emptyList()
 
-        return createOutwardPolygonBuffer(hull, bufferDistanceMeters)
+        // Create buffer around the hull - this ensures all points are covered
+        // since convex hull by definition contains all points
+        return createExpandedBuffer(hull, bufferDistanceMeters)
     }
 
     /**
      * Creates a circular buffer around a single point
      */
-    private fun createCircularBuffer(center: LatLng, radiusMeters: Double, numPoints: Int = 16): List<LatLng> {
+    private fun createCircularBuffer(center: LatLng, radiusMeters: Double, numPoints: Int = 32): List<LatLng> {
         val points = mutableListOf<LatLng>()
         val earthRadius = 6371000.0 // Earth's radius in meters
 
@@ -47,24 +55,87 @@ object GeofenceUtils {
     }
 
     /**
-     * Creates an outward polygon buffer around a convex hull
-     * This ensures the buffer always extends outside the original plan boundary
+     * Creates a capsule-shaped buffer around two points
      */
-    private fun createOutwardPolygonBuffer(hull: List<LatLng>, bufferDistanceMeters: Double): List<LatLng> {
+    private fun createCapsuleBuffer(p1: LatLng, p2: LatLng, bufferDistanceMeters: Double, numPoints: Int = 16): List<LatLng> {
+        val points = mutableListOf<LatLng>()
+        val earthRadius = 6371000.0
+
+        // Calculate perpendicular direction
+        val dx = p2.longitude - p1.longitude
+        val dy = p2.latitude - p1.latitude
+        val length = sqrt(dx * dx + dy * dy)
+
+        if (length < 1e-10) {
+            // Points are the same, just create a circle
+            return createCircularBuffer(p1, bufferDistanceMeters, numPoints)
+        }
+
+        // Normalized perpendicular vector
+        val perpX = -dy / length
+        val perpY = dx / length
+
+        // Convert buffer distance to degrees
+        val avgLat = (p1.latitude + p2.latitude) / 2
+        val latOffset = (bufferDistanceMeters / earthRadius) * 180 / PI
+        val lonOffset = (bufferDistanceMeters / (earthRadius * cos(avgLat * PI / 180))) * 180 / PI
+
+        // Create semicircle around first point
+        for (i in 0..numPoints/2) {
+            val angle = -PI / 2 + PI * i / (numPoints/2)
+            val dirX = perpX * cos(angle) - (dx/length) * sin(angle)
+            val dirY = perpY * cos(angle) - (dy/length) * sin(angle)
+            val lat = p1.latitude + dirY * latOffset
+            val lon = p1.longitude + dirX * lonOffset
+            points.add(LatLng(lat, lon))
+        }
+
+        // Create semicircle around second point
+        for (i in 0..numPoints/2) {
+            val angle = PI / 2 + PI * i / (numPoints/2)
+            val dirX = perpX * cos(angle) + (dx/length) * sin(angle)
+            val dirY = perpY * cos(angle) + (dy/length) * sin(angle)
+            val lat = p2.latitude + dirY * latOffset
+            val lon = p2.longitude + dirX * lonOffset
+            points.add(LatLng(lat, lon))
+        }
+
+        return points
+    }
+
+    /**
+     * Creates an expanded buffer around a convex hull
+     * This ensures the buffer extends outward from all hull vertices
+     */
+    private fun createExpandedBuffer(hull: List<LatLng>, bufferDistanceMeters: Double): List<LatLng> {
+        if (hull.size < 3) return hull
+
         val bufferedPoints = mutableListOf<LatLng>()
-        val earthRadius = 6371000.0 // Earth's radius in meters
+        val earthRadius = 6371000.0
+        val centroid = calculateCentroid(hull)
 
         for (i in hull.indices) {
             val current = hull[i]
-            val prev = hull[if (i == 0) hull.size - 1 else i - 1]
-            val next = hull[if (i == hull.size - 1) 0 else i + 1]
 
-            // Calculate outward normal vector at this vertex
-            val outwardNormal = calculateOutwardNormal(prev, current, next)
+            // Calculate direction from centroid to current point (outward direction)
+            val toCentroidLat = current.latitude - centroid.latitude
+            val toCentroidLon = current.longitude - centroid.longitude
+            val distToCentroid = sqrt(toCentroidLat * toCentroidLat + toCentroidLon * toCentroidLon)
+
+            if (distToCentroid < 1e-10) {
+                // Point is at centroid, use a default direction
+                bufferedPoints.add(current)
+                continue
+            }
+
+            // Normalize the outward direction
+            val outwardLat = toCentroidLat / distToCentroid
+            val outwardLon = toCentroidLon / distToCentroid
 
             // Apply buffer distance in the outward direction
-            val offsetLat = outwardNormal.first * (bufferDistanceMeters / earthRadius) * 180 / PI
-            val offsetLon = outwardNormal.second * (bufferDistanceMeters / (earthRadius * cos(current.latitude * PI / 180))) * 180 / PI
+            val avgLat = current.latitude
+            val offsetLat = outwardLat * (bufferDistanceMeters / earthRadius) * 180 / PI
+            val offsetLon = outwardLon * (bufferDistanceMeters / (earthRadius * cos(avgLat * PI / 180))) * 180 / PI
 
             bufferedPoints.add(LatLng(
                 current.latitude + offsetLat,
@@ -76,49 +147,10 @@ object GeofenceUtils {
     }
 
     /**
-     * Calculates the outward normal vector at a vertex
-     * Returns a pair of (latDirection, lonDirection) normalized to unit length
-     */
-    private fun calculateOutwardNormal(prev: LatLng, current: LatLng, next: LatLng): Pair<Double, Double> {
-        // Calculate edge vectors
-        val edge1Lat = current.latitude - prev.latitude
-        val edge1Lon = current.longitude - prev.longitude
-        val edge2Lat = next.latitude - current.latitude
-        val edge2Lon = next.longitude - current.longitude
-
-        // Calculate average direction of the two edges
-        val avgEdgeLat = (edge1Lat + edge2Lat) / 2.0
-        val avgEdgeLon = (edge1Lon + edge2Lon) / 2.0
-
-        // Calculate perpendicular vector (rotate 90 degrees counterclockwise)
-        val perpLat = -avgEdgeLon
-        val perpLon = avgEdgeLat
-
-        // Normalize the perpendicular vector
-        val length = sqrt(perpLat * perpLat + perpLon * perpLon)
-        if (length == 0.0) return Pair(0.0, 0.0)
-
-        val normalizedLat = perpLat / length
-        val normalizedLon = perpLon / length
-
-        // Determine if this is pointing inward or outward relative to the polygon centroid
-        val centroid = calculateCentroid(listOf(prev, current, next))
-        val toCentroidLat = centroid.latitude - current.latitude
-        val toCentroidLon = centroid.longitude - current.longitude
-
-        // If the normal points toward the centroid, flip it to point outward
-        val dotProduct = normalizedLat * toCentroidLat + normalizedLon * toCentroidLon
-        return if (dotProduct > 0) {
-            Pair(-normalizedLat, -normalizedLon) // Flip to point outward
-        } else {
-            Pair(normalizedLat, normalizedLon) // Already pointing outward
-        }
-    }
-
-    /**
      * Calculate the centroid of a list of points
      */
     private fun calculateCentroid(points: List<LatLng>): LatLng {
+        if (points.isEmpty()) return LatLng(0.0, 0.0)
         val avgLat = points.map { it.latitude }.average()
         val avgLon = points.map { it.longitude }.average()
         return LatLng(avgLat, avgLon)
@@ -126,6 +158,7 @@ object GeofenceUtils {
 
     /**
      * Computes convex hull using Graham scan algorithm
+     * The convex hull by definition contains ALL input points
      */
     private fun convexHull(points: List<LatLng>): List<LatLng> {
         if (points.size < 3) return points

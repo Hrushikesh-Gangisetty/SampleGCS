@@ -517,6 +517,9 @@ class SharedViewModel : ViewModel() {
     private val _geofencePolygon = MutableStateFlow<List<LatLng>>(emptyList())
     val geofencePolygon: StateFlow<List<LatLng>> = _geofencePolygon.asStateFlow()
 
+    // Store home position for geofence calculation
+    private val _homePosition = MutableStateFlow<LatLng?>(null)
+
     fun setSurveyPolygon(polygon: List<LatLng>) {
         _surveyPolygon.value = polygon
         updateGeofencePolygon()
@@ -537,13 +540,21 @@ class SharedViewModel : ViewModel() {
     }
 
     fun setFenceRadius(radius: Float) {
-        _fenceRadius.value = radius
+        // Ensure minimum 5m radius
+        _fenceRadius.value = radius.coerceAtLeast(5f)
         updateGeofencePolygon()
     }
 
     fun setGeofenceEnabled(enabled: Boolean) {
         _geofenceEnabled.value = enabled
         if (enabled) {
+            // Capture current drone position as home position if not set
+            val droneLat = _telemetryState.value.latitude
+            val droneLon = _telemetryState.value.longitude
+            if (_homePosition.value == null && droneLat != null && droneLon != null) {
+                _homePosition.value = LatLng(droneLat, droneLon)
+                Log.i("Geofence", "Home position captured: $droneLat, $droneLon")
+            }
             updateGeofencePolygon()
         } else {
             _geofencePolygon.value = emptyList()
@@ -558,48 +569,97 @@ class SharedViewModel : ViewModel() {
 
         val allWaypoints = mutableListOf<LatLng>()
 
+        // ALWAYS include home position (where drone was when geofence was enabled)
+        val homePos = _homePosition.value
+        if (homePos != null) {
+            allWaypoints.add(homePos)
+            Log.d("Geofence", "Added home position to geofence: $homePos")
+        }
+
+        // Always include current drone position
+        val droneLatitude = _telemetryState.value.latitude
+        val droneLongitude = _telemetryState.value.longitude
+        if (droneLatitude != null && droneLongitude != null) {
+            val dronePos = LatLng(droneLatitude, droneLongitude)
+            allWaypoints.add(dronePos)
+            Log.d("Geofence", "Added current drone position to geofence: $dronePos")
+        }
+
+        // Add mission waypoints
         if (_uploadedWaypoints.value.isNotEmpty()) {
             allWaypoints.addAll(_uploadedWaypoints.value)
+            Log.d("Geofence", "Added ${_uploadedWaypoints.value.size} uploaded waypoints")
         } else {
             allWaypoints.addAll(_planningWaypoints.value)
+            if (_planningWaypoints.value.isNotEmpty()) {
+                Log.d("Geofence", "Added ${_planningWaypoints.value.size} planning waypoints")
+            }
         }
         allWaypoints.addAll(_surveyPolygon.value)
+        if (_surveyPolygon.value.isNotEmpty()) {
+            Log.d("Geofence", "Added ${_surveyPolygon.value.size} survey polygon points")
+        }
         allWaypoints.addAll(_gridWaypoints.value)
+        if (_gridWaypoints.value.isNotEmpty()) {
+            Log.d("Geofence", "Added ${_gridWaypoints.value.size} grid waypoints")
+        }
 
         if (allWaypoints.isNotEmpty()) {
-            // Use mission waypoints if available
-            val bufferDistance = _fenceRadius.value.toDouble()
-            val polygonBuffer = GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
-            _geofencePolygon.value = polygonBuffer
-        } else {
-            // Create default square geofence around drone position when no mission plan
-            val droneLatitude = _telemetryState.value.latitude
-            val droneLongitude = _telemetryState.value.longitude
+            // Use default 5m buffer distance
+            val bufferDistance = _fenceRadius.value.toDouble().coerceAtLeast(5.0)
+            Log.i("Geofence", "Generating polygon buffer with ${allWaypoints.size} points, buffer distance: ${bufferDistance}m")
 
-            if (droneLatitude != null && droneLongitude != null) {
-                val dronePosition = LatLng(droneLatitude, droneLongitude)
-                val fenceRadius = if (_fenceRadius.value <= 0) 5.0 else _fenceRadius.value.toDouble() // Default 5m
-                val squareGeofence = createSquareGeofence(dronePosition, fenceRadius)
-                _geofencePolygon.value = squareGeofence
+            val polygonBuffer = GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
+
+            if (polygonBuffer.size >= 3) {
+                _geofencePolygon.value = polygonBuffer
+                Log.i("Geofence", "✓ Geofence polygon generated successfully with ${polygonBuffer.size} vertices")
             } else {
+                Log.w("Geofence", "Failed to generate valid polygon buffer")
                 _geofencePolygon.value = emptyList()
             }
+        } else {
+            Log.w("Geofence", "No waypoints available for geofence")
+            _geofencePolygon.value = emptyList()
         }
     }
 
-    private fun createSquareGeofence(center: LatLng, radiusMeters: Double): List<LatLng> {
-        // Convert meters to approximate degrees (rough approximation)
-        val latOffset = radiusMeters / 111111.0 // 1 degree latitude ≈ 111,111 meters
-        val lngOffset = radiusMeters / (111111.0 * kotlin.math.cos(Math.toRadians(center.latitude)))
+    /**
+     * Validates that all points are inside or on the polygon boundary
+     */
+    private fun validatePolygonContainsPoints(polygon: List<LatLng>, points: List<LatLng>): Boolean {
+        if (polygon.size < 3) return false
 
-        // Create square corners around the center point
-        return listOf(
-            LatLng(center.latitude + latOffset, center.longitude - lngOffset), // Top-left
-            LatLng(center.latitude + latOffset, center.longitude + lngOffset), // Top-right
-            LatLng(center.latitude - latOffset, center.longitude + lngOffset), // Bottom-right
-            LatLng(center.latitude - latOffset, center.longitude - lngOffset), // Bottom-left
-            LatLng(center.latitude + latOffset, center.longitude - lngOffset)  // Close the polygon
-        )
+        // Check if all points are inside the polygon with a small tolerance
+        for (point in points) {
+            if (!isPointInPolygon(point, polygon)) {
+                Log.w("SharedVM", "Point not in geofence: $point")
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun isPointInPolygon(point: LatLng, polygon: List<LatLng>): Boolean {
+        if (polygon.size < 3) return true // No valid polygon
+
+        var inside = false
+        var j = polygon.size - 1
+
+        for (i in polygon.indices) {
+            val xi = polygon[i].longitude
+            val yi = polygon[i].latitude
+            val xj = polygon[j].longitude
+            val yj = polygon[j].latitude
+
+            if (((yi > point.latitude) != (yj > point.latitude)) &&
+                (point.longitude < (xj - xi) * (point.latitude - yi) / (yj - yi) + xi)) {
+                inside = !inside
+            }
+            j = i
+        }
+
+        return inside
     }
 
     // --- MAVLink Actions ---
@@ -1055,27 +1115,6 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    private fun isPointInPolygon(point: LatLng, polygon: List<LatLng>): Boolean {
-        if (polygon.size < 3) return true // No valid polygon
-
-        var inside = false
-        var j = polygon.size - 1
-
-        for (i in polygon.indices) {
-            val xi = polygon[i].longitude
-            val yi = polygon[i].latitude
-            val xj = polygon[j].longitude
-            val yj = polygon[j].latitude
-
-            if (((yi > point.latitude) != (yj > point.latitude)) &&
-                (point.longitude < (xj - xi) * (point.latitude - yi) / (yj - yi) + xi)) {
-                inside = !inside
-            }
-            j = i
-        }
-
-        return inside
-    }
 
     private fun switchToRTL() {
         viewModelScope.launch {
