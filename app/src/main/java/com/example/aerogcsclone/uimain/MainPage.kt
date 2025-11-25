@@ -336,22 +336,36 @@ fun FloatingButtons(
 
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp), // reduced spacing
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Start Mission Button
         FloatingActionButton(
             onClick = { onStartMission() },
             containerColor = Color.Black.copy(alpha = 0.7f),
-            modifier = Modifier.size(48.dp) // reduced button size
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = "Start",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Start Mission",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Start",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
-        // Dynamic Pause/Resume button based on mission state
+
+        // Dynamic Pause/Resume Button
         FloatingActionButton(
             onClick = {
                 if (isMissionRunning) {
@@ -361,38 +375,78 @@ fun FloatingButtons(
                 }
             },
             containerColor = Color.Black.copy(alpha = 0.7f),
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
-            Icon(
-                if (isMissionRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isMissionRunning) "Pause Mission" else "Resume Mission",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    if (isMissionRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isMissionRunning) "Pause Mission" else "Resume Mission",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (isMissionRunning) "Pause" else "Resume",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
+
+        // Recenter Button
         FloatingActionButton(
             onClick = { onRefresh() },
             containerColor = Color.Black.copy(alpha = 0.7f),
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
-            Icon(
-                Icons.Default.Refresh,
-                contentDescription = "Refresh",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Recenter",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Recenter",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
+
+        // Toggle Map Type Button
         FloatingActionButton(
             onClick = { onToggleMapType() },
             containerColor = Color.Black.copy(alpha = 0.7f),
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
-            Icon(
-                Icons.Default.Map,
-                contentDescription = "Map Options",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.Map,
+                    contentDescription = "Toggle Map",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Map Type",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
