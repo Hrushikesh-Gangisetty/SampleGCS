@@ -516,7 +516,7 @@ class SharedViewModel : ViewModel() {
 
     private val _geofencePolygon = MutableStateFlow<List<LatLng>>(emptyList())
     val geofencePolygon: StateFlow<List<LatLng>> = _geofencePolygon.asStateFlow()
-
+    
     // Store home position for geofence calculation
     private val _homePosition = MutableStateFlow<LatLng?>(null)
 
@@ -575,7 +575,7 @@ class SharedViewModel : ViewModel() {
             allWaypoints.add(homePos)
             Log.d("Geofence", "Added home position to geofence: $homePos")
         }
-
+        
         // Always include current drone position
         val droneLatitude = _telemetryState.value.latitude
         val droneLongitude = _telemetryState.value.longitude
@@ -608,9 +608,9 @@ class SharedViewModel : ViewModel() {
             // Use default 5m buffer distance
             val bufferDistance = _fenceRadius.value.toDouble().coerceAtLeast(5.0)
             Log.i("Geofence", "Generating polygon buffer with ${allWaypoints.size} points, buffer distance: ${bufferDistance}m")
-
+            
             val polygonBuffer = GeofenceUtils.generatePolygonBuffer(allWaypoints, bufferDistance)
-
+            
             if (polygonBuffer.size >= 3) {
                 _geofencePolygon.value = polygonBuffer
                 Log.i("Geofence", "✓ Geofence polygon generated successfully with ${polygonBuffer.size} vertices")
@@ -629,7 +629,7 @@ class SharedViewModel : ViewModel() {
      */
     private fun validatePolygonContainsPoints(polygon: List<LatLng>, points: List<LatLng>): Boolean {
         if (polygon.size < 3) return false
-
+        
         // Check if all points are inside the polygon with a small tolerance
         for (point in points) {
             if (!isPointInPolygon(point, polygon)) {
@@ -1025,6 +1025,108 @@ class SharedViewModel : ViewModel() {
                 repo?.requestMissionAndLog()
             } catch (e: Exception) {
                 Log.e("SharedVM", "Exception during mission readback", e)
+            }
+        }
+    }
+
+    fun pauseMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                Log.i("SharedVM", "Pausing mission...")
+
+                if (repo == null) {
+                    Log.w("SharedVM", "No repo available, cannot pause mission")
+                    onResult(false, "Not connected to vehicle")
+                    return@launch
+                }
+
+                if (!_telemetryState.value.fcuDetected) {
+                    Log.w("SharedVM", "FCU not detected, cannot pause mission")
+                    onResult(false, "FCU not detected")
+                    return@launch
+                }
+
+                val currentMode = _telemetryState.value.mode
+                if (currentMode?.contains("Auto", ignoreCase = true) != true) {
+                    Log.w("SharedVM", "Vehicle not in AUTO mode, cannot pause mission")
+                    onResult(false, "Mission not running (current mode: $currentMode)")
+                    return@launch
+                }
+
+                // Switch to LOITER mode to pause the mission
+                Log.i("SharedVM", "Switching to LOITER mode to pause mission")
+                val result = repo?.changeMode(MavMode.LOITER) ?: false
+
+                if (result) {
+                    Log.i("SharedVM", "✓ Mission paused successfully (switched to LOITER)")
+                    addNotification(
+                        Notification(
+                            message = "Mission paused - holding position",
+                            type = NotificationType.INFO
+                        )
+                    )
+                    onResult(true, null)
+                } else {
+                    Log.e("SharedVM", "Failed to switch to LOITER mode")
+                    onResult(false, "Failed to pause mission")
+                }
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Failed to pause mission", e)
+                onResult(false, e.message)
+            }
+        }
+    }
+
+    fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                Log.i("SharedVM", "Resuming mission...")
+
+                if (repo == null) {
+                    Log.w("SharedVM", "No repo available, cannot resume mission")
+                    onResult(false, "Not connected to vehicle")
+                    return@launch
+                }
+
+                if (!_telemetryState.value.fcuDetected) {
+                    Log.w("SharedVM", "FCU not detected, cannot resume mission")
+                    onResult(false, "FCU not detected")
+                    return@launch
+                }
+
+                if (!_missionUploaded.value || lastUploadedCount == 0) {
+                    Log.w("SharedVM", "No mission uploaded, cannot resume")
+                    onResult(false, "No mission uploaded")
+                    return@launch
+                }
+
+                val currentMode = _telemetryState.value.mode
+                if (currentMode?.contains("Auto", ignoreCase = true) == true) {
+                    Log.i("SharedVM", "Mission already running in AUTO mode")
+                    onResult(false, "Mission already running")
+                    return@launch
+                }
+
+                // Switch to AUTO mode to resume the mission
+                Log.i("SharedVM", "Switching to AUTO mode to resume mission")
+                val result = repo?.changeMode(MavMode.AUTO) ?: false
+
+                if (result) {
+                    Log.i("SharedVM", "✓ Mission resumed successfully (switched to AUTO)")
+                    addNotification(
+                        Notification(
+                            message = "Mission resumed",
+                            type = NotificationType.INFO
+                        )
+                    )
+                    onResult(true, null)
+                } else {
+                    Log.e("SharedVM", "Failed to switch to AUTO mode")
+                    onResult(false, "Failed to resume mission")
+                }
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Failed to resume mission", e)
+                onResult(false, e.message)
             }
         }
     }

@@ -135,7 +135,15 @@ fun MainPage(
                     } else {
                         Toast.makeText(context, "No GPS location available", Toast.LENGTH_SHORT).show()
                     }
-                })
+                },
+                onPauseMission = {
+                    telemetryViewModel.pauseMission()
+                },
+                onResumeMission = {
+                    telemetryViewModel.resumeMission()
+                },
+                currentMode = telemetryState.mode // Pass the current flight mode
+            )
 
             if (isNotificationPanelVisible) {
                 Box(modifier = Modifier.align(Alignment.CenterEnd)) {
@@ -318,8 +326,14 @@ fun FloatingButtons(
     modifier: Modifier = Modifier,
     onToggleMapType: () -> Unit,
     onStartMission: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onPauseMission: () -> Unit,
+    onResumeMission: () -> Unit,
+    currentMode: String?
 ) {
+    // Check if mission is running in AUTO mode
+    val isMissionRunning = currentMode?.contains("Auto", ignoreCase = true) == true
+
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp), // reduced spacing
@@ -337,14 +351,21 @@ fun FloatingButtons(
                 modifier = Modifier.size(20.dp)
             )
         }
+        // Dynamic Pause/Resume button based on mission state
         FloatingActionButton(
-            onClick = { },
+            onClick = {
+                if (isMissionRunning) {
+                    onPauseMission()
+                } else {
+                    onResumeMission()
+                }
+            },
             containerColor = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier.size(48.dp)
         ) {
             Icon(
-                Icons.Default.Settings,
-                contentDescription = "Settings",
+                if (isMissionRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (isMissionRunning) "Pause Mission" else "Resume Mission",
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )

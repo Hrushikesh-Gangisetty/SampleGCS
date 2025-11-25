@@ -275,6 +275,7 @@ fun PlanScreen(
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
                 gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
+                heading = telemetryState.heading, // Add heading parameter to match MainPage
                 // Use local geofence preview while planning; otherwise use the shared geofence
                 geofencePolygon = if (hasStartedPlanning) localGeofencePolygon else geofencePolygon,
                 geofenceEnabled = geofenceEnabled,
