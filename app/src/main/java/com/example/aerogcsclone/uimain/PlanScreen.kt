@@ -673,18 +673,42 @@ fun PlanScreen(
                                 Text("Line Spacing", color = Color.White, modifier = Modifier.weight(1f))
                                 Text("${String.format(Locale.US, "%.1f", lineSpacing)} m", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            Slider(
-                                value = lineSpacing,
-                                onValueChange = { lineSpacing = it },
-                                valueRange = 3f..5f,
-                                steps = 19,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.Gray
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { lineSpacing = (lineSpacing - 0.1f).coerceAtLeast(3f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Remove,
+                                        contentDescription = "Decrease",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = lineSpacing,
+                                    onValueChange = { lineSpacing = it },
+                                    valueRange = 3f..5f,
+                                    steps = 19,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = Color.Gray
+                                    )
                                 )
-                            )
+                                IconButton(
+                                    onClick = { lineSpacing = (lineSpacing + 0.1f).coerceAtMost(5f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Increase",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
 
                         // Grid Angle
@@ -693,18 +717,42 @@ fun PlanScreen(
                                 Text("Grid Angle", color = Color.White, modifier = Modifier.weight(1f))
                                 Text("${gridAngle.toInt()}°", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            Slider(
-                                value = gridAngle,
-                                onValueChange = { gridAngle = it },
-                                valueRange = 0f..180f,
-                                steps = 35,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.Gray
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { gridAngle = (gridAngle - 5f).coerceAtLeast(0f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Remove,
+                                        contentDescription = "Decrease",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = gridAngle,
+                                    onValueChange = { gridAngle = it },
+                                    valueRange = 0f..180f,
+                                    steps = 35,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = Color.Gray
+                                    )
                                 )
-                            )
+                                IconButton(
+                                    onClick = { gridAngle = (gridAngle + 5f).coerceAtMost(180f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Increase",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
 
                         // Survey Speed
@@ -713,18 +761,42 @@ fun PlanScreen(
                                 Text("Speed", color = Color.White, modifier = Modifier.weight(1f))
                                 Text("${surveySpeed.toInt()} m/s", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            Slider(
-                                value = surveySpeed,
-                                onValueChange = { surveySpeed = it },
-                                valueRange = 1f..20f,
-                                steps = 40,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.Gray
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { surveySpeed = (surveySpeed - 1f).coerceAtLeast(1f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Remove,
+                                        contentDescription = "Decrease",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = surveySpeed,
+                                    onValueChange = { surveySpeed = it },
+                                    valueRange = 1f..20f,
+                                    steps = 40,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = Color.Gray
+                                    )
                                 )
-                            )
+                                IconButton(
+                                    onClick = { surveySpeed = (surveySpeed + 1f).coerceAtMost(20f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Increase",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
 
                         // Survey Altitude
@@ -733,18 +805,42 @@ fun PlanScreen(
                                 Text("Altitude", color = Color.White, modifier = Modifier.weight(1f))
                                 Text("${surveyAltitude.toInt()} m", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            Slider(
-                                value = surveyAltitude,
-                                onValueChange = { surveyAltitude = it },
-                                valueRange = 1f..30f,
-                                steps = 60,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.Gray
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { surveyAltitude = (surveyAltitude - 1f).coerceAtLeast(1f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Remove,
+                                        contentDescription = "Decrease",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = surveyAltitude,
+                                    onValueChange = { surveyAltitude = it },
+                                    valueRange = 1f..30f,
+                                    steps = 60,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = Color.Gray
+                                    )
                                 )
-                            )
+                                IconButton(
+                                    onClick = { surveyAltitude = (surveyAltitude + 1f).coerceAtMost(30f) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Increase",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
 
                         // Hold Nose Position
