@@ -1167,7 +1167,7 @@ class SharedViewModel : ViewModel() {
 
                 // Step 2: Set the mission current waypoint to the saved index
                 val savedWaypointIndex = pausedWaypointIndex
-                if (savedWaypointIndex != null && savedWaypointIndex > 0) {
+                if (savedWaypointIndex != null && savedWaypointIndex >= 0) {
                     Log.i("SharedVM", "Setting mission current waypoint to saved index: $savedWaypointIndex")
                     val setCurrentResult = repo?.setMissionCurrent(savedWaypointIndex) ?: false
                     if (setCurrentResult) {
