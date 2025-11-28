@@ -61,6 +61,12 @@ data class PairedDevice(
 
 class SharedViewModel : ViewModel() {
 
+    // Constants for mission resume delays
+    private companion object {
+        const val MODE_STABILIZATION_DELAY_MS = 500L
+        const val MESSAGE_PROCESSING_DELAY_MS = 500L
+    }
+
     // TextToSpeech manager for voice announcements
     private var ttsManager: TextToSpeechManager? = null
 
@@ -1179,7 +1185,7 @@ class SharedViewModel : ViewModel() {
                 Log.i("SharedVM", "✓ Switched to AUTO mode")
 
                 // Step 3: Wait for mode to stabilize
-                delay(500)
+                delay(MODE_STABILIZATION_DELAY_MS)
 
                 // Step 4: Set the mission current waypoint AFTER switching to AUTO mode
                 val savedWaypointIndex = pausedWaypointIndex
@@ -1195,7 +1201,7 @@ class SharedViewModel : ViewModel() {
                         // Fallback: Use MISSION_SET_CURRENT message directly (more reliable on some firmware)
                         Log.w("SharedVM", "Command failed, trying MISSION_SET_CURRENT message as fallback...")
                         repo?.sendMissionSetCurrent(savedWaypointIndex)
-                        delay(500) // Wait for the message to be processed
+                        delay(MESSAGE_PROCESSING_DELAY_MS) // Wait for the message to be processed
                         
                         // Verify if waypoint was set
                         if (_telemetryState.value.missionCurrentSeq == savedWaypointIndex) {
