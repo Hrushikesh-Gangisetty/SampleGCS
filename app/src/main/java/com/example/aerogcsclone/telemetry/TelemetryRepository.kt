@@ -865,6 +865,20 @@ class MavlinkTelemetryRepository(
     }
 
     /**
+     * Send MISSION_SET_CURRENT message to set the current waypoint.
+     * This is an alternative to MAV_CMD_DO_SET_MISSION_CURRENT that works better on some firmware.
+     */
+    suspend fun sendMissionSetCurrent(seq: Int) {
+        Log.i("MavlinkRepo", "Sending MISSION_SET_CURRENT for seq=$seq")
+        val missionSetCurrent = MissionSetCurrent(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId,
+            seq = seq.toUShort()
+        )
+        connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, missionSetCurrent)
+    }
+
+    /**
      * Change vehicle mode (ArduPilot: param1=1, param2=customMode)
      * Waits for Heartbeat confirmation.
      */

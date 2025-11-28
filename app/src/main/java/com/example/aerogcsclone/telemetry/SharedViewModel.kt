@@ -1138,7 +1138,7 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Step 1: Re-arm the vehicle if not armed
+                // Step 1: Re-arm the vehicle if not armed (since we disarm on pause)
                 if (!_telemetryState.value.armed) {
                     Log.i("SharedVM", "Vehicle not armed - attempting to arm")
                     
@@ -1165,39 +1165,59 @@ class SharedViewModel : ViewModel() {
                     Log.i("SharedVM", "✓ Vehicle already armed")
                 }
 
-                // Step 2: Set the mission current waypoint to the saved index
+                // Step 2: Switch to AUTO mode FIRST
+                // ArduPilot resets the mission current waypoint when switching to AUTO mode after being disarmed,
+                // so we must switch to AUTO mode before setting the waypoint
+                Log.i("SharedVM", "Switching to AUTO mode first...")
+                val modeResult = repo?.changeMode(MavMode.AUTO) ?: false
+
+                if (!modeResult) {
+                    Log.e("SharedVM", "Failed to switch to AUTO mode")
+                    onResult(false, "Failed to switch to AUTO mode")
+                    return@launch
+                }
+                Log.i("SharedVM", "✓ Switched to AUTO mode")
+
+                // Step 3: Wait for mode to stabilize
+                delay(500)
+
+                // Step 4: Set the mission current waypoint AFTER switching to AUTO mode
                 val savedWaypointIndex = pausedWaypointIndex
                 if (savedWaypointIndex != null && savedWaypointIndex >= 0) {
                     Log.i("SharedVM", "Setting mission current waypoint to saved index: $savedWaypointIndex")
+                    
+                    // Try using MAV_CMD_DO_SET_MISSION_CURRENT first
                     val setCurrentResult = repo?.setMissionCurrent(savedWaypointIndex) ?: false
+                    
                     if (setCurrentResult) {
-                        Log.i("SharedVM", "✓ Mission current waypoint set to $savedWaypointIndex")
+                        Log.i("SharedVM", "✓ Mission current waypoint set to $savedWaypointIndex via command")
                     } else {
-                        Log.w("SharedVM", "Failed to set mission current waypoint to $savedWaypointIndex, continuing anyway")
+                        // Fallback: Use MISSION_SET_CURRENT message directly (more reliable on some firmware)
+                        Log.w("SharedVM", "Command failed, trying MISSION_SET_CURRENT message as fallback...")
+                        repo?.sendMissionSetCurrent(savedWaypointIndex)
+                        delay(500) // Wait for the message to be processed
+                        
+                        // Verify if waypoint was set
+                        if (_telemetryState.value.missionCurrentSeq == savedWaypointIndex) {
+                            Log.i("SharedVM", "✓ Mission current waypoint set to $savedWaypointIndex via MISSION_SET_CURRENT")
+                        } else {
+                            Log.w("SharedVM", "Failed to set mission current waypoint to $savedWaypointIndex, continuing anyway")
+                        }
                     }
                 } else {
                     Log.i("SharedVM", "No saved waypoint index, mission will continue from current position")
                 }
 
-                // Step 3: Switch to AUTO mode to resume the mission
-                Log.i("SharedVM", "Switching to AUTO mode to resume mission")
-                val result = repo?.changeMode(MavMode.AUTO) ?: false
-
-                if (result) {
-                    Log.i("SharedVM", "✓ Mission resumed successfully (switched to AUTO from waypoint ${savedWaypointIndex ?: "current"})")
-                    addNotification(
-                        Notification(
-                            message = "Mission resumed from waypoint #${savedWaypointIndex ?: "current"}",
-                            type = NotificationType.INFO
-                        )
+                Log.i("SharedVM", "✓ Mission resumed successfully from waypoint ${savedWaypointIndex ?: "current"}")
+                addNotification(
+                    Notification(
+                        message = "Mission resumed from waypoint #${savedWaypointIndex ?: "current"}",
+                        type = NotificationType.INFO
                     )
-                    // Clear the paused waypoint index after successful resume
-                    pausedWaypointIndex = null
-                    onResult(true, null)
-                } else {
-                    Log.e("SharedVM", "Failed to switch to AUTO mode")
-                    onResult(false, "Failed to resume mission")
-                }
+                )
+                // Clear the paused waypoint index after successful resume
+                pausedWaypointIndex = null
+                onResult(true, null)
             } catch (e: Exception) {
                 Log.e("SharedVM", "Failed to resume mission", e)
                 onResult(false, e.message)
