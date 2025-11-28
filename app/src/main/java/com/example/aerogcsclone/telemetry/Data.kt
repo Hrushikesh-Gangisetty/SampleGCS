@@ -24,6 +24,8 @@ data class TelemetryState(
     val mode: String? = null,
     val armed: Boolean = false,
     val armable: Boolean = false,
+    // Current mission waypoint sequence number from MISSION_CURRENT message
+    val missionCurrentSeq: Int? = null,
     // Mission timer (seconds elapsed since mission start, null if not running)
     val missionElapsedSec: Long? = null,
     val lastMissionElapsedSec: Long? = null,

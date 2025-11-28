@@ -571,8 +571,12 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<MissionCurrent>()
                 .collect { missionCurrent ->
-                    if (missionCurrent.seq.toInt() != lastMissionSeq) {
-                        lastMissionSeq = missionCurrent.seq.toInt()
+                    val currentSeq = missionCurrent.seq.toInt()
+                    // Update the telemetry state with the current mission sequence
+                    _state.update { it.copy(missionCurrentSeq = currentSeq) }
+                    
+                    if (currentSeq != lastMissionSeq) {
+                        lastMissionSeq = currentSeq
                         sharedViewModel.addNotification(
                             Notification(
                                 "Executing waypoint #${lastMissionSeq}",
@@ -806,6 +810,58 @@ class MavlinkTelemetryRepository(
         } else {
             Log.w("MavlinkRepo", "Arm command rejected, vehicle not armable")
         }
+    }
+
+    /**
+     * Disarm the vehicle.
+     * Sends MAV_CMD_COMPONENT_ARM_DISARM with param1 = 0 (disarm).
+     * Returns true if disarm was confirmed via heartbeat within timeout.
+     */
+    suspend fun disarm(): Boolean {
+        Log.i("MavlinkRepo", "Sending DISARM command...")
+        sendCommand(
+            MavCmd.COMPONENT_ARM_DISARM,
+            0f  // param1 = 0 for disarm
+        )
+        
+        // Wait for disarm confirmation via heartbeat
+        val timeoutMs = 5000L
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            if (!state.value.armed) {
+                Log.i("MavlinkRepo", "✓ Vehicle disarmed successfully")
+                return true
+            }
+            delay(200)
+        }
+        Log.e("MavlinkRepo", "Disarm not confirmed within timeout")
+        return false
+    }
+
+    /**
+     * Set the current mission waypoint to a specific sequence number.
+     * Sends MAV_CMD_DO_SET_MISSION_CURRENT (224) with param1 = sequence number.
+     * This allows resuming a mission from a specific waypoint.
+     */
+    suspend fun setMissionCurrent(seq: Int): Boolean {
+        Log.i("MavlinkRepo", "Setting mission current waypoint to seq=$seq...")
+        sendCommand(
+            MavCmd.DO_SET_MISSION_CURRENT,
+            seq.toFloat()  // param1 = sequence number of the mission item
+        )
+        
+        // Wait for confirmation via MISSION_CURRENT message
+        val timeoutMs = 5000L
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            if (state.value.missionCurrentSeq == seq) {
+                Log.i("MavlinkRepo", "✓ Mission current waypoint set to $seq")
+                return true
+            }
+            delay(200)
+        }
+        Log.e("MavlinkRepo", "Setting mission current to $seq not confirmed within timeout")
+        return false
     }
 
     /**
