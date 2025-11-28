@@ -228,6 +228,9 @@ class SharedViewModel : ViewModel() {
     private val _telemetryState = MutableStateFlow(TelemetryState())
     val telemetryState: StateFlow<TelemetryState> = _telemetryState.asStateFlow()
 
+    // State to track the paused waypoint index for mission resume
+    private var pausedWaypointIndex: Int? = null
+
     val isConnected: StateFlow<Boolean> = telemetryState
         .map { it.connected }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -1053,22 +1056,50 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Switch to LOITER mode to pause the mission
-                Log.i("SharedVM", "Switching to LOITER mode to pause mission")
-                val result = repo?.changeMode(MavMode.LOITER) ?: false
+                // Step 1: Store the current waypoint index for later resume
+                val currentWaypointSeq = _telemetryState.value.missionCurrentSeq
+                if (currentWaypointSeq != null) {
+                    pausedWaypointIndex = currentWaypointSeq
+                    Log.i("SharedVM", "Stored paused waypoint index: $currentWaypointSeq")
+                } else {
+                    Log.w("SharedVM", "No current waypoint sequence available, will resume from beginning")
+                    pausedWaypointIndex = null
+                }
 
-                if (result) {
-                    Log.i("SharedVM", "✓ Mission paused successfully (switched to LOITER)")
+                // Step 2: Switch to LOITER mode to pause the mission
+                Log.i("SharedVM", "Switching to LOITER mode to pause mission")
+                val modeResult = repo?.changeMode(MavMode.LOITER) ?: false
+
+                if (!modeResult) {
+                    Log.e("SharedVM", "Failed to switch to LOITER mode")
+                    onResult(false, "Failed to pause mission - mode change failed")
+                    return@launch
+                }
+                Log.i("SharedVM", "✓ Switched to LOITER mode")
+
+                // Step 3: Disarm the vehicle
+                Log.i("SharedVM", "Disarming vehicle...")
+                val disarmResult = repo?.disarm() ?: false
+
+                if (disarmResult) {
+                    Log.i("SharedVM", "✓ Mission paused successfully (LOITER mode, disarmed, waypoint $pausedWaypointIndex saved)")
                     addNotification(
                         Notification(
-                            message = "Mission paused - holding position",
+                            message = "Mission paused at waypoint #${pausedWaypointIndex ?: "unknown"} - vehicle disarmed",
                             type = NotificationType.INFO
                         )
                     )
                     onResult(true, null)
                 } else {
-                    Log.e("SharedVM", "Failed to switch to LOITER mode")
-                    onResult(false, "Failed to pause mission")
+                    // Mode changed but disarm failed - still partially successful
+                    Log.w("SharedVM", "Mode changed to LOITER but disarm failed")
+                    addNotification(
+                        Notification(
+                            message = "Mission paused (holding position) - disarm failed",
+                            type = NotificationType.WARNING
+                        )
+                    )
+                    onResult(true, "Paused but disarm failed")
                 }
             } catch (e: Exception) {
                 Log.e("SharedVM", "Failed to pause mission", e)
@@ -1107,18 +1138,61 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Switch to AUTO mode to resume the mission
+                // Step 1: Re-arm the vehicle if not armed
+                if (!_telemetryState.value.armed) {
+                    Log.i("SharedVM", "Vehicle not armed - attempting to arm")
+                    
+                    // Check if vehicle is armable
+                    if (!_telemetryState.value.armable) {
+                        Log.w("SharedVM", "Vehicle not armable, cannot resume mission")
+                        onResult(false, "Vehicle not armable. Check pre-arm conditions.")
+                        return@launch
+                    }
+                    
+                    repo?.arm()
+                    val armTimeout = 10000L
+                    val armStart = System.currentTimeMillis()
+                    while (!_telemetryState.value.armed && System.currentTimeMillis() - armStart < armTimeout) {
+                        delay(500)
+                    }
+                    if (!_telemetryState.value.armed) {
+                        Log.w("SharedVM", "Vehicle did not arm within timeout")
+                        onResult(false, "Vehicle failed to arm. Check pre-arm conditions.")
+                        return@launch
+                    }
+                    Log.i("SharedVM", "✓ Vehicle armed successfully")
+                } else {
+                    Log.i("SharedVM", "✓ Vehicle already armed")
+                }
+
+                // Step 2: Set the mission current waypoint to the saved index
+                val savedWaypointIndex = pausedWaypointIndex
+                if (savedWaypointIndex != null && savedWaypointIndex >= 0) {
+                    Log.i("SharedVM", "Setting mission current waypoint to saved index: $savedWaypointIndex")
+                    val setCurrentResult = repo?.setMissionCurrent(savedWaypointIndex) ?: false
+                    if (setCurrentResult) {
+                        Log.i("SharedVM", "✓ Mission current waypoint set to $savedWaypointIndex")
+                    } else {
+                        Log.w("SharedVM", "Failed to set mission current waypoint to $savedWaypointIndex, continuing anyway")
+                    }
+                } else {
+                    Log.i("SharedVM", "No saved waypoint index, mission will continue from current position")
+                }
+
+                // Step 3: Switch to AUTO mode to resume the mission
                 Log.i("SharedVM", "Switching to AUTO mode to resume mission")
                 val result = repo?.changeMode(MavMode.AUTO) ?: false
 
                 if (result) {
-                    Log.i("SharedVM", "✓ Mission resumed successfully (switched to AUTO)")
+                    Log.i("SharedVM", "✓ Mission resumed successfully (switched to AUTO from waypoint ${savedWaypointIndex ?: "current"})")
                     addNotification(
                         Notification(
-                            message = "Mission resumed",
+                            message = "Mission resumed from waypoint #${savedWaypointIndex ?: "current"}",
                             type = NotificationType.INFO
                         )
                     )
+                    // Clear the paused waypoint index after successful resume
+                    pausedWaypointIndex = null
                     onResult(true, null)
                 } else {
                     Log.e("SharedVM", "Failed to switch to AUTO mode")
