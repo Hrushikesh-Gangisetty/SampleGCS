@@ -371,7 +371,7 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
     private fun getMessage(key: String): String {
         return when (key) {
             "connected" -> if (currentLanguage == "en") "Connected" else "కనెక్ట్ అయింది"
-            "disconnected" -> if (currentLanguage == "en") "Disconnected" else "డిస్కనెక్టర్ అయింది"
+            "disconnected" -> if (currentLanguage == "en") "Disconnected" else "డిస్కనెక్ట్ అయింది"
             "connection_failed" -> if (currentLanguage == "en") "Connection failed" else "కనెక్షన్ విఫలమైంది"
             "calibration_started" -> if (currentLanguage == "en") "Calibration started" else "కేలిబ్రేషన్ ప్రారంభమైంది"
             "calibration_finished" -> if (currentLanguage == "en") "Calibration finished" else "కేలిబ్రేషన్ ముగిసింది"

@@ -86,6 +86,9 @@ fun PlanScreen(
     val waypoints = remember { mutableStateListOf<MissionItemInt>() }
     val coroutineScope = rememberCoroutineScope()
 
+    // Selected waypoint tracking for deletion
+    var selectedWaypointIndex by remember { mutableStateOf<Int?>(null) }
+
     // Center map once when screen opens
     var centeredOnce by remember { mutableStateOf(false) }
     LaunchedEffect(telemetryState.latitude, telemetryState.longitude) {
@@ -243,15 +246,24 @@ fun PlanScreen(
                             }
                         } else {
                             if (waypoints.isNotEmpty()) {
-                                waypoints.removeAt(waypoints.lastIndex)
-                                points.removeAt(points.lastIndex)
-                                // update local geofence after deleting a point
-                                if (geofenceEnabled) {
-                                    if (points.isNotEmpty()) {
-                                        localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), fenceRadius.toDouble())
-                                    } else {
-                                        localGeofencePolygon = emptyList()
+                                // Handle deletion of selected waypoint
+                                selectedWaypointIndex?.let { index ->
+                                    if (index in waypoints.indices) {
+                                        waypoints.removeAt(index)
+                                        points.removeAt(index)
+                                        selectedWaypointIndex = null // Clear selection after deletion
+                                        // update local geofence after deleting a point
+                                        if (geofenceEnabled) {
+                                            if (points.isNotEmpty()) {
+                                                localGeofencePolygon = com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(points.toList(), fenceRadius.toDouble())
+                                            } else {
+                                                localGeofencePolygon = emptyList()
+                                            }
+                                        }
                                     }
+                                } ?: run {
+                                    // If no waypoint is selected, show a toast message
+                                    Toast.makeText(context, "Please select a waypoint to delete", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -275,8 +287,7 @@ fun PlanScreen(
                 surveyPolygon = if (isGridSurveyMode) surveyPolygon else emptyList(),
                 gridLines = gridResult?.gridLines?.map { pair -> listOf(pair.first, pair.second) } ?: emptyList(),
                 gridWaypoints = gridResult?.waypoints?.map { it.position } ?: emptyList(),
-                heading = telemetryState.heading, // Add heading parameter to match MainPage
-                // Use local geofence preview while planning; otherwise use the shared geofence
+                heading = telemetryState.heading,
                 geofencePolygon = if (hasStartedPlanning) localGeofencePolygon else geofencePolygon,
                 geofenceEnabled = geofenceEnabled,
                 // Handle waypoint dragging
@@ -299,6 +310,11 @@ fun PlanScreen(
                             )
                         }
                     }
+                },
+                // Handle waypoint selection
+                selectedWaypointIndex = selectedWaypointIndex,
+                onWaypointClick = { index ->
+                    selectedWaypointIndex = index
                 }
             )
 

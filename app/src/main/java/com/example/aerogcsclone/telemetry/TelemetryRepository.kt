@@ -328,6 +328,17 @@ class MavlinkTelemetryRepository(
 
                     val currentArmed = state.value.armed
 
+                    // Announce armed/disarmed state transitions via TTS
+                    if (currentArmed && !previousArmedState) {
+                        // Drone just armed - announce it
+                        Log.i("MavlinkRepo", "[TTS] Drone armed - announcing via TTS")
+                        sharedViewModel.announceDroneArmed()
+                    } else if (!currentArmed && previousArmedState) {
+                        // Drone just disarmed - announce it
+                        Log.i("MavlinkRepo", "[TTS] Drone disarmed - announcing via TTS")
+                        sharedViewModel.announceDroneDisarmed()
+                    }
+
                     // Manual mission tracking logic
                     // Start conditions: Drone transitions from disarmed to armed AND altitude > 1m
                     if (currentArmed && !previousArmedState) {
