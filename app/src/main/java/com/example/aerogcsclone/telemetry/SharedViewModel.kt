@@ -118,6 +118,14 @@ class SharedViewModel : ViewModel() {
         ttsManager?.announceRebootDrone()
     }
 
+    fun announceDroneArmed() {
+        ttsManager?.announceDroneArmed()
+    }
+
+    fun announceDroneDisarmed() {
+        ttsManager?.announceDroneDisarmed()
+    }
+
     fun speak(text: String) {
         ttsManager?.speak(text)
     }
