@@ -112,7 +112,10 @@ fun GcsMap(
     geofencePolygon: List<LatLng> = emptyList(),
     geofenceEnabled: Boolean = false,
     // Waypoint drag callback
-    onWaypointDrag: (index: Int, newPosition: LatLng) -> Unit = { _, _ -> }
+    onWaypointDrag: (index: Int, newPosition: LatLng) -> Unit = { _, _ -> },
+    // Waypoint selection
+    selectedWaypointIndex: Int? = null,
+    onWaypointClick: (index: Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -134,6 +137,7 @@ fun GcsMap(
     val mediumBlueMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_AZURE) }
     val mediumVioletMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_VIOLET) }
     val mediumOrangeMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_ORANGE) }
+    val mediumYellowMarker = remember { createMediumMarker(BitmapDescriptorFactory.HUE_YELLOW) } // For selected waypoint
 
     // Markers with text labels for grid waypoints
     val startMarker = remember { createMarkerWithText("S", android.graphics.Color.GREEN) }
@@ -211,14 +215,22 @@ fun GcsMap(
                     }
                 }
 
+                // Determine the marker icon based on selection state
+                val markerIcon = if (selectedWaypointIndex == index) {
+                    mediumYellowMarker // Selected waypoint - Yellow
+                } else {
+                    mediumBlueMarker // Default - Blue
+                }
+
                 Marker(
                     state = markerState,
                     title = "WP ${index + 1}",
-                    icon = mediumBlueMarker,
+                    icon = markerIcon,
                     anchor = Offset(0.5f, 0.5f),
                     draggable = true,  // Enable dragging
                     onClick = {
                         // Marker clicked, can be dragged now
+                        onWaypointClick(index) // Handle waypoint click
                         true
                     }
                 )
