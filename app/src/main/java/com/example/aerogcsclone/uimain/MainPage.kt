@@ -77,6 +77,10 @@ fun MainPage(
 
     val notifications by telemetryViewModel.notifications.collectAsState()
     val isNotificationPanelVisible by telemetryViewModel.isNotificationPanelVisible.collectAsState()
+    val splitPlanActive by telemetryViewModel.splitPlanActive.collectAsState()
+
+    // Split plan confirmation dialog
+    var showSplitPlanDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -142,6 +146,11 @@ fun MainPage(
                 onResumeMission = {
                     telemetryViewModel.resumeMission()
                 },
+                onSplitPlan = {
+                    // Show split plan confirmation dialog
+                    showSplitPlanDialog = true
+                },
+                splitPlanActive = splitPlanActive,
                 currentMode = telemetryState.mode // Pass the current flight mode
             )
 
@@ -219,6 +228,39 @@ fun MainPage(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Total distance covered: $distStr", style = MaterialTheme.typography.bodyLarge)
                     }
+                }
+            )
+        }
+
+        // Split Plan Confirmation Dialog
+        if (showSplitPlanDialog) {
+            AlertDialog(
+                onDismissRequest = { showSplitPlanDialog = false },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Confirm split plan
+                            telemetryViewModel.confirmSplitPlan()
+                            showSplitPlanDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Yes", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { showSplitPlanDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("No", color = MaterialTheme.colorScheme.onSecondary)
+                    }
+                },
+                title = {
+                    Text("Confirm Split Plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text("Are you sure you want to split the mission plan? This will pause the current mission and create a new split plan.", style = MaterialTheme.typography.bodyLarge)
                 }
             )
         }
@@ -343,6 +385,8 @@ fun FloatingButtons(
     onRefresh: () -> Unit,
     onPauseMission: () -> Unit,
     onResumeMission: () -> Unit,
+    onSplitPlan: () -> Unit,
+    splitPlanActive: Boolean,
     currentMode: String?
 ) {
     // Check if mission is running in AUTO mode
@@ -404,6 +448,32 @@ fun FloatingButtons(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (isMissionRunning) "Pause" else "Resume",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // Split Plan Button
+        FloatingActionButton(
+            onClick = { onSplitPlan() },
+            containerColor = if (splitPlanActive) Color(0xFFFF9800).copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.7f),
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.CallSplit,
+                    contentDescription = "Split Plan",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (splitPlanActive) "Resume" else "Split",
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium

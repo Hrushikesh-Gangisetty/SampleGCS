@@ -1147,6 +1147,259 @@ class SharedViewModel : ViewModel() {
         _telemetryState.value = TelemetryState()
     }
 
+    // --- Split Plan Management ---
+    private val _splitPlanActive = MutableStateFlow(false)
+    val splitPlanActive: StateFlow<Boolean> = _splitPlanActive.asStateFlow()
+
+    private val _isSplitPlanActive = MutableStateFlow(false)
+    val isSplitPlanActive: StateFlow<Boolean> = _isSplitPlanActive.asStateFlow()
+
+    private val _resumeWaypointIndex = MutableStateFlow<Int?>(null)
+    val resumeWaypointIndex: StateFlow<Int?> = _resumeWaypointIndex.asStateFlow()
+
+    private val _splitPlanWaypointLat = MutableStateFlow<Double?>(null)
+    val splitPlanWaypointLat: StateFlow<Double?> = _splitPlanWaypointLat.asStateFlow()
+
+    private val _splitPlanWaypointLon = MutableStateFlow<Double?>(null)
+    val splitPlanWaypointLon: StateFlow<Double?> = _splitPlanWaypointLon.asStateFlow()
+
+    /**
+     * Toggle split plan mode - show confirmation dialog
+     */
+    fun toggleSplitPlan() {
+        if (_splitPlanActive.value) {
+            // If already in split plan mode, resume from split point
+            resumeFromSplitPlan { success, error ->
+                if (success) {
+                    addNotification(
+                        Notification(
+                            message = "Resuming mission from split point",
+                            type = NotificationType.SUCCESS
+                        )
+                    )
+                } else {
+                    addNotification(
+                        Notification(
+                            message = "Failed to resume: ${error ?: "Unknown error"}",
+                            type = NotificationType.ERROR
+                        )
+                    )
+                }
+            }
+        } else {
+            // Not in split plan mode - initiate split
+            Log.i("SharedVM", "Split plan toggle initiated")
+            // The dialog will be shown in the UI (MainPage), we just need to trigger it
+            // by setting a mutable state - but that's handled in the composable
+            // For now, we'll call splitPlan directly which will show the dialog
+        }
+    }
+
+    /**
+     * Confirm split plan action - called when user clicks Yes in dialog
+     */
+    fun confirmSplitPlan() {
+        splitPlan { success, error ->
+            if (success) {
+                Log.i("SharedVM", "✓ Split plan confirmed and initiated")
+            } else {
+                Log.e("SharedVM", "✗ Split plan failed: $error")
+            }
+        }
+    }
+
+    /**
+     * Initiate split plan: send RTL command to drone and wait for it to land
+     * Once landed, it will be disarmed and the user can resume from the split waypoint
+     */
+    fun splitPlan(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                Log.i("SharedVM", "Initiating split plan...")
+
+                if (repo == null) {
+                    Log.w("SharedVM", "No repo available, cannot split plan")
+                    onResult(false, "Not connected to vehicle")
+                    return@launch
+                }
+
+                if (!_telemetryState.value.fcuDetected) {
+                    Log.w("SharedVM", "FCU not detected, cannot split plan")
+                    onResult(false, "FCU not detected")
+                    return@launch
+                }
+
+                // Store current position as resume waypoint
+                val currentLat = _telemetryState.value.latitude
+                val currentLon = _telemetryState.value.longitude
+
+                if (currentLat == null || currentLon == null) {
+                    Log.w("SharedVM", "Current position not available, cannot split plan")
+                    onResult(false, "Current position not available")
+                    return@launch
+                }
+
+                _splitPlanWaypointLat.value = currentLat
+                _splitPlanWaypointLon.value = currentLon
+
+                Log.i("SharedVM", "✓ Stored split waypoint at Lat: $currentLat, Lon: $currentLon")
+
+                // Switch to RTL mode
+                Log.i("SharedVM", "Switching to RTL mode...")
+                val rtlSuccess = repo?.changeMode(MavMode.RTL) ?: false
+
+                if (!rtlSuccess) {
+                    Log.e("SharedVM", "Failed to switch to RTL mode")
+                    onResult(false, "Failed to switch to RTL mode")
+                    return@launch
+                }
+
+                Log.i("SharedVM", "✓ RTL mode activated")
+                addNotification(
+                    Notification(
+                        message = "Plan split initiated - returning to launch point",
+                        type = NotificationType.INFO
+                    )
+                )
+
+                // Wait for drone to land (altitude becomes 0 or very low)
+                Log.i("SharedVM", "Waiting for drone to land...")
+                val landTimeout = 300000L // 5 minutes timeout
+                val landStart = System.currentTimeMillis()
+
+                while (System.currentTimeMillis() - landStart < landTimeout) {
+                    val altitude = _telemetryState.value.altitudeRelative ?: 0f
+                    if (altitude <= 0.5f) {
+                        Log.i("SharedVM", "✓ Drone has landed (altitude: $altitude)")
+                        break
+                    }
+                    delay(500)
+                }
+
+                // Disarm the drone
+                Log.i("SharedVM", "Disarming drone...")
+                repo?.disarm()
+                delay(1000)
+
+                if (!_telemetryState.value.armed) {
+                    Log.i("SharedVM", "✓ Drone disarmed successfully")
+                } else {
+                    Log.w("SharedVM", "Drone may not be fully disarmed yet")
+                }
+
+                // Mark split plan as active
+                _splitPlanActive.value = true
+                _isSplitPlanActive.value = true
+
+                addNotification(
+                    Notification(
+                        message = "Plan split complete - drone disarmed. Click 'Start' to resume from split point",
+                        type = NotificationType.SUCCESS
+                    )
+                )
+
+                onResult(true, null)
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Failed to split plan", e)
+                onResult(false, e.message)
+            }
+        }
+    }
+
+    /**
+     * Resume mission from the split waypoint
+     * This will start the mission from where the drone came down
+     */
+    fun resumeFromSplitPlan(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                Log.i("SharedVM", "Resuming from split plan...")
+
+                if (repo == null) {
+                    Log.w("SharedVM", "No repo available, cannot resume from split")
+                    onResult(false, "Not connected to vehicle")
+                    return@launch
+                }
+
+                if (!_splitPlanActive.value) {
+                    Log.w("SharedVM", "No active split plan to resume")
+                    onResult(false, "No split plan active")
+                    return@launch
+                }
+
+                if (!_telemetryState.value.fcuDetected) {
+                    Log.w("SharedVM", "FCU not detected, cannot resume from split")
+                    onResult(false, "FCU not detected")
+                    return@launch
+                }
+
+                if (!_missionUploaded.value || lastUploadedCount == 0) {
+                    Log.w("SharedVM", "No mission uploaded, cannot resume")
+                    onResult(false, "No mission uploaded")
+                    return@launch
+                }
+
+                if (!_telemetryState.value.armable) {
+                    Log.w("SharedVM", "Vehicle not armable")
+                    onResult(false, "Vehicle not armable. Check sensors and GPS.")
+                    return@launch
+                }
+
+                val sats = _telemetryState.value.sats ?: 0
+                if (sats < 6) {
+                    Log.w("SharedVM", "Insufficient GPS satellites ($sats)")
+                    onResult(false, "Insufficient GPS satellites ($sats). Need at least 6.")
+                    return@launch
+                }
+
+                // Arm the vehicle
+                Log.i("SharedVM", "Arming vehicle for split plan resume...")
+                repo?.arm()
+                delay(500)
+
+                if (!_telemetryState.value.armed) {
+                    Log.w("SharedVM", "Failed to arm vehicle")
+                    onResult(false, "Failed to arm vehicle")
+                    return@launch
+                }
+
+                Log.i("SharedVM", "✓ Vehicle armed successfully")
+
+                // Send mission start command
+                Log.i("SharedVM", "Sending mission start command...")
+                repo?.sendMissionStartCommand()
+                delay(500)
+
+                // Switch to AUTO mode
+                Log.i("SharedVM", "Switching to AUTO mode...")
+                val autoSuccess = repo?.changeMode(MavMode.AUTO) ?: false
+
+                if (!autoSuccess) {
+                    Log.e("SharedVM", "Failed to switch to AUTO mode")
+                    onResult(false, "Failed to switch to AUTO mode")
+                    return@launch
+                }
+
+                Log.i("SharedVM", "✓ Mission resumed from split point")
+                addNotification(
+                    Notification(
+                        message = "Mission resumed from split waypoint",
+                        type = NotificationType.SUCCESS
+                    )
+                )
+
+                // Clear split plan active flag after successful resume
+                _splitPlanActive.value = false
+                _isSplitPlanActive.value = false
+
+                onResult(true, null)
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Failed to resume from split plan", e)
+                onResult(false, e.message)
+            }
+        }
+    }
+
     // --- Geofence Violation Detection ---
     private val _geofenceViolationDetected = MutableStateFlow(false)
     val geofenceViolationDetected: StateFlow<Boolean> = _geofenceViolationDetected.asStateFlow()

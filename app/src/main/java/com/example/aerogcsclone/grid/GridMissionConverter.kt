@@ -40,7 +40,7 @@ object GridMissionConverter {
                 current = 1u, // MUST be 1 for first item
                 autocontinue = 1u,
                 param1 = 0f, // Hold time
-                param2 = 0f, // Acceptance radius
+                param2 = 3f, // Acceptance radius in meters (CRITICAL: must be >0)
                 param3 = 0f, // Pass through
                 param4 = 0f, // Yaw
                 x = (homePosition.latitude * 1E7).toInt(),
@@ -160,10 +160,10 @@ object GridMissionConverter {
                     command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
                     current = 0u,
                     autocontinue = 1u,
-                    param1 = 0f, // Hold time
-                    param2 = 0f, // Acceptance radius
-                    param3 = 0f, // Pass radius
-                    param4 = 0f, // Yaw
+                    param1 = 0f, // Hold time (0 = no hold)
+                    param2 = 3f, // Acceptance radius in meters (2-5m recommended)
+                    param3 = 0f, // Pass radius (0 = pass through waypoint)
+                    param4 = 0f, // Yaw angle (0 = no change, or calculate from next waypoint)
                     x = (waypoint.position.latitude * 1E7).toInt(),
                     y = (waypoint.position.longitude * 1E7).toInt(),
                     z = waypoint.altitude
@@ -214,10 +214,10 @@ object GridMissionConverter {
             command = MavEnumValue.of(MavCmd.NAV_WAYPOINT),
             current = 0u,
             autocontinue = 1u,
-            param1 = 0f,
-            param2 = 0f,
-            param3 = 0f,
-            param4 = 0f,
+            param1 = 0f, // Hold time (0 = no hold)
+            param2 = 3f, // Acceptance radius in meters (2-5m recommended)
+            param3 = 0f, // Pass radius (0 = pass through waypoint)
+            param4 = 0f, // Yaw angle (0 = no change)
             x = (waypoint.position.latitude * 1E7).toInt(),
             y = (waypoint.position.longitude * 1E7).toInt(),
             z = waypoint.altitude

@@ -808,6 +808,14 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    suspend fun disarm() {
+        sendCommand(
+            MavCmd.COMPONENT_ARM_DISARM,
+            0f  // 0 = disarm
+        )
+        Log.i("MavlinkRepo", "Disarm command sent")
+    }
+
     /**
      * Change vehicle mode (ArduPilot: param1=1, param2=customMode)
      * Waits for Heartbeat confirmation.
