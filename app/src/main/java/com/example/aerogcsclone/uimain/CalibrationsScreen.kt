@@ -75,6 +75,19 @@ fun CalibrationsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             CalibrationOptionCard(
+                title = "Level Horizon",
+                description = "Quick calibration to set the current attitude as level reference",
+                icon = Icons.Default.FitnessCenter,
+                enabled = true,
+                onClick = {
+                    sharedViewModel.announceCalibration("Level Horizon")
+                    navController.navigate("level_calibration")
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CalibrationOptionCard(
                 title = "Compass Calibration",
                 description = "Calibrate the magnetometer by rotating the vehicle slowly through all orientations",
                 icon = Icons.Default.Explore,
