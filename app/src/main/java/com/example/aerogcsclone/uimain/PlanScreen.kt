@@ -89,6 +89,9 @@ fun PlanScreen(
     // Selected waypoint tracking for deletion
     var selectedWaypointIndex by remember { mutableStateOf<Int?>(null) }
 
+    // Waypoint list panel state
+    var showWaypointList by remember { mutableStateOf(false) }
+
     // Center map once when screen opens
     var centeredOnce by remember { mutableStateOf(false) }
     LaunchedEffect(telemetryState.latitude, telemetryState.longitude) {
@@ -609,6 +612,19 @@ fun PlanScreen(
                         )
                     }
 
+                    // NEW: Waypoint List button
+                    FloatingActionButton(
+                        onClick = { showWaypointList = !showWaypointList },
+                        containerColor = if (showWaypointList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.List,
+                            contentDescription = "Waypoint List",
+                            tint = if (showWaypointList) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
                     FloatingActionButton(
                         onClick = {
                             val lat = telemetryState.latitude
@@ -965,6 +981,45 @@ fun PlanScreen(
                         }
                     }
                 }
+            }
+
+            // Waypoint List Panel with Drag-and-Drop Reordering
+            if (showWaypointList && hasStartedPlanning && !isGridSurveyMode && points.isNotEmpty()) {
+                WaypointListPanel(
+                    waypoints = points.toList(),
+                    onReorder = { fromIndex, toIndex ->
+                        // Reorder both points and waypoints lists
+                        if (fromIndex in points.indices && toIndex in points.indices) {
+                            val movedPoint = points.removeAt(fromIndex)
+                            points.add(toIndex, movedPoint)
+
+                            val movedWaypoint = waypoints.removeAt(fromIndex)
+                            waypoints.add(toIndex, movedWaypoint)
+
+                            // Renumber waypoints automatically (seq numbers)
+                            waypoints.forEachIndexed { index, waypoint ->
+                                waypoints[index] = waypoint.copy(seq = index.toUShort())
+                            }
+
+                            Toast.makeText(context, "Waypoint reordered", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onWaypointClick = { index ->
+                        selectedWaypointIndex = index
+                        // Center map on selected waypoint
+                        if (index in points.indices) {
+                            cameraPositionState.move(
+                                CameraUpdateFactory.newLatLngZoom(points[index], 18f)
+                            )
+                        }
+                    },
+                    onClose = { showWaypointList = false },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                        .fillMaxWidth(0.35f)
+                        .fillMaxHeight(0.70f)
+                )
             }
 
             // Dialogs
