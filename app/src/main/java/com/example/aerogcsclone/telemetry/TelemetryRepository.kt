@@ -574,7 +574,7 @@ class MavlinkTelemetryRepository(
                 }
         }
 
-        // MISSION_CURRENT for mission progress
+        // MISSION_CURRENT for mission progress and waypoint tracking
         var lastMissionSeq = -1
         scope.launch {
             mavFrame
@@ -582,8 +582,17 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<MissionCurrent>()
                 .collect { missionCurrent ->
-                    if (missionCurrent.seq.toInt() != lastMissionSeq) {
-                        lastMissionSeq = missionCurrent.seq.toInt()
+                    val currentSeq = missionCurrent.seq.toInt()
+                    
+                    // Update current waypoint in state
+                    _state.update { it.copy(currentWaypoint = currentSeq) }
+                    Log.d("MavlinkRepo", "Mission progress: waypoint $currentSeq")
+                    
+                    // Update SharedViewModel
+                    sharedViewModel.updateCurrentWaypoint(currentSeq)
+                    
+                    if (currentSeq != lastMissionSeq) {
+                        lastMissionSeq = currentSeq
                         sharedViewModel.addNotification(
                             Notification(
                                 "Executing waypoint #${lastMissionSeq}",
@@ -1379,6 +1388,37 @@ class MavlinkTelemetryRepository(
             Log.d("MavlinkRepo", "Sent COMMAND_LONG (custom): $command")
         } catch (e: Exception) {
             Log.e("MavlinkRepo", "Failed to send custom COMMAND_LONG", e)
+        }
+    }
+
+    /**
+     * Set the current mission waypoint
+     * @param seq Waypoint sequence number to resume from
+     */
+    suspend fun setCurrentWaypoint(seq: Int): Boolean {
+        return try {
+            val cmd = CommandLong(
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
+                command = MavCmd.DO_SET_MISSION_CURRENT.wrap(),
+                confirmation = 0u,
+                param1 = seq.toFloat(),
+                param2 = 0f,
+                param3 = 0f,
+                param4 = 0f,
+                param5 = 0f,
+                param6 = 0f,
+                param7 = 0f
+            )
+
+            Log.i("MavlinkRepo", "Setting current waypoint to: $seq")
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, cmd)
+            delay(500)
+
+            true
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "Failed to set current waypoint", e)
+            false
         }
     }
 

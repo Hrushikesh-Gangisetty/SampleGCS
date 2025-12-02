@@ -32,5 +32,9 @@ data class TelemetryState(
     // Formatted speed values for UI
     val formattedAirspeed: String? = null,
     val formattedGroundspeed: String? = null,
-    val heading: Float? = null
+    val heading: Float? = null,
+    // Waypoint tracking for pause/resume
+    val currentWaypoint: Int? = null,
+    val missionPaused: Boolean = false,
+    val pausedAtWaypoint: Int? = null
 )

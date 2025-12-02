@@ -27,6 +27,8 @@ import com.example.aerogcsclone.calibration.RCCalibrationScreen
 import com.example.aerogcsclone.calibration.RCCalibrationViewModel
 import com.example.aerogcsclone.calibration.BarometerCalibrationScreen
 import com.example.aerogcsclone.calibration.BarometerCalibrationViewModel
+import com.example.aerogcsclone.calibration.LevelCalibrationScreen
+import com.example.aerogcsclone.calibration.LevelCalibrationViewModel
 import com.example.aerogcsclone.integration.TlogIntegration
 import com.example.aerogcsclone.telemetry.SharedViewModel
 import com.example.aerogcsclone.uiconnection.ConnectionPage
@@ -57,6 +59,7 @@ sealed class Screen(val route: String) {
     object Calibrations : Screen("calibrations")
     object CompassCalibration : Screen("compass_calibration")
     object AccelerometerCalibration : Screen("accelerometer_calibration")
+    object LevelCalibration : Screen("level_calibration")
     object BarometerCalibration : Screen("barometer_calibration")
     object SprayingSystem : Screen("spraying_system")
     object RemoteController : Screen("remote_controller")
@@ -216,6 +219,18 @@ fun AppNavGraph(navController: NavHostController) {
             // TopNavBar removed - show accelerometer calibration directly
             CalibrationScreen(
                 viewModel = calibrationViewModel,
+                navController = navController
+            )
+        }
+
+        composable(Screen.LevelCalibration.route) {
+            // Create LevelCalibrationViewModel with SharedViewModel for TTS announcements and level calibration
+            val levelCalibrationViewModel: LevelCalibrationViewModel = viewModel { LevelCalibrationViewModel(sharedViewModel) }
+            val telemetryState by sharedViewModel.telemetryState.collectAsState()
+
+            // TopNavBar removed - show level calibration directly
+            LevelCalibrationScreen(
+                viewModel = levelCalibrationViewModel,
                 navController = navController
             )
         }
