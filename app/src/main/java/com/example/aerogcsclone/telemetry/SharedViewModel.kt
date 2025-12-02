@@ -1040,42 +1040,36 @@ class SharedViewModel : ViewModel() {
     fun pauseMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                Log.i("SharedVM", "Pausing mission...")
-
-                if (repo == null) {
-                    Log.w("SharedVM", "No repo available, cannot pause mission")
-                    onResult(false, "Not connected to vehicle")
-                    return@launch
-                }
-
-                if (!_telemetryState.value.fcuDetected) {
-                    Log.w("SharedVM", "FCU not detected, cannot pause mission")
-                    onResult(false, "FCU not detected")
-                    return@launch
-                }
-
                 val currentMode = _telemetryState.value.mode
                 if (currentMode?.contains("Auto", ignoreCase = true) != true) {
-                    Log.w("SharedVM", "Vehicle not in AUTO mode, cannot pause mission")
-                    onResult(false, "Mission not running (current mode: $currentMode)")
+                    onResult(false, "Mission not running")
                     return@launch
                 }
 
-                // Switch to LOITER mode to pause the mission
-                Log.i("SharedVM", "Switching to LOITER mode to pause mission")
+                // Store current waypoint before pausing
+                val currentWaypoint = _telemetryState.value.currentWaypoint
+                Log.i("SharedVM", "Pausing mission at waypoint: $currentWaypoint")
+
+                // Switch to LOITER to hold position
                 val result = repo?.changeMode(MavMode.LOITER) ?: false
 
                 if (result) {
-                    Log.i("SharedVM", "✓ Mission paused successfully (switched to LOITER)")
+                    _telemetryState.update { 
+                        it.copy(
+                            missionPaused = true,
+                            pausedAtWaypoint = currentWaypoint
+                        ) 
+                    }
                     addNotification(
                         Notification(
-                            message = "Mission paused - holding position",
+                            message = "Mission paused at waypoint ${currentWaypoint ?: "?"} - holding position",
                             type = NotificationType.INFO
                         )
                     )
+                    // Announce via TTS
+                    ttsManager?.announceMissionPaused(currentWaypoint ?: 0)
                     onResult(true, null)
                 } else {
-                    Log.e("SharedVM", "Failed to switch to LOITER mode")
                     onResult(false, "Failed to pause mission")
                 }
             } catch (e: Exception) {
@@ -1088,48 +1082,55 @@ class SharedViewModel : ViewModel() {
     fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                Log.i("SharedVM", "Resuming mission...")
+                val pausedWaypoint = _telemetryState.value.pausedAtWaypoint
 
-                if (repo == null) {
-                    Log.w("SharedVM", "No repo available, cannot resume mission")
-                    onResult(false, "Not connected to vehicle")
+                if (pausedWaypoint == null) {
+                    // No paused waypoint, just switch to AUTO
+                    Log.i("SharedVM", "Resuming mission from current position")
+                    val result = repo?.changeMode(MavMode.AUTO) ?: false
+
+                    if (result) {
+                        _telemetryState.update { it.copy(missionPaused = false) }
+                        addNotification(Notification("Mission resumed", NotificationType.INFO))
+                        ttsManager?.announceMissionResumed()
+                        onResult(true, null)
+                    } else {
+                        onResult(false, "Failed to resume mission")
+                    }
                     return@launch
                 }
 
-                if (!_telemetryState.value.fcuDetected) {
-                    Log.w("SharedVM", "FCU not detected, cannot resume mission")
-                    onResult(false, "FCU not detected")
-                    return@launch
+                // Resume from specific waypoint
+                Log.i("SharedVM", "Resuming mission from waypoint: $pausedWaypoint")
+
+                // Set current waypoint in FCU
+                val setWaypointSuccess = repo?.setCurrentWaypoint(pausedWaypoint) ?: false
+
+                if (!setWaypointSuccess) {
+                    Log.w("SharedVM", "Failed to set waypoint, continuing anyway")
                 }
 
-                if (!_missionUploaded.value || lastUploadedCount == 0) {
-                    Log.w("SharedVM", "No mission uploaded, cannot resume")
-                    onResult(false, "No mission uploaded")
-                    return@launch
-                }
+                delay(500)
 
-                val currentMode = _telemetryState.value.mode
-                if (currentMode?.contains("Auto", ignoreCase = true) == true) {
-                    Log.i("SharedVM", "Mission already running in AUTO mode")
-                    onResult(false, "Mission already running")
-                    return@launch
-                }
-
-                // Switch to AUTO mode to resume the mission
-                Log.i("SharedVM", "Switching to AUTO mode to resume mission")
+                // Switch to AUTO mode
                 val result = repo?.changeMode(MavMode.AUTO) ?: false
 
                 if (result) {
-                    Log.i("SharedVM", "✓ Mission resumed successfully (switched to AUTO)")
+                    _telemetryState.update { 
+                        it.copy(
+                            missionPaused = false,
+                            pausedAtWaypoint = null
+                        ) 
+                    }
                     addNotification(
                         Notification(
-                            message = "Mission resumed",
-                            type = NotificationType.INFO
+                            message = "Mission resumed from waypoint $pausedWaypoint",
+                            type = NotificationType.SUCCESS
                         )
                     )
+                    ttsManager?.announceMissionResumed()
                     onResult(true, null)
                 } else {
-                    Log.e("SharedVM", "Failed to switch to AUTO mode")
                     onResult(false, "Failed to resume mission")
                 }
             } catch (e: Exception) {
@@ -1137,6 +1138,13 @@ class SharedViewModel : ViewModel() {
                 onResult(false, e.message)
             }
         }
+    }
+
+    /**
+     * Update current waypoint from telemetry repository
+     */
+    fun updateCurrentWaypoint(waypoint: Int) {
+        _telemetryState.update { it.copy(currentWaypoint = waypoint) }
     }
 
     // Expose FCU system and component IDs for mission building

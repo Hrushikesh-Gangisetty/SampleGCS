@@ -151,7 +151,8 @@ fun MainPage(
                     showSplitPlanDialog = true
                 },
                 splitPlanActive = splitPlanActive,
-                currentMode = telemetryState.mode // Pass the current flight mode
+                currentMode = telemetryState.mode, // Pass the current flight mode
+                missionPaused = telemetryState.missionPaused // Pass the mission paused state
             )
 
             if (isNotificationPanelVisible) {
@@ -329,10 +330,19 @@ fun StatusPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // Show waypoint info - display pause state or current waypoint
+                val waypointText = if (telemetryState.missionPaused) {
+                    "⏸ WP ${telemetryState.pausedAtWaypoint ?: "?"}"
+                } else if (telemetryState.currentWaypoint != null) {
+                    "WP: ${telemetryState.currentWaypoint}"
+                } else {
+                    "WP: N/A"
+                }
                 Text(
-                    "Obs Alt: N/A",
-                    color = Color.White,
+                    waypointText,
+                    color = if (telemetryState.missionPaused) Color.Yellow else Color.White,
                     fontSize = 11.sp,
+                    fontWeight = if (telemetryState.missionPaused) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.weight(0.95f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -387,7 +397,8 @@ fun FloatingButtons(
     onResumeMission: () -> Unit,
     onSplitPlan: () -> Unit,
     splitPlanActive: Boolean,
-    currentMode: String?
+    currentMode: String?,
+    missionPaused: Boolean = false
 ) {
     // Check if mission is running in AUTO mode
     val isMissionRunning = currentMode?.contains("Auto", ignoreCase = true) == true
@@ -428,11 +439,16 @@ fun FloatingButtons(
             onClick = {
                 if (isMissionRunning) {
                     onPauseMission()
-                } else {
+                } else if (missionPaused) {
                     onResumeMission()
+                } else {
+                    // Do nothing if mission not running and not paused
                 }
             },
-            containerColor = Color.Black.copy(alpha = 0.7f),
+            containerColor = if (missionPaused) 
+                Color(0xFFFFA500).copy(alpha = 0.7f) // Orange for paused
+            else 
+                Color.Black.copy(alpha = 0.7f),
             modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
             Column(
@@ -440,14 +456,26 @@ fun FloatingButtons(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    if (isMissionRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isMissionRunning) "Pause Mission" else "Resume Mission",
+                    when {
+                        isMissionRunning -> Icons.Default.Pause
+                        missionPaused -> Icons.Default.PlayArrow
+                        else -> Icons.Default.Refresh
+                    },
+                    contentDescription = when {
+                        isMissionRunning -> "Pause Mission"
+                        missionPaused -> "Resume Mission"
+                        else -> "No Active Mission"
+                    },
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (isMissionRunning) "Pause" else "Resume",
+                    text = when {
+                        isMissionRunning -> "Pause"
+                        missionPaused -> "Resume"
+                        else -> "---"
+                    },
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium

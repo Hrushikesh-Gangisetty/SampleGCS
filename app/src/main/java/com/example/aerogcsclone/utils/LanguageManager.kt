@@ -98,6 +98,9 @@ object AppStrings {
     val missionUploaded get() = getString("Mission Uploaded", "మిషన్ అప్‌లోడ్ అయింది")
     val missionStarted get() = getString("Mission Started", "మిషన్ ప్రారంభమైంది")
     val waypoints get() = getString("Waypoints", "వేపాయింట్లు")
+    val missionPaused get() = getString("Mission Paused", "మిషన్ పాజ్ అయింది")
+    val missionResumed get() = getString("Mission Resumed", "మిషన్ రిజ్యూమ్ అయింది")
+    val pausedAtWaypoint get() = getString("Paused at waypoint", "వేపాయింట్ వద్ద పాజ్ చేయబడింది")
 
     // Settings Strings
     val settings get() = getString("Settings", "సెట్టింగ్‌లు")
@@ -107,7 +110,7 @@ object AppStrings {
     // Common Strings
     val ok get() = getString("OK", "సరే")
     val yes get() = getString("Yes", "అవును")
-    val no get() = getString("No", "కా��ు")
+    val no get() = getString("No", "కాదు")
     val save get() = getString("Save", "సేవ్ చేయండి")
     val delete get() = getString("Delete", "తొలగించండి")
     val edit get() = getString("Edit", "సవరించండి")
@@ -131,7 +134,7 @@ object AppStrings {
     val signInWithGoogle get() = getString("Sign in with Google", "గూగుల్‌తో సైన్ ఇన్ చేయండి")
 
     // Reboot Strings
-    val rebootDrone get() = getString("Please reboot your drone", "దయచేసి మీ డ్ర���న్ రీబూట్ చేయండి")
+    val rebootDrone get() = getString("Please reboot your drone", "దయచేసి మీ డ్రోన్ రీబూట్ చేయండి")
 }
 
 // Composable for reactive language updates
