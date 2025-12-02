@@ -319,6 +319,25 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
     }
 
     /**
+     * Announces mission paused at waypoint
+     */
+    fun announceMissionPaused(waypoint: Int) {
+        val message = if (currentLanguage == "en") {
+            "Mission paused at waypoint $waypoint"
+        } else {
+            "మిషన్ వేపాయింట్ $waypoint వద్ద పాజ్ చేయబడింది"
+        }
+        speak(message)
+    }
+
+    /**
+     * Announces mission resumed
+     */
+    fun announceMissionResumed() {
+        speak(getMessage("mission_resumed"))
+    }
+
+    /**
      * Stops any ongoing speech
      */
     fun stop() {
@@ -385,6 +404,8 @@ class TextToSpeechManager(private val context: Context) : TextToSpeech.OnInitLis
             "compass_calibration_completed" -> if (currentLanguage == "en") "Compass calibration completed successfully" else "కంపాస్ కేలిబ్రేషన్ విజయవంతంగా పూర్తయింది"
             "compass_calibration_failed" -> if (currentLanguage == "en") "Compass calibration failed" else "కంపాస్ కేలిబ్రేషన్ విఫలమైంది"
             "reboot_drone" -> if (currentLanguage == "en") "Please reboot your drone" else "దయచేసి మీ డ్రోన్ రీబూట్ చేయండి"
+            "mission_paused" -> if (currentLanguage == "en") "Mission paused" else "మిషన్ పాజ్ అయింది"
+            "mission_resumed" -> if (currentLanguage == "en") "Mission resumed" else "మిషన్ రిజ్యూమ్ అయింది"
             else -> key
         }
     }
