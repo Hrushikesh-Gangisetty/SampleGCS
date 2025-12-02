@@ -233,6 +233,10 @@ class SharedViewModel : ViewModel() {
     // --- Telemetry & Repository ---
     private var repo: MavlinkTelemetryRepository? = null
 
+    // Public accessor for repository (needed by ObstacleDetectionManager)
+    val repository: MavlinkTelemetryRepository?
+        get() = repo
+
     private val _telemetryState = MutableStateFlow(TelemetryState())
     val telemetryState: StateFlow<TelemetryState> = _telemetryState.asStateFlow()
 
