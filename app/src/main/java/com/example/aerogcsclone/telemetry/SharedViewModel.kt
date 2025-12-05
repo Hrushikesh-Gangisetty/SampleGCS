@@ -158,6 +158,10 @@ class SharedViewModel : ViewModel() {
     private val _missionUploadProgress = MutableStateFlow<MissionUploadProgress?>(null)
     val missionUploadProgress: StateFlow<MissionUploadProgress?> = _missionUploadProgress.asStateFlow()
 
+    // Mission mode monitoring state - tracks if mission is running and mode should be monitored
+    private val _isMissionModeMonitoringActive = MutableStateFlow(false)
+    val isMissionModeMonitoringActive: StateFlow<Boolean> = _isMissionModeMonitoringActive.asStateFlow()
+
     private fun updateSurveyArea() {
         val polygon = _surveyPolygon.value
         if (polygon.size >= 3) {
@@ -934,6 +938,14 @@ class SharedViewModel : ViewModel() {
                 }
                 Log.i("SharedVM", "✓ Mission upload acknowledged (${lastUploadedCount} items)")
 
+                // Check if vehicle is armed (manual arming required via RC)
+                if (!_telemetryState.value.armed) {
+                    Log.w("SharedVM", "Vehicle not armed - manual arming via RC required")
+                    onResult(false, "Please arm the drone manually using the RC transmitter before starting mission.")
+                    return@launch
+                }
+                Log.i("SharedVM", "✓ Vehicle is armed")
+
                 if (!_telemetryState.value.armable) {
                     Log.w("SharedVM", "Vehicle not armable, cannot start mission")
                     onResult(false, "Vehicle not armable. Check sensors and GPS.")
@@ -947,49 +959,7 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                val currentMode = _telemetryState.value.mode
-                val isInArmableMode = currentMode?.equals("Stabilize", ignoreCase = true) == true ||
-                        currentMode?.equals("Loiter", ignoreCase = true) == true
-
-                if (!isInArmableMode) {
-                    Log.i("SharedVM", "Current mode '$currentMode' not suitable for arming, switching to Stabilize")
-                    repo?.changeMode(MavMode.STABILIZE)
-                    val modeTimeout = 5000L
-                    val modeStart = System.currentTimeMillis()
-                    while (System.currentTimeMillis() - modeStart < modeTimeout) {
-                        if (_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true) {
-                            Log.i("SharedVM", "✓ Successfully switched to Stabilize mode")
-                            break
-                        }
-                        delay(500)
-                    }
-                    if (!(_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true)) {
-                        Log.w("SharedVM", "Failed to switch to Stabilize mode within timeout")
-                        onResult(false, "Failed to switch to suitable mode for arming. Current mode: ${_telemetryState.value.mode}")
-                        return@launch
-                    }
-                } else {
-                    Log.i("SharedVM", "✓ Already in suitable mode for arming: $currentMode")
-                }
-
-                if (!_telemetryState.value.armed) {
-                    Log.i("SharedVM", "Vehicle not armed - attempting to arm")
-                    repo?.arm()
-                    val armTimeout = 10000L
-                    val armStart = System.currentTimeMillis()
-                    while (!_telemetryState.value.armed && System.currentTimeMillis() - armStart < armTimeout) {
-                        delay(500)
-                    }
-                    if (!_telemetryState.value.armed) {
-                        Log.w("SharedVM", "Vehicle did not arm within timeout")
-                        onResult(false, "Vehicle failed to arm. Check pre-arm conditions.")
-                        return@launch
-                    }
-                    Log.i("SharedVM", "✓ Vehicle armed successfully")
-                } else {
-                    Log.i("SharedVM", "✓ Vehicle already armed")
-                }
-
+                // Switch to AUTO mode for mission execution
                 if (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true) {
                     Log.i("SharedVM", "Switching vehicle mode to AUTO")
                     repo?.changeMode(MavMode.AUTO)
@@ -1015,6 +985,8 @@ class SharedViewModel : ViewModel() {
                 val result = repo?.startMission() ?: false
                 if (result) {
                     Log.i("SharedVM", "✓ Mission start acknowledged by FCU")
+                    // Start monitoring for manual mode changes
+                    startMissionModeMonitoring()
                     onResult(true, null)
                 } else {
                     Log.e("SharedVM", "Mission start failed or not acknowledged")
@@ -1025,6 +997,72 @@ class SharedViewModel : ViewModel() {
                 onResult(false, e.message)
             }
         }
+    }
+
+    /**
+     * Start monitoring mode changes during autonomous mission.
+     * If user manually changes flight mode via RC, automatically switch to LOITER.
+     */
+    private fun startMissionModeMonitoring() {
+        _isMissionModeMonitoringActive.value = true
+        Log.i("SharedVM", "Mission mode monitoring started")
+
+        viewModelScope.launch {
+            var previousMode: String? = _telemetryState.value.mode
+
+            telemetryState.collect { state ->
+                // Only monitor if mission monitoring is active
+                if (!_isMissionModeMonitoringActive.value) {
+                    return@collect
+                }
+
+                val currentMode = state.mode
+
+                // Check if mode changed from AUTO to something else
+                if (previousMode?.contains("Auto", ignoreCase = true) == true &&
+                    currentMode?.contains("Auto", ignoreCase = true) != true) {
+
+                    Log.w("SharedVM", "Manual mode change detected during mission: $previousMode -> $currentMode")
+                    Log.i("SharedVM", "Switching to LOITER mode due to manual mode override")
+
+                    // Stop monitoring to avoid recursive mode changes
+                    stopMissionModeMonitoring()
+
+                    // Switch to LOITER
+                    repo?.changeMode(MavMode.LOITER)
+
+                    // Add notification
+                    addNotification(
+                        Notification(
+                            message = "Manual mode change detected. Switching to LOITER mode.",
+                            type = NotificationType.WARNING
+                        )
+                    )
+
+                    // Wait for LOITER mode confirmation
+                    delay(2000)
+                    if (_telemetryState.value.mode?.contains("Loiter", ignoreCase = true) == true) {
+                        Log.i("SharedVM", "✓ Successfully switched to LOITER mode")
+                        addNotification(
+                            Notification(
+                                message = "LOITER mode activated - holding position",
+                                type = NotificationType.INFO
+                            )
+                        )
+                    }
+                }
+
+                previousMode = currentMode
+            }
+        }
+    }
+
+    /**
+     * Stop mission mode monitoring.
+     */
+    fun stopMissionModeMonitoring() {
+        _isMissionModeMonitoringActive.value = false
+        Log.i("SharedVM", "Mission mode monitoring stopped")
     }
 
     fun readMissionFromFcu() {
@@ -1058,7 +1096,10 @@ class SharedViewModel : ViewModel() {
                 val result = repo?.changeMode(MavMode.LOITER) ?: false
 
                 if (result) {
-                    _telemetryState.update { 
+                    // Stop mission mode monitoring when paused
+                    stopMissionModeMonitoring()
+
+                    _telemetryState.update {
                         it.copy(
                             missionPaused = true,
                             pausedAtWaypoint = currentWaypoint
@@ -1097,6 +1138,8 @@ class SharedViewModel : ViewModel() {
                         _telemetryState.update { it.copy(missionPaused = false) }
                         addNotification(Notification("Mission resumed", NotificationType.INFO))
                         ttsManager?.announceMissionResumed()
+                        // Restart mission mode monitoring
+                        startMissionModeMonitoring()
                         onResult(true, null)
                     } else {
                         onResult(false, "Failed to resume mission")
@@ -1133,6 +1176,8 @@ class SharedViewModel : ViewModel() {
                         )
                     )
                     ttsManager?.announceMissionResumed()
+                    // Restart mission mode monitoring
+                    startMissionModeMonitoring()
                     onResult(true, null)
                 } else {
                     onResult(false, "Failed to resume mission")
@@ -1156,6 +1201,9 @@ class SharedViewModel : ViewModel() {
     fun getFcuComponentId(): UByte = repo?.fcuComponentId ?: 0u
 
     suspend fun cancelConnection() {
+        // Stop mission mode monitoring when disconnecting
+        stopMissionModeMonitoring()
+
         repo?.let {
             try {
                 it.closeConnection()
@@ -1442,6 +1490,19 @@ class SharedViewModel : ViewModel() {
             isConnected.collect { connected ->
                 ttsManager?.announceConnectionStatus(connected)
                 Log.d("SharedVM", "Connection status changed: ${if (connected) "Connected" else "Disconnected"}")
+            }
+        }
+
+        // Monitor armed state - stop mission mode monitoring when disarmed
+        viewModelScope.launch {
+            var previousArmed = false
+            telemetryState.collect { state ->
+                if (previousArmed && !state.armed && _isMissionModeMonitoringActive.value) {
+                    // Drone was disarmed during mission
+                    Log.i("SharedVM", "Drone disarmed - stopping mission mode monitoring")
+                    stopMissionModeMonitoring()
+                }
+                previousArmed = state.armed
             }
         }
     }
