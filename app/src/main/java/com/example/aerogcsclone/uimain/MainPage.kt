@@ -447,7 +447,7 @@ fun FloatingButtons(
             },
             containerColor = if (missionPaused) 
                 Color(0xFFFFA500).copy(alpha = 0.7f) // Orange for paused
-            else 
+            else
                 Color.Black.copy(alpha = 0.7f),
             modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
@@ -456,26 +456,14 @@ fun FloatingButtons(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    when {
-                        isMissionRunning -> Icons.Default.Pause
-                        missionPaused -> Icons.Default.PlayArrow
-                        else -> Icons.Default.Refresh
-                    },
-                    contentDescription = when {
-                        isMissionRunning -> "Pause Mission"
-                        missionPaused -> "Resume Mission"
-                        else -> "No Active Mission"
-                    },
+                    if (missionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = if (missionPaused) "Resume Mission" else "Pause Mission",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = when {
-                        isMissionRunning -> "Pause"
-                        missionPaused -> "Resume"
-                        else -> "---"
-                    },
+                    text = if (missionPaused) "Resume" else "Pause",
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium
