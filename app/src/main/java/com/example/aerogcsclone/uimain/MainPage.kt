@@ -89,7 +89,23 @@ fun MainPage(
     var showResumeWarningDialog by remember { mutableStateOf(false) }
     var showResumeWaypointDialog by remember { mutableStateOf(false) }
     var showResumeProgressDialog by remember { mutableStateOf(false) }
-    var resumeWaypointNumber by remember { mutableStateOf(1) }
+
+    // Use mutableStateOf without remember key - let it update freely
+    var resumeWaypointNumber by mutableStateOf(
+        telemetryState.pausedAtWaypoint
+            ?: telemetryState.currentWaypoint
+            ?: 1
+    )
+
+    // Always update resumeWaypointNumber when pausedAtWaypoint or currentWaypoint changes
+    LaunchedEffect(telemetryState.pausedAtWaypoint, telemetryState.currentWaypoint) {
+        val newWaypoint = telemetryState.pausedAtWaypoint
+            ?: telemetryState.currentWaypoint
+            ?: 1
+        resumeWaypointNumber = newWaypoint
+        android.util.Log.i("MainPage", "Updated resumeWaypointNumber to: $resumeWaypointNumber (from pausedAt: ${telemetryState.pausedAtWaypoint}, current: ${telemetryState.currentWaypoint})")
+    }
+
     var resumeProgressMessage by remember { mutableStateOf("Initializing...") }
 
     // Debug: Monitor dialog state changes
@@ -356,15 +372,21 @@ fun MainPage(
 
         // Resume Mission Waypoint Selection Dialog (Step 2)
         if (showResumeWaypointDialog) {
-            var waypointInput by remember(resumeWaypointNumber) { mutableStateOf(resumeWaypointNumber.toString()) }
+            // Use key() to force recomposition with fresh state when dialog opens
+            key(showResumeWaypointDialog, telemetryState.pausedAtWaypoint, telemetryState.currentWaypoint) {
+                // Get the current waypoint to resume from
+                val defaultWaypoint = telemetryState.pausedAtWaypoint
+                    ?: telemetryState.currentWaypoint
+                    ?: 1
 
-            AlertDialog(
+                var waypointInput by remember { mutableStateOf(defaultWaypoint.toString()) }
+
+                AlertDialog(
                 onDismissRequest = { showResumeWaypointDialog = false },
                 confirmButton = {
                     Button(
                         onClick = {
-                            val waypointNum = waypointInput.toIntOrNull() ?: resumeWaypointNumber
-                            resumeWaypointNumber = waypointNum
+                            val waypointNum = waypointInput.toIntOrNull() ?: defaultWaypoint
                             showResumeWaypointDialog = false
                             showResumeProgressDialog = true
 
@@ -420,13 +442,14 @@ fun MainPage(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "Default: Waypoint $resumeWaypointNumber (last auto waypoint)",
+                            "Default: Waypoint $defaultWaypoint (last auto waypoint)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             )
+            }
         }
 
         // Resume Mission Progress Dialog (Step 3)
