@@ -1289,7 +1289,8 @@ class SharedViewModel : ViewModel() {
                     Log.i("ResumeMission", "✅ Mission upload confirmed by FC")
                     
                     // Verify by reading back the mission count
-                    delay(1000) // Give FC time to process
+                    // Delay allows FC to fully commit mission to storage before verification
+                    delay(1000)
                     val verifyCount = repo?.getMissionCount() ?: 0
                     if (verifyCount != resequenced.size) {
                         Log.e("ResumeMission", "⚠️ WARNING: FC reports $verifyCount waypoints but we uploaded ${resequenced.size}")
@@ -1302,13 +1303,13 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Step 7: Set Current Waypoint to HOME
+                // Step 7: Set Current Waypoint to start execution
                 onProgress("Step 7/8: Setting current waypoint...")
-                Log.i("ResumeMission", "Setting current waypoint to 1 (HOME)")
+                Log.i("ResumeMission", "Setting current waypoint to 1 (start from first mission item after HOME)")
                 val setWaypointSuccess = repo?.setCurrentWaypoint(1) ?: false
 
                 if (!setWaypointSuccess) {
-                    Log.w("ResumeMission", "Failed to set waypoint to HOME, continuing anyway")
+                    Log.w("ResumeMission", "Failed to set current waypoint, continuing anyway")
                 }
 
                 delay(500)

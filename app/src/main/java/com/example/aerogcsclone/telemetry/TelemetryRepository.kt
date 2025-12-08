@@ -1773,7 +1773,7 @@ class MavlinkTelemetryRepository(
                     Log.e("ResumeMission", "Failed to send MISSION_REQUEST_INT seq=$seq", e)
                 }
 
-                val got = withTimeoutOrNull(2000L) {
+                val got = withTimeoutOrNull(2000L) { // 2s timeout per item (allows for FC processing + network latency)
                     seqDeferred.await()
                     true
                 } ?: false
@@ -1785,6 +1785,7 @@ class MavlinkTelemetryRepository(
                 perSeqMap.remove(seq)
             }
 
+            // Small delay to ensure all MAVLink messages are processed before canceling collector
             delay(200)
             job.cancel()
 
@@ -2228,7 +2229,9 @@ class MavlinkTelemetryRepository(
                     continue
                 }
                 
-                // Keep DO commands (Mission Planner: if wpdata.id >= MAV_CMD_DO_LAST continue)
+                // Keep DO commands - Mission Planner preserves commands in two ranges:
+                // Range 1: 80-99 (conditional DO commands like DO_JUMP, DO_CHANGE_SPEED)
+                // Range 2: 176-252 (unconditional DO commands like DO_SET_SERVO, DO_SET_CAM_TRIGG)
                 val isDoCommand = cmdId in MAV_CMD_DO_START..99u || cmdId in 176u..MAV_CMD_DO_LAST
                 if (isDoCommand) {
                     filtered.add(waypoint)
