@@ -158,6 +158,10 @@ class SharedViewModel : ViewModel() {
     private val _missionUploadProgress = MutableStateFlow<MissionUploadProgress?>(null)
     val missionUploadProgress: StateFlow<MissionUploadProgress?> = _missionUploadProgress.asStateFlow()
 
+    // Mission mode monitoring state - tracks if mission is running and mode should be monitored
+    private val _isMissionModeMonitoringActive = MutableStateFlow(false)
+    val isMissionModeMonitoringActive: StateFlow<Boolean> = _isMissionModeMonitoringActive.asStateFlow()
+
     private fun updateSurveyArea() {
         val polygon = _surveyPolygon.value
         if (polygon.size >= 3) {
@@ -909,36 +913,58 @@ class SharedViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Start mission workflow - validates mission readiness.
+     *
+     * NEW WORKFLOW (Manual Control):
+     * 1. This function validates that mission is uploaded and conditions are met
+     * 2. User must manually arm the drone using RC transmitter
+     * 3. User must manually takeoff the drone using RC
+     * 4. User must manually switch to AUTO mode using RC
+     * 5. Mission will start AUTOMATICALLY when AUTO mode is detected
+     *
+     * The system monitors for AUTO mode changes and starts mission execution automatically
+     * when the pilot switches to AUTO mode via RC transmitter.
+     */
     fun startMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        validateMissionReadiness(onResult)
+    }
+
+    /**
+     * Validates mission readiness without starting the mission.
+     * Mission will start automatically when AUTO mode is detected.
+     */
+    private fun validateMissionReadiness(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            _telemetryState.value = _telemetryState.value.copy(missionCompleted = false, missionElapsedSec = null)
             try {
-                Log.i("SharedVM", "Starting mission start sequence...")
+                Log.i("SharedVM", "Validating mission readiness...")
 
                 if (repo == null) {
-                    Log.w("SharedVM", "No repo available, cannot start mission")
+                    Log.w("SharedVM", "No repo available")
                     onResult(false, "Not connected to vehicle")
                     return@launch
                 }
 
                 if (!_telemetryState.value.fcuDetected) {
-                    Log.w("SharedVM", "FCU not detected, cannot start mission")
+                    Log.w("SharedVM", "FCU not detected")
                     onResult(false, "FCU not detected")
                     return@launch
                 }
 
                 if (!_missionUploaded.value || lastUploadedCount == 0) {
-                    Log.w("SharedVM", "No mission uploaded or acknowledged, cannot start")
+                    Log.w("SharedVM", "No mission uploaded or acknowledged")
                     onResult(false, "No mission uploaded. Please upload a mission first.")
                     return@launch
                 }
                 Log.i("SharedVM", "✓ Mission upload acknowledged (${lastUploadedCount} items)")
 
-                if (!_telemetryState.value.armable) {
-                    Log.w("SharedVM", "Vehicle not armable, cannot start mission")
-                    onResult(false, "Vehicle not armable. Check sensors and GPS.")
+                // Check if vehicle is armed (manual arming required via RC)
+                if (!_telemetryState.value.armed) {
+                    Log.w("SharedVM", "Vehicle not armed - manual arming via RC required")
+                    onResult(false, "Please arm and takeoff the drone manually using the RC transmitter, then switch to AUTO mode.")
                     return@launch
                 }
+                Log.i("SharedVM", "✓ Vehicle is armed")
 
                 val sats = _telemetryState.value.sats ?: 0
                 if (sats < 6) {
@@ -947,66 +973,38 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                val currentMode = _telemetryState.value.mode
-                val isInArmableMode = currentMode?.equals("Stabilize", ignoreCase = true) == true ||
-                        currentMode?.equals("Loiter", ignoreCase = true) == true
+                Log.i("SharedVM", "✓ All pre-flight checks passed")
+                onResult(true, "Ready for mission. Switch to AUTO mode via RC to start.")
+            } catch (e: Exception) {
+                Log.e("SharedVM", "Failed to validate mission readiness", e)
+                onResult(false, e.message)
+            }
+        }
+    }
 
-                if (!isInArmableMode) {
-                    Log.i("SharedVM", "Current mode '$currentMode' not suitable for arming, switching to Stabilize")
-                    repo?.changeMode(MavMode.STABILIZE)
-                    val modeTimeout = 5000L
-                    val modeStart = System.currentTimeMillis()
-                    while (System.currentTimeMillis() - modeStart < modeTimeout) {
-                        if (_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true) {
-                            Log.i("SharedVM", "✓ Successfully switched to Stabilize mode")
-                            break
-                        }
-                        delay(500)
-                    }
-                    if (!(_telemetryState.value.mode?.equals("Stabilize", ignoreCase = true) == true)) {
-                        Log.w("SharedVM", "Failed to switch to Stabilize mode within timeout")
-                        onResult(false, "Failed to switch to suitable mode for arming. Current mode: ${_telemetryState.value.mode}")
-                        return@launch
-                    }
-                } else {
-                    Log.i("SharedVM", "✓ Already in suitable mode for arming: $currentMode")
+    /**
+     * Start mission execution (called automatically when AUTO mode is detected)
+     */
+    private fun startMissionExecution() {
+        viewModelScope.launch {
+            _telemetryState.value = _telemetryState.value.copy(missionCompleted = false, missionElapsedSec = null)
+            try {
+                Log.i("SharedVM", "AUTO mode detected - starting mission execution...")
+
+                if (repo == null || !_telemetryState.value.fcuDetected) {
+                    Log.w("SharedVM", "Cannot start mission - no connection")
+                    return@launch
                 }
 
-                if (!_telemetryState.value.armed) {
-                    Log.i("SharedVM", "Vehicle not armed - attempting to arm")
-                    repo?.arm()
-                    val armTimeout = 10000L
-                    val armStart = System.currentTimeMillis()
-                    while (!_telemetryState.value.armed && System.currentTimeMillis() - armStart < armTimeout) {
-                        delay(500)
-                    }
-                    if (!_telemetryState.value.armed) {
-                        Log.w("SharedVM", "Vehicle did not arm within timeout")
-                        onResult(false, "Vehicle failed to arm. Check pre-arm conditions.")
-                        return@launch
-                    }
-                    Log.i("SharedVM", "✓ Vehicle armed successfully")
-                } else {
-                    Log.i("SharedVM", "✓ Vehicle already armed")
-                }
-
-                if (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true) {
-                    Log.i("SharedVM", "Switching vehicle mode to AUTO")
-                    repo?.changeMode(MavMode.AUTO)
-                    val autoModeTimeout = 8000L
-                    val autoModeStart = System.currentTimeMillis()
-                    while (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true &&
-                        System.currentTimeMillis() - autoModeStart < autoModeTimeout) {
-                        delay(500)
-                    }
-                    if (_telemetryState.value.mode?.contains("Auto", ignoreCase = true) != true) {
-                        Log.w("SharedVM", "Vehicle did not switch to AUTO mode within timeout")
-                        onResult(false, "Failed to switch to AUTO mode. Current mode: ${_telemetryState.value.mode}")
-                        return@launch
-                    }
-                    Log.i("SharedVM", "✓ Vehicle mode is now AUTO")
-                } else {
-                    Log.i("SharedVM", "✓ Vehicle already in AUTO mode")
+                if (!_missionUploaded.value || lastUploadedCount == 0) {
+                    Log.w("SharedVM", "Cannot start mission - no mission uploaded")
+                    addNotification(
+                        Notification(
+                            message = "Cannot start mission - no mission uploaded",
+                            type = NotificationType.ERROR
+                        )
+                    )
+                    return@launch
                 }
 
                 delay(1000)
@@ -1014,17 +1012,100 @@ class SharedViewModel : ViewModel() {
                 Log.i("SharedVM", "Sending start mission command")
                 val result = repo?.startMission() ?: false
                 if (result) {
-                    Log.i("SharedVM", "✓ Mission start acknowledged by FCU")
-                    onResult(true, null)
+                    Log.i("SharedVM", "✓ Mission started successfully")
+                    addNotification(
+                        Notification(
+                            message = "Mission started in AUTO mode",
+                            type = NotificationType.SUCCESS
+                        )
+                    )
+                    // Start monitoring for manual mode changes
+                    startMissionModeMonitoring()
                 } else {
-                    Log.e("SharedVM", "Mission start failed or not acknowledged")
-                    onResult(false, "Mission start failed. Check vehicle status and try again.")
+                    Log.e("SharedVM", "Mission start command failed")
+                    addNotification(
+                        Notification(
+                            message = "Mission start command failed",
+                            type = NotificationType.ERROR
+                        )
+                    )
                 }
             } catch (e: Exception) {
-                Log.e("SharedVM", "Failed to start mission", e)
-                onResult(false, e.message)
+                Log.e("SharedVM", "Failed to start mission execution", e)
+                addNotification(
+                    Notification(
+                        message = "Mission start failed: ${e.message}",
+                        type = NotificationType.ERROR
+                    )
+                )
             }
         }
+    }
+
+    /**
+     * Start monitoring mode changes during autonomous mission.
+     * If user manually changes flight mode via RC, automatically switch to LOITER.
+     */
+    private fun startMissionModeMonitoring() {
+        _isMissionModeMonitoringActive.value = true
+        Log.i("SharedVM", "Mission mode monitoring started")
+
+        viewModelScope.launch {
+            var previousMode: String? = _telemetryState.value.mode
+
+            telemetryState.collect { state ->
+                // Only monitor if mission monitoring is active
+                if (!_isMissionModeMonitoringActive.value) {
+                    return@collect
+                }
+
+                val currentMode = state.mode
+
+                // Check if mode changed from AUTO to something else
+                if (previousMode?.contains("Auto", ignoreCase = true) == true &&
+                    currentMode?.contains("Auto", ignoreCase = true) != true) {
+
+                    Log.w("SharedVM", "Manual mode change detected during mission: $previousMode -> $currentMode")
+                    Log.i("SharedVM", "Switching to LOITER mode due to manual mode override")
+
+                    // Stop monitoring to avoid recursive mode changes
+                    stopMissionModeMonitoring()
+
+                    // Switch to LOITER
+                    repo?.changeMode(MavMode.LOITER)
+
+                    // Add notification
+                    addNotification(
+                        Notification(
+                            message = "Manual mode change detected. Switching to LOITER mode.",
+                            type = NotificationType.WARNING
+                        )
+                    )
+
+                    // Wait for LOITER mode confirmation
+                    delay(2000)
+                    if (_telemetryState.value.mode?.contains("Loiter", ignoreCase = true) == true) {
+                        Log.i("SharedVM", "✓ Successfully switched to LOITER mode")
+                        addNotification(
+                            Notification(
+                                message = "LOITER mode activated - holding position",
+                                type = NotificationType.INFO
+                            )
+                        )
+                    }
+                }
+
+                previousMode = currentMode
+            }
+        }
+    }
+
+    /**
+     * Stop mission mode monitoring.
+     */
+    fun stopMissionModeMonitoring() {
+        _isMissionModeMonitoringActive.value = false
+        Log.i("SharedVM", "Mission mode monitoring stopped")
     }
 
     fun readMissionFromFcu() {
@@ -1058,7 +1139,10 @@ class SharedViewModel : ViewModel() {
                 val result = repo?.changeMode(MavMode.LOITER) ?: false
 
                 if (result) {
-                    _telemetryState.update { 
+                    // Stop mission mode monitoring when paused
+                    stopMissionModeMonitoring()
+
+                    _telemetryState.update {
                         it.copy(
                             missionPaused = true,
                             pausedAtWaypoint = currentWaypoint
@@ -1083,62 +1167,56 @@ class SharedViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Resume mission after pause.
+     *
+     * NEW WORKFLOW (Manual Control):
+     * - Mission was paused and is in LOITER mode
+     * - User must manually switch to AUTO mode via RC to resume
+     * - Mission will resume automatically when AUTO mode is detected
+     */
     fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                val pausedWaypoint = _telemetryState.value.pausedAtWaypoint
-
-                if (pausedWaypoint == null) {
-                    // No paused waypoint, just switch to AUTO
-                    Log.i("SharedVM", "Resuming mission from current position")
-                    val result = repo?.changeMode(MavMode.AUTO) ?: false
-
-                    if (result) {
-                        _telemetryState.update { it.copy(missionPaused = false) }
-                        addNotification(Notification("Mission resumed", NotificationType.INFO))
-                        ttsManager?.announceMissionResumed()
-                        onResult(true, null)
-                    } else {
-                        onResult(false, "Failed to resume mission")
-                    }
+                if (!_telemetryState.value.missionPaused) {
+                    Log.w("SharedVM", "Mission not paused")
+                    onResult(false, "Mission is not paused")
                     return@launch
                 }
 
-                // Resume from specific waypoint
-                Log.i("SharedVM", "Resuming mission from waypoint: $pausedWaypoint")
+                val pausedWaypoint = _telemetryState.value.pausedAtWaypoint
 
-                // Set current waypoint in FCU
-                val setWaypointSuccess = repo?.setCurrentWaypoint(pausedWaypoint) ?: false
+                if (pausedWaypoint != null) {
+                    // Set current waypoint in FCU before resuming
+                    Log.i("SharedVM", "Setting waypoint to $pausedWaypoint for resume")
+                    val setWaypointSuccess = repo?.setCurrentWaypoint(pausedWaypoint) ?: false
 
-                if (!setWaypointSuccess) {
-                    Log.w("SharedVM", "Failed to set waypoint, continuing anyway")
-                }
-
-                delay(500)
-
-                // Switch to AUTO mode
-                val result = repo?.changeMode(MavMode.AUTO) ?: false
-
-                if (result) {
-                    _telemetryState.update { 
-                        it.copy(
-                            missionPaused = false,
-                            pausedAtWaypoint = null
-                        ) 
+                    if (!setWaypointSuccess) {
+                        Log.w("SharedVM", "Failed to set waypoint, continuing anyway")
                     }
-                    addNotification(
-                        Notification(
-                            message = "Mission resumed from waypoint $pausedWaypoint",
-                            type = NotificationType.SUCCESS
-                        )
-                    )
-                    ttsManager?.announceMissionResumed()
-                    onResult(true, null)
-                } else {
-                    onResult(false, "Failed to resume mission")
+
+                    delay(500)
                 }
+
+                // Clear paused state - mission will resume when AUTO mode is detected
+                _telemetryState.update {
+                    it.copy(
+                        missionPaused = false,
+                        pausedAtWaypoint = null
+                    )
+                }
+
+                Log.i("SharedVM", "Mission ready to resume - switch to AUTO mode via RC")
+                addNotification(
+                    Notification(
+                        message = "Ready to resume. Switch to AUTO mode via RC to continue mission.",
+                        type = NotificationType.INFO
+                    )
+                )
+
+                onResult(true, "Switch to AUTO mode via RC to resume mission")
             } catch (e: Exception) {
-                Log.e("SharedVM", "Failed to resume mission", e)
+                Log.e("SharedVM", "Failed to prepare mission resume", e)
                 onResult(false, e.message)
             }
         }
@@ -1156,6 +1234,9 @@ class SharedViewModel : ViewModel() {
     fun getFcuComponentId(): UByte = repo?.fcuComponentId ?: 0u
 
     suspend fun cancelConnection() {
+        // Stop mission mode monitoring when disconnecting
+        stopMissionModeMonitoring()
+
         repo?.let {
             try {
                 it.closeConnection()
@@ -1327,8 +1408,16 @@ class SharedViewModel : ViewModel() {
     }
 
     /**
-     * Resume mission from the split waypoint
-     * This will start the mission from where the drone came down
+     * Resume mission from the split waypoint.
+     *
+     * MANUAL WORKFLOW:
+     * 1. Validates that split plan is ready and conditions are met
+     * 2. User must manually arm the drone using RC transmitter
+     * 3. User must manually takeoff the drone using RC
+     * 4. User must manually switch to AUTO mode using RC
+     * 5. Mission will resume AUTOMATICALLY when AUTO mode is detected
+     *
+     * This will continue the mission from where the drone came down.
      */
     fun resumeFromSplitPlan(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
@@ -1372,47 +1461,24 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Arm the vehicle
-                Log.i("SharedVM", "Arming vehicle for split plan resume...")
-                repo?.arm()
-                delay(500)
-
+                // Check if vehicle is armed (manual arming required via RC)
                 if (!_telemetryState.value.armed) {
-                    Log.w("SharedVM", "Failed to arm vehicle")
-                    onResult(false, "Failed to arm vehicle")
+                    Log.w("SharedVM", "Vehicle not armed - manual arming via RC required")
+                    onResult(false, "Please arm and takeoff the drone manually using the RC transmitter, then switch to AUTO mode to resume mission.")
                     return@launch
                 }
 
-                Log.i("SharedVM", "✓ Vehicle armed successfully")
+                Log.i("SharedVM", "✓ Vehicle is armed")
+                Log.i("SharedVM", "✓ Split plan ready to resume - switch to AUTO mode via RC to continue mission")
 
-                // Send mission start command
-                Log.i("SharedVM", "Sending mission start command...")
-                repo?.sendMissionStartCommand()
-                delay(500)
-
-                // Switch to AUTO mode
-                Log.i("SharedVM", "Switching to AUTO mode...")
-                val autoSuccess = repo?.changeMode(MavMode.AUTO) ?: false
-
-                if (!autoSuccess) {
-                    Log.e("SharedVM", "Failed to switch to AUTO mode")
-                    onResult(false, "Failed to switch to AUTO mode")
-                    return@launch
-                }
-
-                Log.i("SharedVM", "✓ Mission resumed from split point")
                 addNotification(
                     Notification(
-                        message = "Mission resumed from split waypoint",
-                        type = NotificationType.SUCCESS
+                        message = "Split plan ready. Arm, takeoff, and switch to AUTO mode via RC to resume mission.",
+                        type = NotificationType.INFO
                     )
                 )
 
-                // Clear split plan active flag after successful resume
-                _splitPlanActive.value = false
-                _isSplitPlanActive.value = false
-
-                onResult(true, null)
+                onResult(true, "Ready to resume. Switch to AUTO mode via RC to continue mission from split point.")
             } catch (e: Exception) {
                 Log.e("SharedVM", "Failed to resume from split plan", e)
                 onResult(false, e.message)
@@ -1442,6 +1508,62 @@ class SharedViewModel : ViewModel() {
             isConnected.collect { connected ->
                 ttsManager?.announceConnectionStatus(connected)
                 Log.d("SharedVM", "Connection status changed: ${if (connected) "Connected" else "Disconnected"}")
+            }
+        }
+
+        // Monitor armed state - stop mission mode monitoring when disarmed
+        viewModelScope.launch {
+            var previousArmed = false
+            telemetryState.collect { state ->
+                if (previousArmed && !state.armed && _isMissionModeMonitoringActive.value) {
+                    // Drone was disarmed during mission
+                    Log.i("SharedVM", "Drone disarmed - stopping mission mode monitoring")
+                    stopMissionModeMonitoring()
+                }
+                previousArmed = state.armed
+            }
+        }
+
+        // Monitor mode changes - automatically start/resume mission when AUTO mode is detected via RC
+        viewModelScope.launch {
+            var previousMode: String? = null
+            telemetryState.collect { state ->
+                val currentMode = state.mode
+
+                // Check if mode switched to AUTO and mission is ready
+                if (previousMode?.contains("Auto", ignoreCase = true) != true &&
+                    currentMode?.contains("Auto", ignoreCase = true) == true) {
+
+                    // AUTO mode detected
+                    Log.i("SharedVM", "AUTO mode detected via RC: $currentMode")
+
+                    // Only start/resume mission if:
+                    // 1. Mission is uploaded
+                    // 2. Vehicle is armed (manual arming via RC)
+                    // 3. Mission monitoring is not already active (prevents duplicate starts)
+                    if (_missionUploaded.value &&
+                        state.armed &&
+                        !_isMissionModeMonitoringActive.value) {
+
+                        Log.i("SharedVM", "Conditions met - initiating automatic mission start/resume")
+                        startMissionExecution()
+                    } else {
+                        if (!_missionUploaded.value) {
+                            Log.w("SharedVM", "AUTO mode detected but no mission uploaded")
+                            addNotification(
+                                Notification(
+                                    message = "AUTO mode active but no mission uploaded",
+                                    type = NotificationType.WARNING
+                                )
+                            )
+                        }
+                        if (!state.armed) {
+                            Log.w("SharedVM", "AUTO mode detected but vehicle not armed")
+                        }
+                    }
+                }
+
+                previousMode = currentMode
             }
         }
     }
