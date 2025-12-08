@@ -30,6 +30,7 @@ object MavMode {
     const val STABILIZE: UInt = 0u
     const val LOITER: UInt = 5u
     const val AUTO: UInt = 3u
+    const val GUIDED: UInt = 4u // GUIDED mode for copter takeoff
     const val RTL: UInt = 6u // RTL (Return to Launch) mode
     const val LAND: UInt = 9u // Add LAND mode for explicit landing
     // Add other modes as needed
@@ -2282,7 +2283,7 @@ class MavlinkTelemetryRepository(
             
             waypoint.copy(
                 seq = index.toUShort(),
-                current = newCurrent
+                current = newCurrent.toUByte()
             ).also {
                 Log.d("ResumeMission", "Resequenced: old_seq=${waypoint.seq} → new_seq=$index, cmd=${waypoint.command.value}, current=$newCurrent")
             }
