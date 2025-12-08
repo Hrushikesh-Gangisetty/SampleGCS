@@ -810,6 +810,7 @@ class MavlinkTelemetryRepository(
 
                     // Update SharedViewModel
                     sharedViewModel.updateCurrentWaypoint(currentSeq)
+                    Log.d("MavlinkRepo", "Updated SharedViewModel currentWaypoint to: $currentSeq")
 
                     if (currentSeq != lastMissionSeq) {
                         lastMissionSeq = currentSeq
