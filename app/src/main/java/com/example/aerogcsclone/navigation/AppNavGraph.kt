@@ -37,6 +37,9 @@ import com.example.aerogcsclone.uimain.PlanScreen
 import com.example.aerogcsclone.uimain.TopNavBar
 import com.example.aerogcsclone.uimain.SettingsScreen
 import com.example.aerogcsclone.uimain.CalibrationsScreen
+import com.example.aerogcsclone.uimain.SprayCalibrationScreen
+import com.example.aerogcsclone.uimain.LevelSensorCalibrationScreen
+import com.example.aerogcsclone.uimain.FlowSensorCalibrationScreen
 import com.example.aerogcsclone.ui.components.PlotTemplatesScreen
 import com.example.aerogcsclone.ui.logs.LogsScreen
 import com.example.aerogcsclone.ui.LanguageSelectionPage
@@ -66,6 +69,12 @@ sealed class Screen(val route: String) {
     object Aircraft : Screen("aircraft")
     object RangeFinderSettings : Screen("rangefinder_settings")
     object AboutApp : Screen("about_app")
+    // Spray Calibration routes
+    object SprayCalibration : Screen("spray_calibration")
+    object FlowSensorCalibration : Screen("flow_sensor_calibration")
+    object LevelSensorCalibration : Screen("level_sensor_calibration")
+    object PumpCalibration : Screen("pump_calibration")
+    object SpraySystemTest : Screen("spray_system_test")
 }
 
 @Composable
@@ -255,10 +264,8 @@ fun AppNavGraph(navController: NavHostController) {
         }
 
         composable(Screen.SprayingSystem.route) {
-            val telemetryState by sharedViewModel.telemetryState.collectAsState()
-
-            // TopNavBar removed
-            PlaceholderScreen("Spraying System", "Spraying system configuration coming soon!")
+            // Show Spray Calibration Screen
+            SprayCalibrationScreen(navController = navController, sharedViewModel = sharedViewModel)
         }
 
         composable(Screen.RemoteController.route) {
@@ -290,6 +297,30 @@ fun AppNavGraph(navController: NavHostController) {
 
             // TopNavBar removed
             PlaceholderScreen("About App", "Ground Control Station v1.0\nDeveloped for drone operations")
+        }
+
+        // Spray Calibration screens
+        composable(Screen.SprayCalibration.route) {
+            SprayCalibrationScreen(navController = navController, sharedViewModel = sharedViewModel)
+        }
+
+        composable(Screen.FlowSensorCalibration.route) {
+            FlowSensorCalibrationScreen(navController = navController, sharedViewModel = sharedViewModel)
+        }
+
+        composable(Screen.LevelSensorCalibration.route) {
+            // TODO: Implement Level Sensor Calibration Screen
+            LevelSensorCalibrationScreen(navController = navController, sharedViewModel = sharedViewModel)
+        }
+
+        composable(Screen.PumpCalibration.route) {
+            // TODO: Implement Pump Calibration Screen
+            PlaceholderScreen("Pump Calibration", "Pump calibration configuration coming soon!")
+        }
+
+        composable(Screen.SpraySystemTest.route) {
+            // TODO: Implement Spray System Test Screen
+            PlaceholderScreen("Spray System Test", "Spray system test configuration coming soon!")
         }
     }
 }

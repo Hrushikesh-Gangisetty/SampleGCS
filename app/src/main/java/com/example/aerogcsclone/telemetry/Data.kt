@@ -17,8 +17,12 @@ data class SprayTelemetry(
 
     // Level sensor data (BATT3 - Instance 2)
     val tankVoltageMv: Int? = null,          // Raw voltage from level sensor
-    val tankLevelPercent: Int? = null,       // Tank level % based on voltage
+    val tankLevelPercent: Int? = null,       // Tank level % based on voltage (calculated in app)
     val tankCapacityLiters: Float? = null,   // Total tank capacity for level sensor
+
+    // Level sensor calibration (voltage ranges)
+    val levelSensorEmptyMv: Int = 10000,     // Voltage when tank is EMPTY (calibrated)
+    val levelSensorFullMv: Int = 45000,      // Voltage when tank is FULL (calibrated)
 
     // Formatted values for UI
     val formattedFlowRate: String? = null,   // e.g., "0.4 L/min"
