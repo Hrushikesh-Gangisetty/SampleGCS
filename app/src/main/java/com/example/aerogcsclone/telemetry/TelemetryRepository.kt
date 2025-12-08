@@ -37,6 +37,36 @@ object MavMode {
     // Add other modes as needed
 }
 
+// MAVLink command IDs for mission items
+object MavCmdId {
+    const val NAV_WAYPOINT: UInt = 16u
+    const val NAV_LOITER_UNLIM: UInt = 17u
+    const val NAV_RETURN_TO_LAUNCH: UInt = 20u
+    const val NAV_LAND: UInt = 21u
+    const val NAV_TAKEOFF: UInt = 22u
+}
+
+// ARM/DISARM magic values (Mission Planner protocol)
+object ArmMagicValues {
+    // Force arm value - bypasses pre-arm checks (use with caution)
+    // This is the Mission Planner magic value for forcing arm
+    const val FORCE_ARM: Float = 2989.0f
+    
+    // Force disarm value - immediately disarms even in flight (emergency use only)
+    const val FORCE_DISARM: Float = 21196.0f
+}
+
+// Altitude limits for mission validation
+object AltitudeLimits {
+    // Minimum altitude in meters (relative to home)
+    const val MIN_ALTITUDE: Float = 0f
+    
+    // Maximum altitude in meters (10km - reasonable limit for most drones)
+    // ArduPilot typically limits to 120m AGL for regulatory compliance,
+    // but we allow higher values for special use cases
+    const val MAX_ALTITUDE: Float = 10000f
+}
+
 class MavlinkTelemetryRepository(
     private val provider: MavConnectionProvider,
     private val sharedViewModel: SharedViewModel
@@ -859,18 +889,18 @@ class MavlinkTelemetryRepository(
         }
 
         val maxAttempts = 3
-        val retryDelays = listOf(1000L, 2000L, 3000L) // Exponential backoff
+        val retryDelays = listOf(1000L, 2000L, 3000L) // Progressive backoff delays
         
         for (attempt in 1..maxAttempts) {
             try {
-                val param2 = if (forceArm || attempt == maxAttempts) 2989.0f else 0f
-                val armType = if (param2 == 2989.0f) "FORCE-ARM" else "ARM"
+                val param2 = if (forceArm || attempt == maxAttempts) ArmMagicValues.FORCE_ARM else 0f
+                val armType = if (param2 == ArmMagicValues.FORCE_ARM) "FORCE-ARM" else "ARM"
                 
                 Log.i("MavlinkRepo", "[Arm] Attempt $attempt/$maxAttempts - Sending $armType command...")
                 sendCommand(
                     MavCmd.COMPONENT_ARM_DISARM,
                     1f,      // param1: 1 = arm
-                    param2   // param2: 0 = normal, 2989 = force-arm (Mission Planner magic value)
+                    param2   // param2: 0 = normal, FORCE_ARM = force-arm (Mission Planner magic value)
                 )
                 
                 // Wait for arming to complete

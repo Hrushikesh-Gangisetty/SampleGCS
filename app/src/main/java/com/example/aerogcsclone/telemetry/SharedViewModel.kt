@@ -811,8 +811,8 @@ class SharedViewModel : ViewModel() {
             return Pair(false, "Invalid sequence numbers - Expected: 0-${missionItems.size-1}, Got: $sequences")
         }
 
-        // Find NAV_TAKEOFF command (command 22)
-        val hasTakeoff = missionItems.any { it.command.value == 22u }
+        // Find NAV_TAKEOFF command
+        val hasTakeoff = missionItems.any { it.command.value == MavCmdId.NAV_TAKEOFF }
         if (!hasTakeoff) {
             Log.w("MissionValidation", "⚠️ Mission does not contain NAV_TAKEOFF command!")
             addNotification(
@@ -825,7 +825,7 @@ class SharedViewModel : ViewModel() {
         }
 
         // Check that NAV_TAKEOFF is early in mission (ideally seq 1 after HOME)
-        val takeoffSeq = missionItems.find { it.command.value == 22u }?.seq?.toInt()
+        val takeoffSeq = missionItems.find { it.command.value == MavCmdId.NAV_TAKEOFF }?.seq?.toInt()
         if (takeoffSeq != null && takeoffSeq > 2) {
             Log.w("MissionValidation", "⚠️ NAV_TAKEOFF at seq=$takeoffSeq (expected seq=1)")
             addNotification(
@@ -839,8 +839,14 @@ class SharedViewModel : ViewModel() {
         // Validate coordinates and altitudes for NAV commands
         missionItems.forEach { item ->
             val cmdId = item.command.value
-            // NAV commands: WAYPOINT(16), LOITER(17), RETURN_TO_LAUNCH(20), LAND(21), TAKEOFF(22)
-            if (cmdId in listOf(16u, 17u, 20u, 21u, 22u)) {
+            // NAV commands: WAYPOINT, LOITER, RETURN_TO_LAUNCH, LAND, TAKEOFF
+            if (cmdId in listOf(
+                    MavCmdId.NAV_WAYPOINT,
+                    MavCmdId.NAV_LOITER_UNLIM,
+                    MavCmdId.NAV_RETURN_TO_LAUNCH,
+                    MavCmdId.NAV_LAND,
+                    MavCmdId.NAV_TAKEOFF
+                )) {
                 val lat = item.x / 1e7
                 val lon = item.y / 1e7
                 
@@ -854,8 +860,8 @@ class SharedViewModel : ViewModel() {
                     }
                 }
                 
-                if (item.z < 0f || item.z > 10000f) {
-                    return Pair(false, "Invalid altitude at seq=${item.seq}: ${item.z}m")
+                if (item.z < AltitudeLimits.MIN_ALTITUDE || item.z > AltitudeLimits.MAX_ALTITUDE) {
+                    return Pair(false, "Invalid altitude at seq=${item.seq}: ${item.z}m (valid range: ${AltitudeLimits.MIN_ALTITUDE}-${AltitudeLimits.MAX_ALTITUDE}m)")
                 }
             }
         }
