@@ -1474,7 +1474,10 @@ class MavlinkTelemetryRepository(
                 }
                 
                 // Keep DO commands (Mission Planner: if wpdata.id >= MAV_CMD.LAST)
-                // DO commands are: 80-99 (conditional), 176-252 (unconditional)
+                // DO commands have two ranges in MAVLink:
+                //   - 80-99: Conditional DO commands (e.g., DO_JUMP, DO_CHANGE_SPEED)
+                //   - 176-252: Unconditional DO commands (e.g., DO_SET_SERVO, DO_SET_CAM_TRIGG)
+                // Both types must be preserved as they set persistent mission parameters
                 val isDoCommand = cmdId in MAV_CMD_DO_START..99u || cmdId in 176u..MAV_CMD_DO_LAST
                 if (isDoCommand) {
                     filtered.add(waypoint)
@@ -1482,7 +1485,9 @@ class MavlinkTelemetryRepository(
                     continue
                 }
                 
-                // Skip NAV waypoints before resume point (Mission Planner: if wpdata.id < MAV_CMD.LAST continue)
+                // Skip NAV waypoints before resume point
+                // Mission Planner C#: if (wpdata.id < MAV_CMD.LAST) continue;
+                // MAV_CMD.LAST = 95, so we skip commands with ID <= 95 (NAV commands)
                 if (cmdId <= MAV_CMD_NAV_LAST) {
                     Log.d("ResumeMission", "⏭ Skipping NAV waypoint (seq=$seq, cmd=$cmdId)")
                     continue
