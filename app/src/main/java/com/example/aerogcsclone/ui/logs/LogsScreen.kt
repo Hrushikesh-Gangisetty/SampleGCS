@@ -1,15 +1,25 @@
 package com.example.aerogcsclone.ui.logs
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,7 +29,6 @@ import androidx.navigation.NavHostController
 import com.example.aerogcsclone.authentication.AuthViewModel
 import com.example.aerogcsclone.database.tlog.FlightEntity
 import com.example.aerogcsclone.export.ExportFormat
-import com.example.aerogcsclone.uimain.TopNavBar
 import com.example.aerogcsclone.viewmodel.TlogViewModel
 //import com.example.aerogcsclone.Telemetry.SharedViewModel
 import com.example.aerogcsclone.telemetry.SharedViewModel
@@ -38,60 +47,138 @@ fun LogsScreen(
     val uiState by tlogViewModel.uiState.collectAsState()
     val flights by tlogViewModel.flights.collectAsState(initial = emptyList())
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // TopNavBar removed - it's already handled in AppNavGraph.kt
+    val scrollState = rememberScrollState()
 
-        // Main Content
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF0A0E27),
+                        Color(0xFF1A1F3A),
+                        Color(0xFF0F1419)
+                    )
+                )
+            )
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp) // Reduced vertical padding
+                .verticalScroll(scrollState)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            // Header with Export All button - Made more compact
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp), // Reduced bottom padding
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Flight Logs",
-                    fontSize = 20.sp, // Reduced font size
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Button(
-                    onClick = { tlogViewModel.exportAllFlights() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                    enabled = !uiState.isExporting && flights.isNotEmpty(),
-                    modifier = Modifier.height(36.dp), // Reduced button height
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp) // Compact padding
+                // Modern Header Section
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (uiState.isExporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp), // Smaller indicator
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = "Export All",
-                            modifier = Modifier.size(14.dp) // Smaller icon
+                    // Title with icon
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFF2196F3),
+                                            Color(0xFF1976D2)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.FlightTakeoff,
+                                contentDescription = "Flight Logs",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "Flight Logs",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "${flights.size} missions recorded",
+                                fontSize = 14.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    // Export All Button with modern design
+                    Button(
+                        onClick = { tlogViewModel.exportAllFlights() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                        ),
+                        enabled = !uiState.isExporting && flights.isNotEmpty(),
+                        modifier = Modifier
+                            .height(48.dp)
+                            .shadow(8.dp, RoundedCornerShape(24.dp))
+                            .background(
+                                if (!uiState.isExporting && flights.isNotEmpty()) {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF1E88E5),
+                                            Color(0xFF1565C0)
+                                        )
+                                    )
+                                } else {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Gray.copy(alpha = 0.3f),
+                                            Color.Gray.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                },
+                                shape = RoundedCornerShape(24.dp)
+                            ),
+                        shape = RoundedCornerShape(24.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                    ) {
+                        if (uiState.isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = "Export All",
+                                modifier = Modifier.size(20.dp),
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Export All",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export All", fontSize = 12.sp) // Smaller text
                 }
-            }
 
-            // Statistics Card - Made more compact
+            // Modern Statistics Card
             StatsCard(
                 totalFlights = uiState.totalFlights,
                 totalFlightTime = uiState.totalFlightTime,
-                modifier = Modifier.padding(bottom = 8.dp) // Reduced spacing
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
             // Active Flight Status
@@ -99,140 +186,203 @@ fun LogsScreen(
                 ActiveFlightCard(
                     flightId = uiState.currentFlightId,
                     onEndFlight = { tlogViewModel.endFlight() },
-                    modifier = Modifier.padding(bottom = 8.dp) // Reduced spacing
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
 
-            // Error Message
+            // Error Message with modern styling
             uiState.errorMessage?.let { error ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.1f)),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFF5252).copy(alpha = 0.15f)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 4.dp) // Reduced spacing
+                        .padding(bottom = 12.dp)
+                        .shadow(4.dp, RoundedCornerShape(12.dp)),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp), // Reduced padding
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Error,
-                            contentDescription = "Error",
-                            tint = Color.Red,
-                            modifier = Modifier.size(16.dp) // Smaller icon
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF5252).copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Error,
+                                contentDescription = "Error",
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = error,
-                            color = Color.Red,
-                            fontSize = 12.sp // Smaller text
+                            color = Color(0xFFFF5252),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.weight(1f))
                         IconButton(
                             onClick = { tlogViewModel.clearError() },
-                            modifier = Modifier.size(24.dp) // Smaller button
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = Color.Red,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Export Success Message
+            // Export Success Message with modern styling
             uiState.exportMessage?.let { message ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.Green.copy(alpha = 0.1f)),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 4.dp) // Reduced spacing
+                        .padding(bottom = 12.dp)
+                        .shadow(4.dp, RoundedCornerShape(12.dp)),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp), // Reduced padding
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Success",
-                            tint = Color.Green,
-                            modifier = Modifier.size(16.dp) // Smaller icon
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF4CAF50).copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Success",
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = message,
-                            color = Color.Green,
-                            fontSize = 12.sp // Smaller text
+                            color = Color(0xFF4CAF50),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.weight(1f))
                         IconButton(
                             onClick = { tlogViewModel.clearExportMessage() },
-                            modifier = Modifier.size(24.dp) // Smaller button
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = Color.Green,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Flights List Header - Made more compact
-            Text(
-                text = "Recent Flights",
-                fontSize = 16.sp, // Reduced font size
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 4.dp) // Reduced spacing
-            )
-
-            // Flights List - Takes remaining space
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(), // Takes all remaining space
-                verticalArrangement = Arrangement.spacedBy(6.dp) // Reduced spacing between items
+            // Modern Flights List Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(flights) { flight ->
-                    FlightItem(
-                        flight = flight,
-                        onViewDetails = { /* Navigate to flight details */ },
-                        onDelete = { tlogViewModel.deleteFlight(flight.id) },
-                        onExport = { format -> tlogViewModel.exportFlight(flight, format) },
-                        modifier = Modifier.fillMaxWidth() // Removed bottom padding since we use spacedBy
-                    )
-                }
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = "History",
+                    tint = Color(0xFF64B5F6),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Recent Flights",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
 
-                if (flights.isEmpty()) {
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.Gray.copy(alpha = 0.2f)),
-                            modifier = Modifier.fillMaxWidth()
+            // Flights List with modern cards
+            if (flights.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1E2844).copy(alpha = 0.6f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(8.dp, RoundedCornerShape(20.dp)),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(48.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF64B5F6).copy(alpha = 0.3f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(32.dp)
-                                    .fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Default.FlightTakeoff,
-                                    contentDescription = "No flights",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "No flights recorded yet",
-                                    color = Color.Gray,
-                                    fontSize = 16.sp
-                                )
-                            }
+                            Icon(
+                                Icons.Default.FlightTakeoff,
+                                contentDescription = "No flights",
+                                tint = Color(0xFF64B5F6),
+                                modifier = Modifier.size(48.dp)
+                            )
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No flights recorded yet",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Start a mission to begin logging",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    flights.forEach { flight ->
+                        FlightItem(
+                            flight = flight,
+                            onViewDetails = { /* Navigate to flight details */ },
+                            onDelete = { tlogViewModel.deleteFlight(flight.id) },
+                            onExport = { format -> tlogViewModel.exportFlight(flight, format) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
@@ -247,33 +397,62 @@ fun StatsCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
-        modifier = modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(12.dp, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF1E3A8A).copy(alpha = 0.8f),
+                            Color(0xFF1E293B).copy(alpha = 0.9f)
+                        )
+                    )
+                )
         ) {
-            StatItem(
-                icon = Icons.Default.Flight,
-                label = "Total Flights",
-                value = totalFlights.toString()
-            )
-
-            HorizontalDivider(
+            Row(
                 modifier = Modifier
-                    .height(40.dp)
-                    .width(1.dp),
-                color = Color.White.copy(alpha = 0.3f)
-            )
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatItem(
+                    icon = Icons.Default.Flight,
+                    label = "Total Flights",
+                    value = totalFlights.toString(),
+                    color = Color(0xFF60A5FA)
+                )
 
-            StatItem(
-                icon = Icons.Default.AccessTime,
-                label = "Flight Time",
-                value = formatDuration(totalFlightTime)
-            )
+                Box(
+                    modifier = Modifier
+                        .height(60.dp)
+                        .width(2.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = 0.3f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                StatItem(
+                    icon = Icons.Default.AccessTime,
+                    label = "Flight Time",
+                    value = formatDuration(totalFlightTime),
+                    color = Color(0xFF34D399)
+                )
+            }
         }
     }
 }
@@ -282,26 +461,47 @@ fun StatsCard(
 fun StatItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    value: String
+    value: String,
+    color: Color = Color(0xFF60A5FA)
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.3f),
+                            Color.Transparent
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = color,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = value,
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp
+            color = Color.White.copy(alpha = 0.6f),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
@@ -313,40 +513,102 @@ fun ActiveFlightCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.Green.copy(alpha = 0.2f)),
-        modifier = modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(10.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF10B981).copy(alpha = 0.25f),
+                            Color(0xFF059669).copy(alpha = 0.3f)
+                        )
+                    )
+                )
         ) {
-            Icon(
-                Icons.Default.RadioButtonChecked,
-                contentDescription = "Active",
-                tint = Color.Green,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Flight Active",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Flight ID: $flightId",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 12.sp
-                )
-            }
-            Button(
-                onClick = onEndFlight,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            Row(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("End Flight")
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF10B981),
+                                    Color(0xFF059669)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.RadioButtonChecked,
+                        contentDescription = "Active",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🟢 Flight Active",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Flight ID: $flightId",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Button(
+                    onClick = onEndFlight,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent
+                    ),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .shadow(6.dp, RoundedCornerShape(22.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFEF4444),
+                                    Color(0xFFDC2626)
+                                )
+                            ),
+                            shape = RoundedCornerShape(22.dp)
+                        ),
+                    shape = RoundedCornerShape(22.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Stop,
+                        contentDescription = "End",
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "End Flight",
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
             }
         }
     }
@@ -362,113 +624,317 @@ fun FlightItem(
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f)),
-        modifier = modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-                    .clickable { onViewDetails() },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    if (flight.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = if (flight.isCompleted) "Completed" else "In Progress",
-                    tint = if (flight.isCompleted) Color.Green else Color(0xFFFFA500),
-                    modifier = Modifier.size(24.dp)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = dateFormat.format(Date(flight.startTime)),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF1E293B).copy(alpha = 0.9f),
+                            Color(0xFF0F172A).copy(alpha = 0.95f)
+                        )
                     )
+                )
+                .clickable { onViewDetails() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Status indicator with gradient circle
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (flight.isCompleted) {
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF10B981).copy(alpha = 0.3f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                } else {
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFA500).copy(alpha = 0.3f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (flight.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                            contentDescription = if (flight.isCompleted) "Completed" else "In Progress",
+                            tint = if (flight.isCompleted) Color(0xFF10B981) else Color(0xFFFFA500),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
 
-                    Row {
-                        flight.flightDuration?.let { duration ->
-                            Text(
-                                text = "Duration: ${formatDuration(duration)}",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 12.sp
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // Flight info
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = dateFormat.format(Date(flight.startTime)),
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = timeFormat.format(Date(flight.startTime)),
+                            color = Color(0xFF60A5FA),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    // Action buttons with modern styling
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Export button
+                        IconButton(
+                            onClick = { showExportDialog = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Color(0xFF1E88E5).copy(alpha = 0.15f)
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = "Export",
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        flight.area?.let { area ->
-                            Text(
-                                text = " • Area: ${String.format(Locale.getDefault(), "%.2f", area)} ha",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 12.sp
+                        // Delete button
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Color(0xFFEF4444).copy(alpha = 0.15f)
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
-                // Export button
-                IconButton(onClick = { showExportDialog = true }) {
-                    Icon(
-                        Icons.Default.Download,
-                        contentDescription = "Export",
-                        tint = Color(0xFF1E88E5)
-                    )
-                }
+                // Flight details section with modern cards
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Delete button
-                IconButton(onClick = { showDeleteDialog = true }) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color.Red
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    flight.flightDuration?.let { duration ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1E3A8A).copy(alpha = 0.2f))
+                                .padding(12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.AccessTime,
+                                    contentDescription = "Duration",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = formatDuration(duration),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Duration",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    flight.area?.let { area ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF059669).copy(alpha = 0.2f))
+                                .padding(12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Landscape,
+                                    contentDescription = "Area",
+                                    tint = Color(0xFF34D399),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = String.format(Locale.getDefault(), "%.2f ha", area),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Area",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Export Format Selection Dialog
+    // Modern Export Format Selection Dialog
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            title = { Text("Export Flight Log") },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF1E88E5),
+                                        Color(0xFF1565C0)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Export",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Export Flight Log",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
+            },
             text = {
                 Column(
-                    modifier = Modifier.height(300.dp) // Set fixed height to enable scrolling
+                    modifier = Modifier.height(300.dp)
                 ) {
-                    Text("Choose export format:")
+                    Text(
+                        "Choose export format:",
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
 
                     LazyColumn(
                         modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(ExportFormat.values()) { format ->
+                        items(ExportFormat.entries.toTypedArray()) { format ->
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color.Gray.copy(alpha = 0.1f)),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF1E293B).copy(alpha = 0.6f)
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .shadow(4.dp, RoundedCornerShape(12.dp))
                                     .clickable {
                                         onExport(format)
                                         showExportDialog = false
-                                    }
+                                    },
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = format.displayName,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    )
-                                    Text(
-                                        text = format.description,
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF60A5FA).copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.InsertDriveFile,
+                                            contentDescription = format.displayName,
+                                            tint = Color(0xFF60A5FA),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = format.displayName,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = format.description,
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = "Select",
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
@@ -478,32 +944,118 @@ fun FlightItem(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showExportDialog = false }) {
-                    Text("Cancel")
+                TextButton(
+                    onClick = { showExportDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF60A5FA)
+                    )
+                ) {
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
                 }
             }
         )
     }
 
-    // Delete Confirmation Dialog
+    // Modern Delete Confirmation Dialog
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Flight") },
-            text = { Text("Are you sure you want to delete this flight? This action cannot be undone.") },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFEF4444),
+                                        Color(0xFFDC2626)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Delete Flight",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = Color(0xFFEF4444)
+                    )
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        "Are you sure you want to delete this flight?",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "⚠️ This action cannot be undone.",
+                        fontSize = 13.sp,
+                        color = Color(0xFFEF4444).copy(alpha = 0.8f)
+                    )
+                }
+            },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         onDelete()
                         showDeleteDialog = false
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent
+                    ),
+                    modifier = Modifier
+                        .shadow(6.dp, RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFEF4444),
+                                    Color(0xFFDC2626)
+                                )
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        ),
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
                 ) {
-                    Text("Delete", color = Color.Red)
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Delete",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
+                TextButton(
+                    onClick = { showDeleteDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF60A5FA)
+                    )
+                ) {
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
                 }
             }
         )
