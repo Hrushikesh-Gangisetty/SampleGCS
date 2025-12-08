@@ -1709,6 +1709,150 @@ class MavlinkTelemetryRepository(
     }
 
     /**
+     * Retrieve all waypoints from the flight controller.
+     * Returns a list of MissionItemInt objects representing the current mission.
+     */
+    suspend fun getAllWaypoints(timeoutMs: Long = 10000): List<MissionItemInt>? {
+        if (!state.value.fcuDetected) {
+            Log.w("ResumeMission", "FCU not detected; cannot retrieve mission")
+            return null
+        }
+        
+        try {
+            val receivedItems = mutableListOf<MissionItemInt>()
+            val expectedCountDeferred = CompletableDeferred<Int?>()
+            val perSeqMap = mutableMapOf<Int, CompletableDeferred<Unit>>()
+
+            val job = AppScope.launch {
+                connection.mavFrame.collect { frame ->
+                    when (val msg = frame.message) {
+                        is MissionCount -> {
+                            Log.i("ResumeMission", "Received MISSION_COUNT=${msg.count} from FC")
+                            expectedCountDeferred.complete(msg.count.toInt())
+                        }
+                        is MissionItemInt -> {
+                            Log.d("ResumeMission", "Received MISSION_ITEM_INT seq=${msg.seq} cmd=${msg.command.value}")
+                            receivedItems.add(msg)
+                            perSeqMap[msg.seq.toInt()]?.let { d -> if (!d.isCompleted) d.complete(Unit) }
+                        }
+                        is MissionAck -> {
+                            Log.d("ResumeMission", "Received MISSION_ACK type=${msg.type}")
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            try {
+                val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
+                Log.i("ResumeMission", "Sent MISSION_REQUEST_LIST to FCU")
+            } catch (e: Exception) {
+                Log.e("ResumeMission", "Failed to send MISSION_REQUEST_LIST", e)
+                job.cancel()
+                return null
+            }
+
+            val expectedCount = withTimeoutOrNull(timeoutMs) { expectedCountDeferred.await() } ?: run {
+                Log.w("ResumeMission", "Did not receive MISSION_COUNT from FCU within timeout")
+                job.cancel()
+                return null
+            }
+
+            Log.i("ResumeMission", "Expecting $expectedCount mission items - requesting each item")
+
+            for (seq in 0 until expectedCount) {
+                val seqDeferred = CompletableDeferred<Unit>()
+                perSeqMap[seq] = seqDeferred
+                
+                try {
+                    val reqItem = MissionRequestInt(targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = seq.toUShort())
+                    connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, reqItem)
+                    Log.d("ResumeMission", "Sent MISSION_REQUEST_INT for seq=$seq")
+                } catch (e: Exception) {
+                    Log.e("ResumeMission", "Failed to send MISSION_REQUEST_INT seq=$seq", e)
+                }
+
+                val got = withTimeoutOrNull(2000L) { // 2s timeout per item (allows for FC processing + network latency)
+                    seqDeferred.await()
+                    true
+                } ?: false
+
+                if (!got) {
+                    Log.w("ResumeMission", "Did not receive item for seq=$seq within timeout")
+                }
+
+                perSeqMap.remove(seq)
+            }
+
+            // Small delay to ensure all MAVLink messages are processed before canceling collector
+            delay(200)
+            job.cancel()
+
+            // Sort items by sequence number
+            val sortedItems = receivedItems.sortedBy { it.seq.toInt() }
+            
+            Log.i("ResumeMission", "Mission retrieval complete: expected=$expectedCount received=${sortedItems.size}")
+            
+            if (sortedItems.size != expectedCount) {
+                Log.w("ResumeMission", "⚠️ Received ${sortedItems.size} items but expected $expectedCount")
+            }
+            
+            return sortedItems
+            
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Error during mission retrieval", e)
+            return null
+        }
+    }
+
+    /**
+     * Get the mission count from the flight controller.
+     * Returns the number of mission items stored in the FC.
+     */
+    suspend fun getMissionCount(timeoutMs: Long = 5000): Int? {
+        if (!state.value.fcuDetected) {
+            Log.w("ResumeMission", "FCU not detected; cannot get mission count")
+            return null
+        }
+        
+        try {
+            val expectedCountDeferred = CompletableDeferred<Int?>()
+
+            val job = AppScope.launch {
+                connection.mavFrame.collect { frame ->
+                    when (val msg = frame.message) {
+                        is MissionCount -> {
+                            Log.d("ResumeMission", "Received MISSION_COUNT=${msg.count}")
+                            expectedCountDeferred.complete(msg.count.toInt())
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            try {
+                val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
+                Log.d("ResumeMission", "Sent MISSION_REQUEST_LIST to get count")
+            } catch (e: Exception) {
+                Log.e("ResumeMission", "Failed to send MISSION_REQUEST_LIST", e)
+                job.cancel()
+                return null
+            }
+
+            val count = withTimeoutOrNull(timeoutMs) { expectedCountDeferred.await() }
+            job.cancel()
+            
+            return count
+            
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Error getting mission count", e)
+            return null
+        }
+    }
+
+    /**
      * Start the mission after uploading.
      * Replicates the Dart/Flutter workflow:
      * 1. Arm the vehicle
@@ -2077,35 +2221,32 @@ class MavlinkTelemetryRepository(
 
             // For waypoints before resume point
             if (seq < resumeWaypointSeq) {
-                // Keep TAKEOFF commands (Mission Planner: if wpdata.id != TAKEOFF)
+                // ALWAYS keep TAKEOFF commands (Mission Planner protocol)
+                // Mission Planner: if (wpdata.id != TAKEOFF) skip NAV commands
                 if (cmdId == MAV_CMD_NAV_TAKEOFF) {
                     filtered.add(waypoint)
-                    Log.d("ResumeMission", "✅ Keeping TAKEOFF (seq=$seq, cmd=$cmdId)")
+                    Log.i("ResumeMission", "✅ CRITICAL: Keeping TAKEOFF (seq=$seq, cmd=$cmdId) - altitude reference")
                     continue
                 }
-
-                // Keep DO commands (Mission Planner: if wpdata.id >= MAV_CMD.LAST)
-                // DO commands have two ranges in MAVLink:
-                //   - 80-99: Conditional DO commands (e.g., DO_JUMP, DO_CHANGE_SPEED)
-                //   - 176-252: Unconditional DO commands (e.g., DO_SET_SERVO, DO_SET_CAM_TRIGG)
-                // Both types must be preserved as they set persistent mission parameters
+                
+                // Keep DO commands - Mission Planner preserves commands in two ranges:
+                // Range 1: 80-99 (conditional DO commands like DO_JUMP, DO_CHANGE_SPEED)
+                // Range 2: 176-252 (unconditional DO commands like DO_SET_SERVO, DO_SET_CAM_TRIGG)
                 val isDoCommand = cmdId in MAV_CMD_DO_START..99u || cmdId in 176u..MAV_CMD_DO_LAST
                 if (isDoCommand) {
                     filtered.add(waypoint)
-                    Log.d("ResumeMission", "✅ Keeping DO command (seq=$seq, cmd=$cmdId)")
+                    Log.i("ResumeMission", "✅ Keeping DO command (seq=$seq, cmd=$cmdId)")
                     continue
                 }
-
-                // Skip NAV waypoints before resume point
-                // Mission Planner C#: if (wpdata.id < MAV_CMD.LAST) continue;
-                // MAV_CMD.LAST = 95, so we skip commands with ID <= 95 (NAV commands)
-                if (cmdId <= MAV_CMD_NAV_LAST) {
-                    Log.d("ResumeMission", "⏭ Skipping NAV waypoint (seq=$seq, cmd=$cmdId)")
+                
+                // Skip NAV waypoints before resume point (Mission Planner: if wpdata.id < MAV_CMD_LAST continue)
+                if (cmdId in 16u..MAV_CMD_NAV_LAST) {
+                    Log.d("ResumeMission", "⏭️ Skipping NAV waypoint before resume (seq=$seq, cmd=$cmdId)")
                     continue
                 }
-
+                
                 // Skip any other commands before resume point
-                Log.d("ResumeMission", "⏭ Skipping waypoint (seq=$seq, cmd=$cmdId)")
+                Log.d("ResumeMission", "⏭️ Skipping unknown command before resume (seq=$seq, cmd=$cmdId)")
                 continue
             }
 
@@ -2128,15 +2269,34 @@ class MavlinkTelemetryRepository(
      * @return Re-sequenced list with sequential numbering
      */
     suspend fun resequenceWaypoints(waypoints: List<MissionItemInt>): List<MissionItemInt> {
-        Log.i("ResumeMission", "Re-sequencing ${waypoints.size} waypoints...")
+        if (waypoints.isEmpty()) {
+            Log.w("ResumeMission", "No waypoints to resequence")
+            return emptyList()
+        }
 
-        return waypoints.mapIndexed { index, waypoint ->
+        Log.i("ResumeMission", "═══ Re-sequencing ${waypoints.size} waypoints ═══")
+        
+        val resequenced = waypoints.mapIndexed { index, waypoint ->
+            // Set current=1 only for HOME (seq 0), all others current=0
+            val newCurrent = if (index == 0) 1u else 0u
+            
             waypoint.copy(
                 seq = index.toUShort(),
-                current = if (index == 0) 1u else 0u // Mark HOME as current
-            )
-        }.also {
-            Log.i("ResumeMission", "Re-sequenced: 0 to ${it.size - 1}")
+                current = newCurrent
+            ).also {
+                Log.d("ResumeMission", "Resequenced: old_seq=${waypoint.seq} → new_seq=$index, cmd=${waypoint.command.value}, current=$newCurrent")
+            }
         }
+        
+        // Validation check
+        val sequences = resequenced.map { it.seq.toInt() }
+        val expected = (0 until resequenced.size).toList()
+        if (sequences != expected) {
+            Log.e("ResumeMission", "❌ Resequencing FAILED! Expected: $expected, Got: $sequences")
+        } else {
+            Log.i("ResumeMission", "✅ Resequencing successful: ${resequenced.size} waypoints (0..${resequenced.size-1})")
+        }
+        
+        return resequenced
     }
 }

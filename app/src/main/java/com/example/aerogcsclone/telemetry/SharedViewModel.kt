@@ -807,8 +807,22 @@ class SharedViewModel : ViewModel() {
 
         // Check sequence numbers are sequential starting from 0
         val sequences = missionItems.map { it.seq.toInt() }.sorted()
-        if (sequences != (0 until missionItems.size).toList()) {
-            return Pair(false, "Invalid sequence numbers - Expected: 0-${missionItems.size-1}, Got: $sequences")
+        val expectedSequences = (0 until missionItems.size).toList()
+
+        if (sequences != expectedSequences) {
+            // Enhanced logging for debugging
+            Log.e("MissionValidation", "❌ Sequence validation FAILED")
+            Log.e("MissionValidation", "Expected sequences: $expectedSequences")
+            Log.e("MissionValidation", "Actual sequences: $sequences")
+            Log.e("MissionValidation", "Missing sequences: ${expectedSequences.minus(sequences.toSet())}")
+            Log.e("MissionValidation", "Extra sequences: ${sequences.toSet().minus(expectedSequences.toSet())}")
+            
+            // Log each mission item for debugging
+            missionItems.forEach { item ->
+                Log.e("MissionValidation", "Item: seq=${item.seq} cmd=${item.command.value} current=${item.current}")
+            }
+            
+            return Pair(false, "Invalid sequence numbers - Expected: $expectedSequences, Got: $sequences")
         }
 
         // Find NAV_TAKEOFF command
@@ -1196,25 +1210,112 @@ class SharedViewModel : ViewModel() {
                 Log.i("ResumeMission", "═══════════════════════════════════════")
 
                 // Step 1: Pre-flight Checks
-                onProgress("Step 1/5: Pre-flight checks...")
+                onProgress("Step 1/8: Pre-flight checks...")
                 if (!_telemetryState.value.connected) {
                     onResult(false, "Not connected to flight controller")
                     return@launch
                 }
 
-                // Step 2: Set waypoint in FCU
-                onProgress("Step 2/5: Setting resume waypoint...")
-                Log.i("ResumeMission", "Setting current waypoint to $resumeWaypointNumber")
-                val setWaypointSuccess = repo?.setCurrentWaypoint(resumeWaypointNumber) ?: false
+                // Step 2: Retrieve Current Mission from FC
+                onProgress("Step 2/8: Retrieving mission from flight controller...")
+                Log.i("ResumeMission", "Retrieving current mission from FC...")
+                val allWaypoints = repo?.getAllWaypoints()
+                
+                if (allWaypoints == null || allWaypoints.isEmpty()) {
+                    Log.e("ResumeMission", "❌ Failed to retrieve mission from FC")
+                    onResult(false, "Failed to retrieve mission from flight controller")
+                    return@launch
+                }
+
+                // Log original mission structure
+                Log.i("ResumeMission", "════════════════════════════════")
+                Log.i("ResumeMission", "Original mission count: ${allWaypoints.size}")
+                Log.i("ResumeMission", "Resume from waypoint: $resumeWaypointNumber")
+                allWaypoints.forEach { wp ->
+                    Log.i("ResumeMission", "  Original: seq=${wp.seq} cmd=${wp.command.value} current=${wp.current}")
+                }
+
+                // Step 3: Filter Waypoints for Resume
+                onProgress("Step 3/8: Filtering waypoints...")
+                Log.i("ResumeMission", "Filtering waypoints for resume from waypoint $resumeWaypointNumber...")
+                val filtered = repo?.filterWaypointsForResume(allWaypoints, resumeWaypointNumber)
+                
+                if (filtered == null || filtered.isEmpty()) {
+                    Log.e("ResumeMission", "❌ Filtering resulted in empty mission")
+                    onResult(false, "Mission filtering failed - no waypoints to resume")
+                    return@launch
+                }
+                
+                Log.i("ResumeMission", "────────────────────────────────")
+                Log.i("ResumeMission", "Filtered mission count: ${filtered.size}")
+                filtered.forEach { wp ->
+                    Log.i("ResumeMission", "  Filtered: seq=${wp.seq} cmd=${wp.command.value} current=${wp.current}")
+                }
+
+                // Step 4: Resequence Waypoints
+                onProgress("Step 4/8: Resequencing waypoints...")
+                Log.i("ResumeMission", "Resequencing waypoints...")
+                val resequenced = repo?.resequenceWaypoints(filtered)
+                
+                if (resequenced == null || resequenced.isEmpty()) {
+                    Log.e("ResumeMission", "❌ Resequencing resulted in empty mission")
+                    onResult(false, "Mission resequencing failed")
+                    return@launch
+                }
+                
+                Log.i("ResumeMission", "────────────────────────────────")
+                Log.i("ResumeMission", "Resequenced mission count: ${resequenced.size}")
+                resequenced.forEach { wp ->
+                    Log.i("ResumeMission", "  Resequenced: seq=${wp.seq} cmd=${wp.command.value} current=${wp.current}")
+                }
+                Log.i("ResumeMission", "════════════════════════════════")
+
+                // Step 5: Validate Mission Structure
+                onProgress("Step 5/8: Validating mission...")
+                val (isValid, validationError) = validateMissionStructure(resequenced)
+                if (!isValid) {
+                    Log.e("ResumeMission", "❌ Mission validation failed: $validationError")
+                    onResult(false, "Mission validation failed: $validationError")
+                    return@launch
+                }
+                Log.i("ResumeMission", "✅ Mission validation passed")
+
+                // Step 6: Upload Modified Mission to FC
+                onProgress("Step 6/8: Uploading mission to flight controller...")
+                Log.i("ResumeMission", "Uploading ${resequenced.size} waypoints to FC...")
+                val success = repo?.uploadMissionWithAck(resequenced) ?: false
+
+                if (success) {
+                    Log.i("ResumeMission", "✅ Mission upload confirmed by FC")
+                    
+                    // Verify by reading back the mission count
+                    // Delay allows FC to fully commit mission to storage before verification
+                    delay(1000)
+                    val verifyCount = repo?.getMissionCount() ?: 0
+                    if (verifyCount != resequenced.size) {
+                        Log.e("ResumeMission", "⚠️ WARNING: FC reports $verifyCount waypoints but we uploaded ${resequenced.size}")
+                    } else {
+                        Log.i("ResumeMission", "✅ FC confirms $verifyCount waypoints stored")
+                    }
+                } else {
+                    Log.e("ResumeMission", "❌ Mission upload FAILED - FC rejected mission")
+                    onResult(false, "Mission upload failed - flight controller rejected mission")
+                    return@launch
+                }
+
+                // Step 7: Set Current Waypoint to start execution
+                onProgress("Step 7/8: Setting current waypoint...")
+                Log.i("ResumeMission", "Setting current waypoint to 1 (start from first mission item after HOME)")
+                val setWaypointSuccess = repo?.setCurrentWaypoint(1) ?: false
 
                 if (!setWaypointSuccess) {
-                    Log.w("ResumeMission", "Failed to set waypoint, continuing anyway")
+                    Log.w("ResumeMission", "Failed to set current waypoint, continuing anyway")
                 }
 
                 delay(500)
 
-                // Step 3: Switch to AUTO Mode
-                onProgress("Step 3/5: Switching to AUTO mode...")
+                // Step 8: Switch to AUTO Mode
+                onProgress("Step 8/8: Switching to AUTO mode...")
                 val currentMode = _telemetryState.value.mode
                 Log.i("ResumeMission", "Current mode: $currentMode")
 
@@ -1249,8 +1350,8 @@ class SharedViewModel : ViewModel() {
 
                 Log.i("ResumeMission", "✅ Successfully switched to AUTO mode")
 
-                // Step 4: Update state
-                onProgress("Step 4/5: Updating mission state...")
+                // Complete: Update state
+                onProgress("Mission resumed!")
                 _telemetryState.update {
                     it.copy(
                         missionPaused = false,
@@ -1258,8 +1359,7 @@ class SharedViewModel : ViewModel() {
                     )
                 }
 
-                // Step 5: Complete
-                onProgress("Step 5/5: Mission resumed!")
+                // Complete
                 addNotification(
                     Notification(
                         message = "Mission resumed from waypoint $resumeWaypointNumber",
