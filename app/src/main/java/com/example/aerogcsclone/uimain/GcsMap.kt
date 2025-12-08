@@ -115,7 +115,12 @@ fun GcsMap(
     onWaypointDrag: (index: Int, newPosition: LatLng) -> Unit = { _, _ -> },
     // Waypoint selection
     selectedWaypointIndex: Int? = null,
-    onWaypointClick: (index: Int) -> Unit = {}
+    onWaypointClick: (index: Int) -> Unit = {},
+    // Polygon point drag callback
+    onPolygonPointDrag: (index: Int, newPosition: LatLng) -> Unit = { _, _ -> },
+    // Polygon point selection
+    selectedPolygonPointIndex: Int? = null,
+    onPolygonPointClick: (index: Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val cameraState = cameraPositionState ?: rememberCameraPositionState()
@@ -242,14 +247,36 @@ fun GcsMap(
             }
         }
 
-        // Survey polygon outline (purple)
+        // Survey polygon outline (purple) - Now draggable!
         if (surveyPolygon.isNotEmpty()) {
             surveyPolygon.forEachIndexed { index, point ->
+                val markerState = rememberMarkerState(position = point)
+
+                // Listen to marker position changes for drag events
+                LaunchedEffect(markerState.position, point) {
+                    if (markerState.position != point) {
+                        onPolygonPointDrag(index, markerState.position)
+                    }
+                }
+
+                // Determine the marker icon based on selection state
+                val markerIcon = if (selectedPolygonPointIndex == index) {
+                    mediumYellowMarker // Selected polygon point - Yellow
+                } else {
+                    mediumVioletMarker // Default - Purple
+                }
+
                 Marker(
-                    state = MarkerState(position = point),
+                    state = markerState,
                     title = "P${index + 1}",
-                    icon = mediumVioletMarker,
-                    anchor = Offset(0.5f, 0.5f)
+                    icon = markerIcon,
+                    anchor = Offset(0.5f, 0.5f),
+                    draggable = true,  // Enable dragging
+                    onClick = {
+                        // Marker clicked, can be dragged now
+                        onPolygonPointClick(index) // Handle polygon point click
+                        true
+                    }
                 )
             }
 

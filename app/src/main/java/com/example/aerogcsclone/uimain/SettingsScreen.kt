@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,13 +46,34 @@ fun SettingsScreen(navController: NavHostController) {
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = "Settings",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            // Header row with title and home icon
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Settings",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Home icon button
+                IconButton(
+                    onClick = { navController.navigate("main") },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Home,
+                        contentDescription = "Go to Home",
+                        tint = Color(0xFF87CEEB), // light blue
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
 
             // Light blue horizontal line separating the title from the rest of the content
             HorizontalDivider(
