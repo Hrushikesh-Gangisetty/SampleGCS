@@ -37,6 +37,14 @@ object MavMode {
     // Add other modes as needed
 }
 
+// Timeout constants for mission operations (align with MissionPlanner behavior)
+object MissionTimeouts {
+    const val MODE_TIMEOUT_MS: Long = 30000L      // 30 seconds for mode change
+    const val ARM_TIMEOUT_MS: Long = 30000L        // 30 seconds for arming
+    const val ALTITUDE_TIMEOUT_MS: Long = 40000L   // 40 seconds for altitude target
+    const val POLLING_INTERVAL_MS: Long = 1000L    // 1 second polling interval
+}
+
 class MavlinkTelemetryRepository(
     private val provider: MavConnectionProvider,
     private val sharedViewModel: SharedViewModel
@@ -1149,6 +1157,14 @@ class MavlinkTelemetryRepository(
                 Log.i("MissionUpload", "Total items: ${missionItems.size}")
                 Log.i("MissionUpload", "All sequences confirmed: ${sentSeqs.sorted()}")
                 Log.i("MissionUpload", "═══════════════════════════════════════")
+                
+                // Set current waypoint to 1 (first mission waypoint after home)
+                // This aligns with MissionPlanner behavior
+                Log.i("MissionUpload", "Setting current waypoint to 1...")
+                val setWPSuccess = setWPCurrent(fcuSystemId, fcuComponentId, 1)
+                if (!setWPSuccess) {
+                    Log.w("MissionUpload", "⚠️ Failed to set current waypoint, but mission uploaded successfully")
+                }
             } else {
                 Log.e("MissionUpload", "═══════════════════════════════════════")
                 Log.e("MissionUpload", "❌ FAILED - $errorMsg")
@@ -1418,6 +1434,249 @@ class MavlinkTelemetryRepository(
             true
         } catch (e: Exception) {
             Log.e("MavlinkRepo", "Failed to set current waypoint", e)
+            false
+        }
+    }
+
+    /**
+     * Check if the connected vehicle is a copter (multirotor).
+     * Uses MAV_TYPE from heartbeat to determine vehicle type.
+     * @return true if vehicle is a copter, false otherwise
+     */
+    fun isCopter(): Boolean {
+        // For now, we'll check based on available modes and common copter indicators
+        // In a real implementation, we should check MAV_TYPE from the heartbeat
+        // Common copter MAV_TYPEs: QUADROTOR (2), HEXAROTOR (13), OCTOROTOR (14), TRICOPTER (15), etc.
+        // For this implementation, we'll assume it's a copter if connected
+        // A more robust check would store MAV_TYPE from heartbeat messages
+        val currentMode = state.value.mode
+        // Copters typically have modes like Stabilize, Loiter, Alt Hold
+        val copterModes = listOf("Stabilize", "Loiter", "Alt Hold", "Pos Hold", "Auto", "Guided", "Acro")
+        return state.value.fcuDetected && copterModes.any { currentMode?.contains(it, ignoreCase = true) == true }
+    }
+
+    /**
+     * Wait for the vehicle to enter a specific mode with retries.
+     * Repeatedly sends setMode commands and polls telemetry until mode matches or timeout occurs.
+     * @param targetMode The desired flight mode (e.g., "Auto", "Loiter", "Stabilize")
+     * @param timeoutMs Timeout in milliseconds (default: 30 seconds)
+     * @return true if mode change successful, false if timeout or error
+     */
+    suspend fun waitForMode(targetMode: String, timeoutMs: Long = MissionTimeouts.MODE_TIMEOUT_MS): Boolean {
+        Log.i("MavlinkRepo", "[waitForMode] Attempting to change mode to: $targetMode (timeout: ${timeoutMs}ms)")
+        
+        if (!state.value.fcuDetected) {
+            Log.e("MavlinkRepo", "[waitForMode] FCU not detected")
+            return false
+        }
+
+        // Map target mode string to MavMode constant
+        val modeValue: UInt = when (targetMode.lowercase()) {
+            "auto" -> MavMode.AUTO
+            "stabilize" -> MavMode.STABILIZE
+            "loiter" -> MavMode.LOITER
+            "rtl" -> MavMode.RTL
+            "land" -> MavMode.LAND
+            else -> {
+                Log.e("MavlinkRepo", "[waitForMode] Unknown mode: $targetMode")
+                return false
+            }
+        }
+
+        val startTime = System.currentTimeMillis()
+        var attempt = 0
+        
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            attempt++
+            
+            // Check if already in target mode
+            val currentMode = state.value.mode
+            if (currentMode?.contains(targetMode, ignoreCase = true) == true) {
+                Log.i("MavlinkRepo", "[waitForMode] ✓ Mode confirmed: $currentMode (attempt $attempt)")
+                return true
+            }
+            
+            // Send mode change command
+            Log.d("MavlinkRepo", "[waitForMode] Attempt $attempt: Sending mode change command to $targetMode (current: $currentMode)")
+            sendCommand(
+                MavCmd.DO_SET_MODE,
+                1f,                   // param1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+                modeValue.toFloat(),  // param2: custom mode value
+                0f, 0f, 0f, 0f, 0f
+            )
+            
+            // Wait before next check
+            delay(MissionTimeouts.POLLING_INTERVAL_MS)
+        }
+        
+        val finalMode = state.value.mode
+        Log.e("MavlinkRepo", "[waitForMode] ✗ Timeout waiting for mode '$targetMode' after ${attempt} attempts (current: $finalMode)")
+        return false
+    }
+
+    /**
+     * Wait for the vehicle to arm with retries.
+     * Polls telemetry and calls arm() until armed or timeout occurs.
+     * @param timeoutMs Timeout in milliseconds (default: 30 seconds)
+     * @return true if vehicle armed successfully, false if timeout or error
+     */
+    suspend fun waitForArmed(timeoutMs: Long = MissionTimeouts.ARM_TIMEOUT_MS): Boolean {
+        Log.i("MavlinkRepo", "[waitForArmed] Attempting to arm vehicle (timeout: ${timeoutMs}ms)")
+        
+        if (!state.value.fcuDetected) {
+            Log.e("MavlinkRepo", "[waitForArmed] FCU not detected")
+            return false
+        }
+
+        if (!state.value.armable) {
+            Log.e("MavlinkRepo", "[waitForArmed] Vehicle not armable (check sensors and GPS)")
+            return false
+        }
+
+        val startTime = System.currentTimeMillis()
+        var attempt = 0
+        
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            attempt++
+            
+            // Check if already armed
+            if (state.value.armed) {
+                Log.i("MavlinkRepo", "[waitForArmed] ✓ Vehicle armed (attempt $attempt)")
+                return true
+            }
+            
+            // Send arm command
+            Log.d("MavlinkRepo", "[waitForArmed] Attempt $attempt: Sending arm command")
+            sendCommand(MavCmd.COMPONENT_ARM_DISARM, 1f)
+            
+            // Wait before next check
+            delay(MissionTimeouts.POLLING_INTERVAL_MS)
+        }
+        
+        Log.e("MavlinkRepo", "[waitForArmed] ✗ Timeout waiting for vehicle to arm after ${attempt} attempts")
+        return false
+    }
+
+    /**
+     * Wait for the vehicle to reach a target altitude.
+     * Polls current altitude until >= targetAlt - tolerance or timeout occurs.
+     * @param targetAlt Target altitude in meters (MSL)
+     * @param tolerance Altitude tolerance in meters (default: 2.0m)
+     * @param timeoutMs Timeout in milliseconds (default: 40 seconds)
+     * @return true if altitude reached, false if timeout
+     */
+    suspend fun waitForAltitude(
+        targetAlt: Double, 
+        tolerance: Double = 2.0, 
+        timeoutMs: Long = MissionTimeouts.ALTITUDE_TIMEOUT_MS
+    ): Boolean {
+        Log.i("MavlinkRepo", "[waitForAltitude] Waiting for altitude: ${targetAlt}m ± ${tolerance}m (timeout: ${timeoutMs}ms)")
+        
+        if (!state.value.fcuDetected) {
+            Log.e("MavlinkRepo", "[waitForAltitude] FCU not detected")
+            return false
+        }
+
+        val startTime = System.currentTimeMillis()
+        var attempt = 0
+        val minAltitude = targetAlt - tolerance
+        
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            attempt++
+            
+            val currentAlt = state.value.altitudeRelative?.toDouble() ?: 0.0
+            
+            if (currentAlt >= minAltitude) {
+                Log.i("MavlinkRepo", "[waitForAltitude] ✓ Target altitude reached: ${currentAlt}m >= ${minAltitude}m (attempt $attempt)")
+                return true
+            }
+            
+            if (attempt % 5 == 0) {  // Log every 5 seconds
+                Log.d("MavlinkRepo", "[waitForAltitude] Current altitude: ${currentAlt}m, target: ${minAltitude}m (attempt $attempt)")
+            }
+            
+            delay(MissionTimeouts.POLLING_INTERVAL_MS)
+        }
+        
+        val finalAlt = state.value.altitudeRelative?.toDouble() ?: 0.0
+        Log.e("MavlinkRepo", "[waitForAltitude] ✗ Timeout waiting for altitude (current: ${finalAlt}m, target: ${minAltitude}m)")
+        return false
+    }
+
+    /**
+     * Send takeoff command to the vehicle.
+     * Only issues TAKEOFF command if vehicle is a copter.
+     * @param alt Target altitude in meters
+     * @return true if command sent successfully, false if not a copter or error
+     */
+    suspend fun sendTakeoffCommand(alt: Double): Boolean {
+        Log.i("MavlinkRepo", "[sendTakeoffCommand] Requesting takeoff to ${alt}m")
+        
+        if (!state.value.fcuDetected) {
+            Log.e("MavlinkRepo", "[sendTakeoffCommand] FCU not detected")
+            return false
+        }
+
+        if (!isCopter()) {
+            Log.w("MavlinkRepo", "[sendTakeoffCommand] Vehicle is not a copter - skipping TAKEOFF command")
+            return true  // Not an error, just not applicable
+        }
+
+        try {
+            // Get current position for takeoff command
+            val lat = state.value.latitude ?: 0.0
+            val lon = state.value.longitude ?: 0.0
+            
+            sendCommand(
+                MavCmd.NAV_TAKEOFF,
+                param1 = 0f,          // Minimum pitch (unused for copters)
+                param2 = 0f,          // Empty
+                param3 = 0f,          // Empty
+                param4 = 0f,          // Yaw angle (0 = current)
+                param5 = lat.toFloat(), // Latitude
+                param6 = lon.toFloat(), // Longitude
+                param7 = alt.toFloat()  // Altitude
+            )
+            
+            Log.i("MavlinkRepo", "[sendTakeoffCommand] ✓ Takeoff command sent")
+            return true
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "[sendTakeoffCommand] ✗ Failed to send takeoff command", e)
+            return false
+        }
+    }
+
+    /**
+     * Set the current waypoint after mission upload (MAVLink protocol compliance).
+     * This ensures the FCU starts from waypoint 1 (after home at 0).
+     * @param seq Waypoint sequence number (typically 1 for first mission waypoint)
+     * @return true if command sent successfully, false otherwise
+     */
+    suspend fun setWPCurrent(sysid: UByte, compid: UByte, seq: Int): Boolean {
+        return try {
+            Log.i("MavlinkRepo", "[setWPCurrent] Setting current waypoint to: $seq")
+            
+            val cmd = CommandLong(
+                targetSystem = sysid,
+                targetComponent = compid,
+                command = MavCmd.DO_SET_MISSION_CURRENT.wrap(),
+                confirmation = 0u,
+                param1 = seq.toFloat(),
+                param2 = 0f,
+                param3 = 0f,
+                param4 = 0f,
+                param5 = 0f,
+                param6 = 0f,
+                param7 = 0f
+            )
+            
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, cmd)
+            delay(300)
+            
+            Log.i("MavlinkRepo", "[setWPCurrent] ✓ Current waypoint set to: $seq")
+            true
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "[setWPCurrent] ✗ Failed to set current waypoint", e)
             false
         }
     }

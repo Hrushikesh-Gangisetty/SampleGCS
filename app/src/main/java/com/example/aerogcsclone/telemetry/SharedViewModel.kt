@@ -689,12 +689,20 @@ class SharedViewModel : ViewModel() {
     private val _isNotificationPanelVisible = MutableStateFlow(false)
     val isNotificationPanelVisible: StateFlow<Boolean> = _isNotificationPanelVisible.asStateFlow()
 
+    // --- Resume Mission Error State ---
+    private val _resumeError = MutableStateFlow<String?>(null)
+    val resumeError: StateFlow<String?> = _resumeError.asStateFlow()
+
     fun addNotification(notification: Notification) {
         _notifications.value = listOf(notification) + _notifications.value
     }
 
     fun toggleNotificationPanel() {
         _isNotificationPanelVisible.value = !_isNotificationPanelVisible.value
+    }
+
+    fun clearResumeError() {
+        _resumeError.value = null
     }
 
     fun startImuCalibration() {
@@ -1100,67 +1108,119 @@ class SharedViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
+                // Clear any previous error
+                _resumeError.value = null
+                
                 Log.i("ResumeMission", "═══════════════════════════════════════")
-                Log.i("ResumeMission", "Starting Resume Mission")
+                Log.i("ResumeMission", "Starting Resume Mission (HARDENED)")
                 Log.i("ResumeMission", "Resume at waypoint: $resumeWaypointNumber")
                 Log.i("ResumeMission", "═══════════════════════════════════════")
 
                 // Step 1: Pre-flight Checks
-                onProgress("Step 1/5: Pre-flight checks...")
+                onProgress("Step 1/6: Pre-flight checks...")
+                
+                if (repo == null) {
+                    val error = "Not connected to flight controller"
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
+                    return@launch
+                }
+                
                 if (!_telemetryState.value.connected) {
-                    onResult(false, "Not connected to flight controller")
+                    val error = "Not connected to flight controller"
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
                     return@launch
                 }
 
-                // Step 2: Set waypoint in FCU
-                onProgress("Step 2/5: Setting resume waypoint...")
-                Log.i("ResumeMission", "Setting current waypoint to $resumeWaypointNumber")
-                val setWaypointSuccess = repo?.setCurrentWaypoint(resumeWaypointNumber) ?: false
+                if (!_telemetryState.value.armable) {
+                    val error = "Vehicle not armable (check sensors and GPS)"
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
+                    return@launch
+                }
 
+                val sats = _telemetryState.value.sats ?: 0
+                if (sats < 6) {
+                    val error = "Insufficient GPS satellites ($sats). Need at least 6 for mission."
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
+                    return@launch
+                }
+
+                Log.i("ResumeMission", "✓ Pre-flight checks passed")
+
+                // Step 2: Set waypoint in FCU
+                onProgress("Step 2/6: Setting resume waypoint...")
+                Log.i("ResumeMission", "Setting current waypoint to $resumeWaypointNumber")
+                
+                val setWaypointSuccess = repo?.setCurrentWaypoint(resumeWaypointNumber) ?: false
                 if (!setWaypointSuccess) {
-                    Log.w("ResumeMission", "Failed to set waypoint, continuing anyway")
+                    val error = "Failed to set waypoint $resumeWaypointNumber"
+                    Log.w("ResumeMission", "⚠️ $error, continuing anyway")
+                    // Not a fatal error, continue
+                } else {
+                    Log.i("ResumeMission", "✓ Waypoint set to $resumeWaypointNumber")
                 }
 
                 delay(500)
 
-                // Step 3: Switch to AUTO Mode
-                onProgress("Step 3/5: Switching to AUTO mode...")
-                val currentMode = _telemetryState.value.mode
-                Log.i("ResumeMission", "Current mode: $currentMode")
+                // Step 3: Arm the vehicle (using new helper with timeout)
+                onProgress("Step 3/6: Arming vehicle...")
+                Log.i("ResumeMission", "Arming vehicle...")
+                
+                val armSuccess = repo?.waitForArmed() ?: false
+                if (!armSuccess) {
+                    val error = "Failed to arm vehicle within timeout"
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
+                    return@launch
+                }
+                
+                Log.i("ResumeMission", "✓ Vehicle armed successfully")
 
-                var autoSuccess = false
-                var retryCount = 0
-                val maxRetries = 3
-
-                while (!autoSuccess && retryCount < maxRetries) {
-                    val attempt = retryCount + 1
-                    Log.i("ResumeMission", "Attempt $attempt/$maxRetries: Sending AUTO mode command...")
-
-                    autoSuccess = repo?.changeMode(MavMode.AUTO) ?: false
-
-                    Log.i("ResumeMission", "Attempt $attempt result: ${if (autoSuccess) "SUCCESS" else "FAILED"}")
-
-                    if (!autoSuccess) {
-                        retryCount++
-                        if (retryCount < maxRetries) {
-                            Log.w("ResumeMission", "Waiting 2 seconds before retry...")
-                            delay(2000)
-                        }
+                // Step 4: Wait for takeoff altitude if copter (optional based on current altitude)
+                onProgress("Step 4/6: Checking altitude...")
+                
+                val currentAlt = _telemetryState.value.altitudeRelative?.toDouble() ?: 0.0
+                if (currentAlt < 1.0 && (repo?.isCopter() == true)) {
+                    Log.i("ResumeMission", "Ground level detected, waiting for takeoff...")
+                    
+                    // Wait for minimum altitude before switching to AUTO
+                    val altitudeSuccess = repo?.waitForAltitude(targetAlt = 2.0, tolerance = 1.0, timeoutMs = 15000L) ?: false
+                    if (!altitudeSuccess) {
+                        Log.w("ResumeMission", "⚠️ Altitude wait timed out, continuing anyway (current: ${currentAlt}m)")
+                        // Not fatal - vehicle might takeoff in AUTO mode
+                    } else {
+                        Log.i("ResumeMission", "✓ Altitude reached")
                     }
+                } else {
+                    Log.i("ResumeMission", "✓ Already at cruise altitude: ${currentAlt}m")
                 }
 
+                // Step 5: Switch to AUTO Mode (using new helper with retries)
+                onProgress("Step 5/6: Switching to AUTO mode...")
+                Log.i("ResumeMission", "Switching to AUTO mode...")
+                
+                val autoSuccess = repo?.waitForMode("Auto") ?: false
                 if (!autoSuccess) {
                     val finalMode = _telemetryState.value.mode
-                    Log.e("ResumeMission", "❌ Failed to switch to AUTO after $maxRetries attempts")
-                    Log.e("ResumeMission", "Final mode: $finalMode")
-                    onResult(false, "Failed to switch to AUTO. Stuck in: $finalMode")
+                    val error = "Failed to switch to AUTO mode (stuck in: $finalMode)"
+                    Log.e("ResumeMission", "✗ $error")
+                    _resumeError.value = error
+                    onResult(false, error)
                     return@launch
                 }
 
-                Log.i("ResumeMission", "✅ Successfully switched to AUTO mode")
+                Log.i("ResumeMission", "✓ Successfully switched to AUTO mode")
 
-                // Step 4: Update state
-                onProgress("Step 4/5: Updating mission state...")
+                // Step 6: Update state and complete
+                onProgress("Step 6/6: Mission resumed!")
                 _telemetryState.update {
                     it.copy(
                         missionPaused = false,
@@ -1168,8 +1228,6 @@ class SharedViewModel : ViewModel() {
                     )
                 }
 
-                // Step 5: Complete
-                onProgress("Step 5/5: Mission resumed!")
                 addNotification(
                     Notification(
                         message = "Mission resumed from waypoint $resumeWaypointNumber",
@@ -1185,8 +1243,10 @@ class SharedViewModel : ViewModel() {
                 onResult(true, null)
 
             } catch (e: Exception) {
-                Log.e("ResumeMission", "❌ Resume mission failed", e)
-                addNotification(Notification("Resume mission failed: ${e.message}", NotificationType.ERROR))
+                val error = "Resume mission failed: ${e.message}"
+                Log.e("ResumeMission", "❌ $error", e)
+                _resumeError.value = error
+                addNotification(Notification(error, NotificationType.ERROR))
                 onResult(false, e.message)
             }
         }
@@ -1199,12 +1259,23 @@ class SharedViewModel : ViewModel() {
     fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
+                // Clear any previous error
+                _resumeError.value = null
+                
                 val pausedWaypoint = _telemetryState.value.pausedAtWaypoint
 
                 if (pausedWaypoint == null) {
-                    // No paused waypoint, just switch to AUTO
-                    Log.i("SharedVM", "Resuming mission from current position")
-                    val result = repo?.changeMode(MavMode.AUTO) ?: false
+                    // No paused waypoint, just switch to AUTO using new helper
+                    Log.i("SharedVM", "Resuming mission from current position using waitForMode")
+                    
+                    if (repo == null) {
+                        val error = "Not connected to vehicle"
+                        _resumeError.value = error
+                        onResult(false, error)
+                        return@launch
+                    }
+                    
+                    val result = repo?.waitForMode("Auto") ?: false
 
                     if (result) {
                         _telemetryState.update { it.copy(missionPaused = false) }
@@ -1212,13 +1283,22 @@ class SharedViewModel : ViewModel() {
                         ttsManager?.announceMissionResumed()
                         onResult(true, null)
                     } else {
-                        onResult(false, "Failed to resume mission")
+                        val error = "Failed to resume mission - mode change failed"
+                        _resumeError.value = error
+                        onResult(false, error)
                     }
                     return@launch
                 }
 
-                // Resume from specific waypoint
+                // Resume from specific waypoint using hardened helpers
                 Log.i("SharedVM", "Resuming mission from waypoint: $pausedWaypoint")
+
+                if (repo == null) {
+                    val error = "Not connected to vehicle"
+                    _resumeError.value = error
+                    onResult(false, error)
+                    return@launch
+                }
 
                 // Set current waypoint in FCU
                 val setWaypointSuccess = repo?.setCurrentWaypoint(pausedWaypoint) ?: false
@@ -1229,8 +1309,8 @@ class SharedViewModel : ViewModel() {
 
                 delay(500)
 
-                // Switch to AUTO mode
-                val result = repo?.changeMode(MavMode.AUTO) ?: false
+                // Switch to AUTO mode using new helper
+                val result = repo?.waitForMode("Auto") ?: false
 
                 if (result) {
                     _telemetryState.update { 
@@ -1248,10 +1328,14 @@ class SharedViewModel : ViewModel() {
                     ttsManager?.announceMissionResumed()
                     onResult(true, null)
                 } else {
-                    onResult(false, "Failed to resume mission")
+                    val error = "Failed to resume mission - mode change to AUTO failed"
+                    _resumeError.value = error
+                    onResult(false, error)
                 }
             } catch (e: Exception) {
-                Log.e("SharedVM", "Failed to resume mission", e)
+                val error = "Failed to resume mission: ${e.message}"
+                Log.e("SharedVM", error, e)
+                _resumeError.value = error
                 onResult(false, e.message)
             }
         }
