@@ -1422,5 +1422,113 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    /**
+     * Filter waypoints for resume mission following Mission Planner protocol.
+     * 
+     * Mission Planner Logic:
+     * - Always keep HOME (waypoint 0)
+     * - Keep TAKEOFF commands even before resume point
+     * - Keep ALL DO commands (80-99 and 176-252) even before resume point
+     * - Skip NAV waypoints before resume point
+     * - Keep ALL waypoints from resume point onward
+     *
+     * @param allWaypoints Complete mission from flight controller
+     * @param resumeWaypointSeq The waypoint sequence number to resume from
+     * @return Filtered list of waypoints with HOME + DO commands + resume waypoints
+     */
+    suspend fun filterWaypointsForResume(
+        allWaypoints: List<MissionItemInt>, 
+        resumeWaypointSeq: Int
+    ): List<MissionItemInt> {
+        val filtered = mutableListOf<MissionItemInt>()
+        
+        // MAVLink command ID constants
+        val MAV_CMD_NAV_TAKEOFF = 22u
+        val MAV_CMD_NAV_LAST = 95u      // Last NAV command (MAV_CMD.LAST in Mission Planner)
+        val MAV_CMD_DO_START = 80u       // First DO command
+        val MAV_CMD_DO_LAST = 252u       // Last DO command
+        
+        Log.i("ResumeMission", "═══ Filtering Mission for Resume (Mission Planner Protocol) ═══")
+        Log.i("ResumeMission", "Original mission: ${allWaypoints.size} waypoints")
+        Log.i("ResumeMission", "Resume from waypoint: $resumeWaypointSeq")
+        Log.i("ResumeMission", "Logic: HOME + TAKEOFF + DO commands + resume waypoints")
+        
+        for (waypoint in allWaypoints) {
+            val seq = waypoint.seq.toInt()
+            val cmdId = waypoint.command.value
+            
+            // Always keep HOME (waypoint 0)
+            if (seq == 0) {
+                filtered.add(waypoint)
+                Log.d("ResumeMission", "✅ Keeping HOME (seq=$seq)")
+                continue
+            }
+            
+            // For waypoints before resume point
+            if (seq < resumeWaypointSeq) {
+                // Keep TAKEOFF commands (Mission Planner: if wpdata.id != TAKEOFF)
+                if (cmdId == MAV_CMD_NAV_TAKEOFF) {
+                    filtered.add(waypoint)
+                    Log.d("ResumeMission", "✅ Keeping TAKEOFF (seq=$seq, cmd=$cmdId)")
+                    continue
+                }
+                
+                // Keep DO commands (Mission Planner: if wpdata.id >= MAV_CMD.LAST)
+                // DO commands have two ranges in MAVLink:
+                //   - 80-99: Conditional DO commands (e.g., DO_JUMP, DO_CHANGE_SPEED)
+                //   - 176-252: Unconditional DO commands (e.g., DO_SET_SERVO, DO_SET_CAM_TRIGG)
+                // Both types must be preserved as they set persistent mission parameters
+                val isDoCommand = cmdId in MAV_CMD_DO_START..99u || cmdId in 176u..MAV_CMD_DO_LAST
+                if (isDoCommand) {
+                    filtered.add(waypoint)
+                    Log.d("ResumeMission", "✅ Keeping DO command (seq=$seq, cmd=$cmdId)")
+                    continue
+                }
+                
+                // Skip NAV waypoints before resume point
+                // Mission Planner C#: if (wpdata.id < MAV_CMD.LAST) continue;
+                // MAV_CMD.LAST = 95, so we skip commands with ID <= 95 (NAV commands)
+                if (cmdId <= MAV_CMD_NAV_LAST) {
+                    Log.d("ResumeMission", "⏭ Skipping NAV waypoint (seq=$seq, cmd=$cmdId)")
+                    continue
+                }
+                
+                // Skip any other commands before resume point
+                Log.d("ResumeMission", "⏭ Skipping waypoint (seq=$seq, cmd=$cmdId)")
+                continue
+            }
+            
+            // Keep ALL waypoints from resume point onward
+            filtered.add(waypoint)
+            Log.d("ResumeMission", "✅ Keeping waypoint (seq=$seq, cmd=$cmdId)")
+        }
+        
+        Log.i("ResumeMission", "Filtered: ${allWaypoints.size} → ${filtered.size} waypoints")
+        Log.i("ResumeMission", "Result: HOME + TAKEOFF + DO commands + resume waypoints")
+        Log.i("ResumeMission", "═══════════════════════════════════════════════════════")
+        
+        return filtered
+    }
+
+    /**
+     * Re-sequence waypoints to 0, 1, 2, 3...
+     * Marks HOME (waypoint 0) as current.
+     * 
+     * @param waypoints List of waypoints to re-sequence
+     * @return Re-sequenced list with sequential numbering
+     */
+    suspend fun resequenceWaypoints(waypoints: List<MissionItemInt>): List<MissionItemInt> {
+        Log.i("ResumeMission", "Re-sequencing ${waypoints.size} waypoints...")
+        
+        return waypoints.mapIndexed { index, waypoint ->
+            waypoint.copy(
+                seq = index.toUShort(),
+                current = if (index == 0) 1u else 0u // Mark HOME as current
+            )
+        }.also {
+            Log.i("ResumeMission", "Re-sequenced: 0 to ${it.size - 1}")
+        }
+    }
+
 
 }
