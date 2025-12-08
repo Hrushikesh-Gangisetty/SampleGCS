@@ -89,6 +89,9 @@ fun PlanScreen(
     // Selected waypoint tracking for deletion
     var selectedWaypointIndex by remember { mutableStateOf<Int?>(null) }
 
+    // Selected polygon point tracking for deletion and dragging
+    var selectedPolygonPointIndex by remember { mutableStateOf<Int?>(null) }
+
     // Waypoint list panel state
     var showWaypointList by remember { mutableStateOf(false) }
 
@@ -238,14 +241,31 @@ fun PlanScreen(
                 FloatingActionButton(
                     onClick = {
                         if (isGridSurveyMode) {
-                            if (surveyPolygon.isNotEmpty()) {
-                                surveyPolygon = surveyPolygon.dropLast(1)
-                                if (surveyPolygon.size >= 3) regenerateGrid() else gridResult = null
-                                // update local geofence after deleting a point
-                                if (geofenceEnabled) {
-                                    val allWaypoints = gridResult?.waypoints?.map { it.position } ?: surveyPolygon
-                                    localGeofencePolygon = if (allWaypoints.isNotEmpty()) com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(allWaypoints, fenceRadius.toDouble()) else emptyList()
+                            // Handle deletion of selected polygon point
+                            selectedPolygonPointIndex?.let { index ->
+                                if (index in surveyPolygon.indices) {
+                                    surveyPolygon = surveyPolygon.toMutableList().apply {
+                                        removeAt(index)
+                                    }
+                                    selectedPolygonPointIndex = null // Clear selection after deletion
+                                    if (surveyPolygon.size >= 3) {
+                                        regenerateGrid()
+                                    } else {
+                                        gridResult = null
+                                    }
+                                    // update local geofence after deleting a point
+                                    if (geofenceEnabled) {
+                                        val allWaypoints = gridResult?.waypoints?.map { it.position } ?: surveyPolygon
+                                        localGeofencePolygon = if (allWaypoints.isNotEmpty()) {
+                                            com.example.aerogcsclone.utils.GeofenceUtils.generatePolygonBuffer(allWaypoints, fenceRadius.toDouble())
+                                        } else {
+                                            emptyList()
+                                        }
+                                    }
                                 }
+                            } ?: run {
+                                // If no polygon point is selected, show a toast message
+                                Toast.makeText(context, "Please select a polygon point to delete", Toast.LENGTH_SHORT).show()
                             }
                         } else {
                             if (waypoints.isNotEmpty()) {
@@ -273,7 +293,7 @@ fun PlanScreen(
                     },
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Last Waypoint")
+                    Icon(Icons.Default.Delete, contentDescription = if (isGridSurveyMode) "Delete Polygon Point" else "Delete Waypoint")
                 }
             }
         }
@@ -318,6 +338,26 @@ fun PlanScreen(
                 selectedWaypointIndex = selectedWaypointIndex,
                 onWaypointClick = { index ->
                     selectedWaypointIndex = index
+                    selectedPolygonPointIndex = null // Clear polygon selection
+                },
+                // Handle polygon point dragging
+                onPolygonPointDrag = { index, newPosition ->
+                    if (index in surveyPolygon.indices) {
+                        // Update the polygon point position
+                        surveyPolygon = surveyPolygon.toMutableList().apply {
+                            this[index] = newPosition
+                        }
+                        // Regenerate the grid with the updated polygon
+                        if (surveyPolygon.size >= 3) {
+                            regenerateGrid()
+                        }
+                    }
+                },
+                // Handle polygon point selection
+                selectedPolygonPointIndex = selectedPolygonPointIndex,
+                onPolygonPointClick = { index ->
+                    selectedPolygonPointIndex = index
+                    selectedWaypointIndex = null // Clear waypoint selection
                 }
             )
 
