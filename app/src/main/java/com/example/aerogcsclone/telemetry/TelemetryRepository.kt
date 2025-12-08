@@ -244,6 +244,11 @@ class MavlinkTelemetryRepository(
                             setMessageRate(33u, 5f)  // GLOBAL_POSITION_INT
                             setMessageRate(74u, 5f)  // VFR_HUD
                             setMessageRate(147u, 1f) // BATTERY_STATUS
+                            setMessageRate(65u, 2f)  // RC_CHANNELS (2Hz for spray monitoring)
+
+                            // Request spray telemetry capacity parameters
+                            delay(500) // Small delay to let message rates stabilize
+                            requestSprayCapacityParameters()
                         }
                     } else if (!state.value.connected) {
                         // FCU was detected before but connection was lost, now it's back
@@ -447,8 +452,172 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<BatteryStatus>()
                 .collect { b ->
-                    val currentA = if (b.currentBattery.toInt() == -1) null else b.currentBattery / 100f
-                    _state.update { it.copy(currentA = currentA) }
+                    // Log ALL battery status messages first for debugging
+                    Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.i("Spray Telemetry", "📦 BATTERY_STATUS message received:")
+                    Log.i("Spray Telemetry", "   Battery ID: ${b.id.toInt()}")
+                    Log.i("Spray Telemetry", "   current_battery: ${b.currentBattery} cA (${b.currentBattery / 100f} A)")
+                    Log.i("Spray Telemetry", "   current_consumed: ${b.currentConsumed} mAh")
+                    Log.i("Spray Telemetry", "   battery_remaining: ${b.batteryRemaining}%")
+                    Log.i("Spray Telemetry", "   voltages[0]: ${b.voltages.firstOrNull()} mV")
+                    Log.i("Spray Telemetry", "   temperature: ${b.temperature} °C")
+                    Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+                    // Main battery (id=0)
+                    if (b.id.toInt() == 0) {
+                        Log.d("Spray Telemetry", "✅ Processing main battery (id=0)")
+                        val currentA = if (b.currentBattery.toInt() == -1) null else b.currentBattery / 100f
+                        _state.update { it.copy(currentA = currentA) }
+                    }
+                    // Flow sensor (BATT2 - id=1)
+                    else if (b.id.toInt() == 1) {
+                        Log.i("Spray Telemetry", "🚿 Processing FLOW SENSOR (BATT2 - id=1)")
+                        Log.d("Spray Telemetry", "Flow sensor (BATT2) - Raw data: " +
+                                "current_battery=${b.currentBattery} cA, " +
+                                "current_consumed=${b.currentConsumed} mAh, " +
+                                "battery_remaining=${b.batteryRemaining}%")
+
+                        // Check for spray enabled but no flow detected
+                        val currentSprayEnabled = state.value.sprayTelemetry.sprayEnabled
+                        val currentRc7 = state.value.sprayTelemetry.rc7Value
+
+                        if (currentSprayEnabled && b.currentBattery == 0.toShort()) {
+                            Log.e("Spray Telemetry", "⚠️⚠️⚠️ CONFIGURATION ERROR DETECTED ⚠️⚠️⚠️")
+                            Log.e("Spray Telemetry", "RC7 shows spray ENABLED ($currentRc7 PWM > 1500)")
+                            Log.e("Spray Telemetry", "BUT flow sensor reports 0 cA (no flow data)")
+                            Log.e("Spray Telemetry", "")
+                            Log.e("Spray Telemetry", "Possible causes:")
+                            Log.e("Spray Telemetry", "1. Flow sensor not physically connected")
+                            Log.e("Spray Telemetry", "2. BATT2_MONITOR parameter not set correctly")
+                            Log.e("Spray Telemetry", "   (should be 11 for Fuel Flow sensor)")
+                            Log.e("Spray Telemetry", "3. Flow sensor pin not configured in FCU")
+                            Log.e("Spray Telemetry", "4. Flow sensor not calibrated (BATT2_AMP_PERVLT)")
+                            Log.e("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        }
+
+                        // Parse flow rate (current_battery in centi-Amps)
+                        val flowRateLiterPerHour = if (b.currentBattery.toInt() == -1) {
+                            Log.w("Spray Telemetry", "⚠️ Flow rate is -1 (invalid)")
+                            null
+                        } else if (b.currentBattery == 0.toShort()) {
+                            // 0 is valid but might indicate no flow or configuration issue
+                            Log.w("Spray Telemetry", "⚠️ Flow rate is 0 (no flow detected)")
+                            0f
+                        } else {
+                            val rate = b.currentBattery / 100f  // Convert cA to Amps (= L/h)
+                            Log.d("Spray Telemetry", "✓ Flow rate calculated: $rate L/h")
+                            rate
+                        }
+                        val flowRateLiterPerMin = flowRateLiterPerHour?.let {
+                            val ratePerMin = it / 60f
+                            Log.d("Spray Telemetry", "✓ Flow rate per minute: $ratePerMin L/min")
+                            ratePerMin
+                        }
+
+                        // Parse consumed volume (current_consumed in mAh = mL)
+                        val consumedLiters = if (b.currentConsumed == -1) {
+                            Log.w("Spray Telemetry", "⚠️ Consumed volume is -1 (invalid)")
+                            null
+                        } else if (b.currentConsumed == 0) {
+                            // 0 is valid for start of spraying
+                            Log.d("Spray Telemetry", "✓ Consumed volume: 0.0 L (0 mL) - No consumption yet")
+                            0f
+                        } else {
+                            val consumed = b.currentConsumed / 1000f  // Convert mAh (mL) to Liters
+                            Log.d("Spray Telemetry", "✓ Consumed volume: $consumed L (${b.currentConsumed} mL)")
+                            consumed
+                        }
+
+                        // Use capacity from parameters (read dynamically from FCU)
+                        val flowCapacityLiters = state.value.sprayTelemetry.batt2CapacityMah / 1000f
+                        Log.d("Spray Telemetry", "✓ Tank capacity (from params): $flowCapacityLiters L")
+
+                        val flowRemainingPercent = if (b.batteryRemaining.toInt() == -1) {
+                            Log.w("Spray Telemetry", "⚠️ Remaining percentage is -1 (invalid)")
+                            null
+                        } else {
+                            val remaining = b.batteryRemaining.toInt()
+                            Log.d("Spray Telemetry", "✓ Remaining: $remaining%")
+                            remaining
+                        }
+
+                        // Format values for UI
+                        val formattedFlowRate = flowRateLiterPerMin?.let {
+                            "%.2f L/min".format(it)
+                        }
+                        val formattedConsumed = consumedLiters?.let {
+                            if (it < 1f) "%.0f mL".format(it * 1000f)
+                            else "%.2f L".format(it)
+                        }
+
+                        Log.i("Spray Telemetry", "📊 BATT2 Summary:")
+                        Log.i("Spray Telemetry", "   Flow Rate: ${formattedFlowRate ?: "N/A"}")
+                        Log.i("Spray Telemetry", "   Consumed: ${formattedConsumed ?: "N/A"}")
+                        Log.i("Spray Telemetry", "   Capacity: $flowCapacityLiters L")
+                        Log.i("Spray Telemetry", "   Remaining: ${flowRemainingPercent?.toString() ?: "N/A"}%")
+
+                        _state.update { state ->
+                            state.copy(
+                                sprayTelemetry = state.sprayTelemetry.copy(
+                                    flowRateLiterPerMin = flowRateLiterPerMin,
+                                    consumedLiters = consumedLiters,
+                                    flowCapacityLiters = flowCapacityLiters,
+                                    flowRemainingPercent = flowRemainingPercent,
+                                    formattedFlowRate = formattedFlowRate,
+                                    formattedConsumed = formattedConsumed
+                                )
+                            )
+                        }
+                        Log.i("Spray Telemetry", "✅ State updated with BATT2 data")
+                    }
+                    // Level sensor (BATT3 - id=2)
+                    else if (b.id.toInt() == 2) {
+                        Log.i("Spray Telemetry", "💧 Processing LEVEL SENSOR (BATT3 - id=2)")
+                        Log.d("Spray Telemetry", "Level sensor (BATT3) - Raw data: " +
+                                "voltages=${b.voltages.firstOrNull()} mV, " +
+                                "battery_remaining=${b.batteryRemaining}%")
+
+                        // Parse voltage from level sensor
+                        val tankVoltageMv = b.voltages.firstOrNull()?.toInt()
+                        if (tankVoltageMv != null) {
+                            Log.d("Spray Telemetry", "✓ Tank voltage: $tankVoltageMv mV")
+                        } else {
+                            Log.w("Spray Telemetry", "⚠️ Tank voltage is null")
+                        }
+
+                        // Parse tank level percentage
+                        val tankLevelPercent = if (b.batteryRemaining.toInt() == -1) {
+                            Log.w("Spray Telemetry", "⚠️ Tank level percentage is -1 (invalid)")
+                            null
+                        } else {
+                            val level = b.batteryRemaining.toInt()
+                            Log.d("Spray Telemetry", "✓ Tank level: $level%")
+                            level
+                        }
+
+                        // Use capacity from parameters (read dynamically from FCU)
+                        val tankCapacityLiters = state.value.sprayTelemetry.batt3CapacityMah / 1000f
+                        Log.d("Spray Telemetry", "✓ Tank capacity (from params): $tankCapacityLiters L")
+
+                        Log.i("Spray Telemetry", "📊 BATT3 Summary:")
+                        Log.i("Spray Telemetry", "   Voltage: ${tankVoltageMv?.toString() ?: "N/A"} mV")
+                        Log.i("Spray Telemetry", "   Level: ${tankLevelPercent?.toString() ?: "N/A"}%")
+                        Log.i("Spray Telemetry", "   Capacity: $tankCapacityLiters L")
+
+                        _state.update { state ->
+                            state.copy(
+                                sprayTelemetry = state.sprayTelemetry.copy(
+                                    tankVoltageMv = tankVoltageMv,
+                                    tankLevelPercent = tankLevelPercent,
+                                    tankCapacityLiters = tankCapacityLiters
+                                )
+                            )
+                        }
+                        Log.i("Spray Telemetry", "✅ State updated with BATT3 data")
+                    }
+                    else {
+                        Log.w("Spray Telemetry", "⚠️ Unknown battery ID: ${b.id.toInt()} - ignoring")
+                    }
                 }
         }
         // HEARTBEAT for mode, armed, armable
@@ -676,9 +845,26 @@ class MavlinkTelemetryRepository(
                 .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
                 .map { it.message }
                 .filterIsInstance<RcChannels>()
-                .collect { rcChannels ->
-                    Log.d("RCCalVM", "📻 RC_CHANNELS received: ch1=${rcChannels.chan1Raw} ch2=${rcChannels.chan2Raw} ch3=${rcChannels.chan3Raw} ch4=${rcChannels.chan4Raw}")
-                    _rcChannels.emit(rcChannels)
+                .collect { rcChannelsData ->
+                    Log.d("RCCalVM", "📻 RC_CHANNELS received: ch1=${rcChannelsData.chan1Raw} ch2=${rcChannelsData.chan2Raw} ch3=${rcChannelsData.chan3Raw} ch4=${rcChannelsData.chan4Raw}")
+
+                    // Monitor RC7 for spray system status
+                    val rc7Value = rcChannelsData.chan7Raw.toInt()
+                    val sprayEnabled = rc7Value > 1500 // PWM > 1500 = spray ON
+
+                    Log.d("Spray Telemetry", "🎮 RC7 channel: $rc7Value PWM, Spray ${if (sprayEnabled) "ENABLED" else "DISABLED"}")
+
+                    _state.update { state ->
+                        state.copy(
+                            sprayTelemetry = state.sprayTelemetry.copy(
+                                sprayEnabled = sprayEnabled,
+                                rc7Value = rc7Value
+                            )
+                        )
+                        }
+
+
+                    _rcChannels.emit(rcChannelsData)
                 }
         }
 
@@ -689,48 +875,187 @@ class MavlinkTelemetryRepository(
                 .map { it.message }
                 .filterIsInstance<ParamValue>()
                 .collect { paramValue ->
-                    Log.d("ParamVM", "📝 PARAM_VALUE received: ${paramValue.paramId} = ${paramValue.paramValue}")
+                    val paramName = paramValue.paramId.toString().trim()
+                    Log.d("ParamVM", "📝 PARAM_VALUE received: $paramName = ${paramValue.paramValue}")
+
+                    // Handle spray telemetry parameters
+                    when (paramName) {
+                        "BATT2_MONITOR" -> {
+                            val monitorType = paramValue.paramValue.toInt()
+                            Log.i("Spray Telemetry", "📊 BATT2_MONITOR parameter read: $monitorType")
+
+                            if (monitorType != 11) {
+                                Log.e("Spray Telemetry", "⚠️⚠️⚠️ CONFIGURATION ERROR ⚠️⚠️⚠️")
+                                Log.e("Spray Telemetry", "BATT2_MONITOR = $monitorType")
+                                Log.e("Spray Telemetry", "Expected: 11 (Fuel Flow sensor)")
+                                Log.e("Spray Telemetry", "Flow sensor will NOT work with current setting!")
+
+                                sharedViewModel.addNotification(
+                                    Notification(
+                                        "Flow sensor not configured! BATT2_MONITOR should be 11, currently $monitorType",
+                                        NotificationType.ERROR
+                                    )
+                                )
+                            } else {
+                                Log.i("Spray Telemetry", "✅ BATT2_MONITOR correctly set to 11 (Fuel Flow)")
+                            }
+
+                            _state.update { state ->
+                                state.copy(
+                                    sprayTelemetry = state.sprayTelemetry.copy(
+                                        batt2MonitorType = monitorType
+                                    )
+                                )
+                            }
+                        }
+
+                        "BATT2_CAPACITY" -> {
+                            val capacityMah = paramValue.paramValue.toInt()
+                            Log.i("Spray Telemetry", "📊 BATT2_CAPACITY parameter read: $capacityMah mAh (${capacityMah/1000f} L)")
+
+                            if (capacityMah == 0) {
+                                Log.e("Spray Telemetry", "⚠️ BATT2_CAPACITY is 0 - tank capacity not configured!")
+                                sharedViewModel.addNotification(
+                                    Notification(
+                                        "Flow sensor capacity not set! Configure BATT2_CAPACITY parameter",
+                                        NotificationType.WARNING
+                                    )
+                                )
+                            }
+
+                            _state.update { state ->
+                                state.copy(
+                                    sprayTelemetry = state.sprayTelemetry.copy(
+                                        batt2CapacityMah = capacityMah
+                                    )
+                                )
+                            }
+                        }
+
+                        "BATT2_AMP_PERVLT" -> {
+                            val ampPerVolt = paramValue.paramValue
+                            Log.i("Spray Telemetry", "📊 BATT2_AMP_PERVLT parameter read: $ampPerVolt")
+
+                            if (ampPerVolt == 0f) {
+                                Log.e("Spray Telemetry", "⚠️ BATT2_AMP_PERVLT is 0 - flow sensor NOT calibrated!")
+                                Log.e("Spray Telemetry", "This is why you're getting 0 flow rate even when spray is enabled!")
+
+                                sharedViewModel.addNotification(
+                                    Notification(
+                                        "Flow sensor not calibrated! Set BATT2_AMP_PERVLT parameter",
+                                        NotificationType.ERROR
+                                    )
+                                )
+                            } else {
+                                Log.i("Spray Telemetry", "✅ BATT2_AMP_PERVLT calibrated: $ampPerVolt")
+                            }
+
+                            _state.update { state ->
+                                state.copy(
+                                    sprayTelemetry = state.sprayTelemetry.copy(
+                                        batt2AmpPerVolt = ampPerVolt
+                                    )
+                                )
+                            }
+                        }
+
+                        "BATT2_CURR_PIN" -> {
+                            val currPin = paramValue.paramValue.toInt()
+                            Log.i("Spray Telemetry", "📊 BATT2_CURR_PIN parameter read: $currPin")
+
+                            if (currPin == -1 || currPin == 0) {
+                                Log.e("Spray Telemetry", "⚠️ BATT2_CURR_PIN not configured ($currPin) - sensor not connected!")
+                                sharedViewModel.addNotification(
+                                    Notification(
+                                        "Flow sensor pin not configured! Set BATT2_CURR_PIN parameter",
+                                        NotificationType.ERROR
+                                    )
+                                )
+                            } else {
+                                Log.i("Spray Telemetry", "✅ BATT2_CURR_PIN configured: pin $currPin")
+                            }
+
+                            _state.update { state ->
+                                state.copy(
+                                    sprayTelemetry = state.sprayTelemetry.copy(
+                                        batt2CurrPin = currPin
+                                    )
+                                )
+                            }
+                        }
+
+                        "BATT3_CAPACITY" -> {
+                            val capacityMah = paramValue.paramValue.toInt()
+                            Log.i("Spray Telemetry", "📊 BATT3_CAPACITY parameter read: $capacityMah mAh (${capacityMah/1000f} L)")
+
+                            if (capacityMah == 0) {
+                                Log.w("Spray Telemetry", "⚠️ BATT3_CAPACITY is 0 - level sensor capacity not configured")
+                            }
+
+                            _state.update { state ->
+                                state.copy(
+                                    sprayTelemetry = state.sprayTelemetry.copy(
+                                        batt3CapacityMah = capacityMah
+                                    )
+                                )
+                            }
+                        }
+
+                        "BATT3_VOLT_PIN" -> {
+                            val voltPin = paramValue.paramValue.toInt()
+                            Log.i("Spray Telemetry", "📊 BATT3_VOLT_PIN parameter read: $voltPin")
+
+                            if (voltPin == -1 || voltPin == 0) {
+                                Log.w("Spray Telemetry", "⚠️ BATT3_VOLT_PIN not configured ($voltPin)")
+                            } else {
+                                Log.i("Spray Telemetry", "✅ BATT3_VOLT_PIN configured: pin $voltPin")
+                            }
+                        }
+                    }
+
+                    // After receiving any spray parameter, validate complete configuration
+                    if (paramName.startsWith("BATT2_") || paramName.startsWith("BATT3_")) {
+                        validateSprayConfiguration()
+                    }
+
                     _paramValue.emit(paramValue)
                 }
         }
+    }
 
-        // Mission progress logging: MISSION_ITEM_REACHED, MISSION_CURRENT, and mode
-
-
-        // Helper to request mission items from FCU and return as list
-        suspend fun requestMissionItemsFromFcu(timeoutMs: Long = 5000): List<MissionItemInt> {
-            val items = mutableListOf<MissionItemInt>()
-            val expectedCountDeferred = CompletableDeferred<Int?>()
-            val perSeqMap = mutableMapOf<Int, CompletableDeferred<Unit>>()
-            val job = AppScope.launch {
-                connection.mavFrame.collect { frame ->
-                    when (val msg = frame.message) {
-                        is MissionCount -> {
-                            expectedCountDeferred.complete(msg.count.toInt())
-                        }
-                        is MissionItemInt -> {
-                            items.add(msg)
-                            perSeqMap[msg.seq.toInt()]?.let { d -> if (!d.isCompleted) d.complete(Unit) }
-                        }
-                        else -> {}
+    // Helper to request mission items from FCU and return as list
+    suspend fun requestMissionItemsFromFcu(timeoutMs: Long = 5000): List<MissionItemInt> {
+        val items = mutableListOf<MissionItemInt>()
+        val expectedCountDeferred = CompletableDeferred<Int?>()
+        val perSeqMap = mutableMapOf<Int, CompletableDeferred<Unit>>()
+        val job = AppScope.launch {
+            connection.mavFrame.collect { frame ->
+                when (val msg = frame.message) {
+                    is MissionCount -> {
+                        expectedCountDeferred.complete(msg.count.toInt())
                     }
+                    is MissionItemInt -> {
+                        items.add(msg)
+                        perSeqMap[msg.seq.toInt()]?.let { d -> if (!d.isCompleted) d.complete(Unit) }
+                    }
+                    else -> {}
                 }
             }
-            val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
-            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
-            val expectedCount = withTimeoutOrNull(timeoutMs) { expectedCountDeferred.await() } ?: 0
-            for (seq in 0 until expectedCount) {
-                val seqDeferred = CompletableDeferred<Unit>()
-                perSeqMap[seq] = seqDeferred
-                val reqItem = MissionRequestInt(targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = seq.toUShort())
-                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, reqItem)
-                withTimeoutOrNull(1500L) { seqDeferred.await() }
-                perSeqMap.remove(seq)
-            }
-            delay(200)
-            job.cancel()
-            return items.sortedBy { it.seq.toInt() }
         }
+        val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+        connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
+        val expectedCount = withTimeoutOrNull(timeoutMs) { expectedCountDeferred.await() } ?: 0
+        for (seq in 0 until expectedCount) {
+            val seqDeferred = CompletableDeferred<Unit>()
+            perSeqMap[seq] = seqDeferred
+            val reqItem = MissionRequestInt(targetSystem = fcuSystemId, targetComponent = fcuComponentId, seq = seq.toUShort())
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, reqItem)
+            withTimeoutOrNull(1500L) { seqDeferred.await() }
+            perSeqMap.remove(seq)
+        }
+        delay(200)
+        job.cancel()
+        return items.sortedBy { it.seq.toInt() }
     }
 
     suspend fun sendCommand(command: MavCmd, param1: Float = 0f, param2: Float = 0f, param3: Float = 0f, param4: Float = 0f, param5: Float = 0f, param6: Float = 0f, param7: Float = 0f) {
@@ -1422,5 +1747,120 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    /**
+     * Validate spray system configuration and update state accordingly
+     */
+    private fun validateSprayConfiguration() {
+        val spray = state.value.sprayTelemetry
+
+        // Check if we have received all critical parameters
+        val hasMonitorType = spray.batt2MonitorType != null
+        val hasCapacity = spray.batt2CapacityMah > 0
+        val hasCalibration = spray.batt2AmpPerVolt != null
+        val hasPin = spray.batt2CurrPin != null
+
+        val parametersReceived = hasMonitorType && hasCapacity && hasCalibration && hasPin
+
+        // Validate configuration correctness
+        val monitorCorrect = spray.batt2MonitorType == 11
+        val capacitySet = spray.batt2CapacityMah > 0
+        val calibrationSet = (spray.batt2AmpPerVolt ?: 0f) != 0f
+        val pinConfigured = (spray.batt2CurrPin ?: -1) > 0
+
+        val configurationValid = monitorCorrect && capacitySet && calibrationSet && pinConfigured
+
+        // Generate error message if configuration is invalid
+        val configurationError = if (!configurationValid) {
+            buildString {
+                if (!monitorCorrect) append("BATT2_MONITOR must be 11. ")
+                if (!capacitySet) append("BATT2_CAPACITY not set. ")
+                if (!calibrationSet) append("BATT2_AMP_PERVLT not calibrated. ")
+                if (!pinConfigured) append("BATT2_CURR_PIN not configured. ")
+            }.trim()
+        } else null
+
+        // Update state with validation results
+        _state.update { state ->
+            state.copy(
+                sprayTelemetry = state.sprayTelemetry.copy(
+                    parametersReceived = parametersReceived,
+                    configurationValid = configurationValid,
+                    configurationError = configurationError
+                )
+            )
+        }
+
+        // Log final validation status
+        if (parametersReceived) {
+            if (configurationValid) {
+                Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.i("Spray Telemetry", "✅ SPRAY CONFIGURATION VALID")
+                Log.i("Spray Telemetry", "   Monitor Type: ${spray.batt2MonitorType} (Fuel Flow)")
+                Log.i("Spray Telemetry", "   Capacity: ${spray.batt2CapacityMah} mAh")
+                Log.i("Spray Telemetry", "   Calibration: ${spray.batt2AmpPerVolt}")
+                Log.i("Spray Telemetry", "   Pin: ${spray.batt2CurrPin}")
+                Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+                sharedViewModel.addNotification(
+                    Notification(
+                        "Spray system configured correctly",
+                        NotificationType.SUCCESS
+                    )
+                )
+            } else {
+                Log.e("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.e("Spray Telemetry", "❌ SPRAY CONFIGURATION INVALID")
+                Log.e("Spray Telemetry", "   Error: $configurationError")
+                Log.e("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            }
+        }
+    }
+
+    /**
+     * Request spray telemetry capacity parameters from the FCU.
+     * This reads BATT2_CAPACITY and BATT3_CAPACITY to dynamically configure
+     * the spray system instead of using hardcoded values.
+     */
+    private suspend fun requestSprayCapacityParameters() {
+        if (!state.value.fcuDetected) {
+            Log.w("Spray Telemetry", "Cannot request parameters - FCU not detected")
+            return
+        }
+
+        Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.i("Spray Telemetry", "📤 Requesting spray system parameters from FCU...")
+        Log.i("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        try {
+            val parametersToRequest = listOf(
+                "BATT2_MONITOR",      // Sensor type (should be 11 for Fuel Flow)
+                "BATT2_CAPACITY",     // Tank capacity in mAh
+                "BATT2_AMP_PERVLT",   // Flow sensor calibration factor
+                "BATT2_CURR_PIN",     // Flow sensor pin configuration
+                "BATT3_CAPACITY",     // Tank capacity for level sensor
+                "BATT3_VOLT_PIN"      // Level sensor pin configuration
+            )
+
+            for ((index, paramId) in parametersToRequest.withIndex()) {
+                val request = ParamRequestRead(
+                    targetSystem = fcuSystemId,
+                    targetComponent = fcuComponentId,
+                    paramId = paramId,
+                    paramIndex = -1
+                )
+                connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, request)
+                Log.d("Spray Telemetry", "📤 Sent PARAM_REQUEST_READ for $paramId")
+
+                // Small delay between requests to avoid overwhelming FCU
+                if (index < parametersToRequest.size - 1) {
+                    delay(100)
+                }
+            }
+
+            Log.i("Spray Telemetry", "✅ All parameter requests sent - waiting for PARAM_VALUE responses")
+        } catch (e: Exception) {
+            Log.e("Spray Telemetry", "❌ Failed to request spray capacity parameters", e)
+        }
+    }
 
 }

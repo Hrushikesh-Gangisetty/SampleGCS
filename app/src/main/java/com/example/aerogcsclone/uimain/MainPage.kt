@@ -317,7 +317,7 @@ fun StatusPanel(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "Flow: N/A",
+                    "Flow: ${telemetryState.sprayTelemetry.formattedFlowRate ?: "N/A"}",
                     color = Color.White,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(0.7f),
@@ -375,7 +375,7 @@ fun StatusPanel(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "Consumed: N/A",
+                    "Consumed: ${telemetryState.sprayTelemetry.formattedConsumed ?: "N/A"}",
                     color = Color.White,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(0.7f),
