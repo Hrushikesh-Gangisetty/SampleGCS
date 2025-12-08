@@ -795,6 +795,75 @@ class SharedViewModel : ViewModel() {
         )
     }
 
+    /**
+     * Validate mission structure before upload
+     * Checks for NAV_TAKEOFF, proper sequence numbers, valid coordinates, etc.
+     * Returns Pair(isValid, errorMessage)
+     */
+    private fun validateMissionStructure(missionItems: List<MissionItemInt>): Pair<Boolean, String?> {
+        if (missionItems.isEmpty()) {
+            return Pair(false, "Mission is empty")
+        }
+
+        // Check sequence numbers are sequential starting from 0
+        val sequences = missionItems.map { it.seq.toInt() }.sorted()
+        if (sequences != (0 until missionItems.size).toList()) {
+            return Pair(false, "Invalid sequence numbers - Expected: 0-${missionItems.size-1}, Got: $sequences")
+        }
+
+        // Find NAV_TAKEOFF command (command 22)
+        val hasTakeoff = missionItems.any { it.command.value == 22u }
+        if (!hasTakeoff) {
+            Log.w("MissionValidation", "⚠️ Mission does not contain NAV_TAKEOFF command!")
+            addNotification(
+                Notification(
+                    "WARNING: Mission missing NAV_TAKEOFF. AUTO mode may fail with 'Missing Takeoff Cmd'",
+                    NotificationType.WARNING
+                )
+            )
+            // Don't fail validation, just warn - some missions might work without it
+        }
+
+        // Check that NAV_TAKEOFF is early in mission (ideally seq 1 after HOME)
+        val takeoffSeq = missionItems.find { it.command.value == 22u }?.seq?.toInt()
+        if (takeoffSeq != null && takeoffSeq > 2) {
+            Log.w("MissionValidation", "⚠️ NAV_TAKEOFF at seq=$takeoffSeq (expected seq=1)")
+            addNotification(
+                Notification(
+                    "WARNING: NAV_TAKEOFF should be at sequence 1 (after HOME)",
+                    NotificationType.WARNING
+                )
+            )
+        }
+
+        // Validate coordinates and altitudes for NAV commands
+        missionItems.forEach { item ->
+            val cmdId = item.command.value
+            // NAV commands: WAYPOINT(16), LOITER(17), RETURN_TO_LAUNCH(20), LAND(21), TAKEOFF(22)
+            if (cmdId in listOf(16u, 17u, 20u, 21u, 22u)) {
+                val lat = item.x / 1e7
+                val lon = item.y / 1e7
+                
+                // Skip HOME waypoint (seq=0) coordinate check as it can be (0,0)
+                if (item.seq.toInt() != 0) {
+                    if (lat !in -90.0..90.0 || lon !in -180.0..180.0) {
+                        return Pair(false, "Invalid coordinates at seq=${item.seq}: lat=$lat, lon=$lon")
+                    }
+                    if (lat == 0.0 && lon == 0.0) {
+                        Log.w("MissionValidation", "⚠️ Waypoint at seq=${item.seq} has coordinates (0,0)")
+                    }
+                }
+                
+                if (item.z < 0f || item.z > 10000f) {
+                    return Pair(false, "Invalid altitude at seq=${item.seq}: ${item.z}m")
+                }
+            }
+        }
+
+        Log.i("MissionValidation", "✅ Mission structure validation passed")
+        return Pair(true, null)
+    }
+
     fun uploadMission(missionItems: List<MissionItemInt>, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
@@ -815,6 +884,21 @@ class SharedViewModel : ViewModel() {
                     onResult(false, "FCU not detected")
                     return@launch
                 }
+
+                // Validate mission structure before uploading
+                Log.i("MissionUpload", "VM: Validating mission structure...")
+                val (isValid, errorMessage) = validateMissionStructure(missionItems)
+                if (!isValid) {
+                    _missionUploaded.value = false
+                    lastUploadedCount = 0
+                    Log.e("MissionUpload", "VM: Mission validation failed - $errorMessage")
+                    addNotification(
+                        Notification("Mission validation failed: $errorMessage", NotificationType.ERROR)
+                    )
+                    onResult(false, "Mission validation failed: $errorMessage")
+                    return@launch
+                }
+                Log.i("MissionUpload", "VM: Mission structure validation passed")
 
                 // Show progress: Uploading
                 _missionUploadProgress.value = MissionUploadProgress(

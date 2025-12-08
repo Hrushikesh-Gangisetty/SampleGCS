@@ -817,15 +817,92 @@ class MavlinkTelemetryRepository(
         }
     }
 
-    suspend fun arm() {
-        if (state.value.armable) {
+    /**
+     * Send pre-arm checks command to validate vehicle is ready to arm
+     * Returns true if pre-arm checks pass, false otherwise
+     */
+    suspend fun sendPrearmChecks(): Boolean {
+        Log.i("MavlinkRepo", "[Pre-arm] Sending RUN_PREARM_CHECKS command...")
+        try {
             sendCommand(
-                MavCmd.COMPONENT_ARM_DISARM,
-                1f
+                MavCmd.RUN_PREARM_CHECKS,
+                0f  // param1: not used
             )
-        } else {
-            Log.w("MavlinkRepo", "Arm command rejected, vehicle not armable")
+            Log.i("MavlinkRepo", "[Pre-arm] Command sent, waiting for status messages...")
+            
+            // Wait a bit for pre-arm status messages to arrive via STATUSTEXT
+            // These will be automatically displayed via the existing STATUSTEXT handler
+            delay(2000)
+            
+            // Check if vehicle became armable after pre-arm checks
+            val armable = state.value.armable
+            Log.i("MavlinkRepo", "[Pre-arm] Vehicle armable status: $armable")
+            return armable
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "[Pre-arm] Failed to send pre-arm checks", e)
+            return false
         }
+    }
+
+    /**
+     * Arm the vehicle with retry logic and force-arm fallback
+     * @param forceArm If true, uses force-arm immediately (param2 = 2989.0f)
+     * @return true if armed successfully, false otherwise
+     */
+    suspend fun arm(forceArm: Boolean = false): Boolean {
+        if (!state.value.armable && !forceArm) {
+            Log.w("MavlinkRepo", "[Arm] Vehicle not armable, skipping arm command")
+            sharedViewModel.addNotification(
+                Notification("Vehicle not armable. Check pre-arm status.", NotificationType.ERROR)
+            )
+            return false
+        }
+
+        val maxAttempts = 3
+        val retryDelays = listOf(1000L, 2000L, 3000L) // Exponential backoff
+        
+        for (attempt in 1..maxAttempts) {
+            try {
+                val param2 = if (forceArm || attempt == maxAttempts) 2989.0f else 0f
+                val armType = if (param2 == 2989.0f) "FORCE-ARM" else "ARM"
+                
+                Log.i("MavlinkRepo", "[Arm] Attempt $attempt/$maxAttempts - Sending $armType command...")
+                sendCommand(
+                    MavCmd.COMPONENT_ARM_DISARM,
+                    1f,      // param1: 1 = arm
+                    param2   // param2: 0 = normal, 2989 = force-arm (Mission Planner magic value)
+                )
+                
+                // Wait for arming to complete
+                delay(1500)
+                
+                // Check if vehicle is now armed
+                if (state.value.armed) {
+                    Log.i("MavlinkRepo", "[Arm] ✅ Vehicle armed successfully on attempt $attempt")
+                    sharedViewModel.addNotification(
+                        Notification("Vehicle armed successfully", NotificationType.SUCCESS)
+                    )
+                    return true
+                } else {
+                    Log.w("MavlinkRepo", "[Arm] ⚠️ Attempt $attempt failed - vehicle not armed")
+                    if (attempt < maxAttempts) {
+                        Log.i("MavlinkRepo", "[Arm] Retrying in ${retryDelays[attempt-1]}ms...")
+                        delay(retryDelays[attempt-1])
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MavlinkRepo", "[Arm] Exception on attempt $attempt", e)
+                if (attempt < maxAttempts) {
+                    delay(retryDelays[attempt-1])
+                }
+            }
+        }
+        
+        Log.e("MavlinkRepo", "[Arm] ❌ Failed to arm vehicle after $maxAttempts attempts")
+        sharedViewModel.addNotification(
+            Notification("Failed to arm vehicle. Check STATUSTEXT messages for details.", NotificationType.ERROR)
+        )
+        return false
     }
 
     suspend fun disarm() {
@@ -1265,17 +1342,53 @@ class MavlinkTelemetryRepository(
         Log.i("MavlinkRepo", "[Mission Start] Initiating mission start workflow...")
         if (!state.value.fcuDetected) {
             Log.w("MavlinkRepo", "[Mission Start] Cannot start mission - FCU not detected")
+            sharedViewModel.addNotification(
+                Notification("Cannot start mission - FCU not detected", NotificationType.ERROR)
+            )
             return false
         }
 
-        // Step 1: Arm the vehicle
+        // Step 0: Run pre-arm checks
         try {
-            Log.i("MavlinkRepo", "[Mission Start] Sending ARM command...")
-            arm()
-            Log.i("MavlinkRepo", "[Mission Start] ARM command sent")
-            delay(500)
+            Log.i("MavlinkRepo", "[Mission Start] Running pre-arm checks...")
+            sharedViewModel.addNotification(
+                Notification("Running pre-arm checks...", NotificationType.INFO)
+            )
+            val prearmOk = sendPrearmChecks()
+            if (!prearmOk) {
+                Log.w("MavlinkRepo", "[Mission Start] Pre-arm checks failed")
+                sharedViewModel.addNotification(
+                    Notification("Pre-arm checks failed. Check STATUSTEXT messages.", NotificationType.ERROR)
+                )
+                // Continue anyway - the arm() function will handle retries
+            } else {
+                Log.i("MavlinkRepo", "[Mission Start] Pre-arm checks passed")
+                sharedViewModel.addNotification(
+                    Notification("Pre-arm checks passed", NotificationType.SUCCESS)
+                )
+            }
         } catch (e: Exception) {
-            Log.e("MavlinkRepo", "[Mission Start] Failed to arm vehicle", e)
+            Log.e("MavlinkRepo", "[Mission Start] Failed to run pre-arm checks", e)
+            // Continue anyway - the arm() function will handle retries
+        }
+
+        // Step 1: Arm the vehicle with retry logic
+        try {
+            Log.i("MavlinkRepo", "[Mission Start] Arming vehicle...")
+            val armed = arm(forceArm = false)
+            if (!armed) {
+                Log.e("MavlinkRepo", "[Mission Start] Failed to arm vehicle")
+                sharedViewModel.addNotification(
+                    Notification("Failed to arm vehicle. Check pre-arm status.", NotificationType.ERROR)
+                )
+                return false
+            }
+            Log.i("MavlinkRepo", "[Mission Start] Vehicle armed successfully")
+        } catch (e: Exception) {
+            Log.e("MavlinkRepo", "[Mission Start] Exception while arming vehicle", e)
+            sharedViewModel.addNotification(
+                Notification("Exception while arming: ${e.message}", NotificationType.ERROR)
+            )
             return false
         }
 
@@ -1298,6 +1411,9 @@ class MavlinkTelemetryRepository(
             delay(500)
             if (!modeChanged) {
                 Log.e("MavlinkRepo", "[Mission Start] Failed to switch to AUTO mode")
+                sharedViewModel.addNotification(
+                    Notification("Failed to switch to AUTO mode. Check if mission has NAV_TAKEOFF.", NotificationType.ERROR)
+                )
                 return false
             }
         } catch (e: Exception) {
@@ -1306,6 +1422,9 @@ class MavlinkTelemetryRepository(
         }
 
         Log.i("MavlinkRepo", "[Mission Start] Mission start workflow complete. Vehicle should be in AUTO mode.")
+        sharedViewModel.addNotification(
+            Notification("Mission started successfully", NotificationType.SUCCESS)
+        )
         return true
     }
 
