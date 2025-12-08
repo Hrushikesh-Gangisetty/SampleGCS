@@ -1168,6 +1168,7 @@ class SharedViewModel : ViewModel() {
                             pausedAtWaypoint = currentWaypoint
                         ) 
                     }
+                    Log.i("SharedVM", "Mission paused successfully. pausedAtWaypoint set to: ${_telemetryState.value.pausedAtWaypoint}")
                     addNotification(
                         Notification(
                             message = "Mission paused at waypoint ${currentWaypoint ?: "?"} - holding position",

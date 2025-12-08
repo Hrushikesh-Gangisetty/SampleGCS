@@ -163,18 +163,20 @@ fun MainPage(
                 },
                 onResumeMission = {
                     android.util.Log.i("MainPage", "=== RESUME CALLBACK TRIGGERED ===")
-                    Toast.makeText(context, "Resume callback triggered!", Toast.LENGTH_LONG).show()
-
+                    
+                    // Log the state values for debugging
+                    android.util.Log.i("MainPage", "pausedAtWaypoint: ${telemetryState.pausedAtWaypoint}")
+                    android.util.Log.i("MainPage", "currentWaypoint: ${telemetryState.currentWaypoint}")
+                    
                     // Get the last auto waypoint (current or paused waypoint)
                     val lastAutoWp = telemetryState.pausedAtWaypoint
                         ?: telemetryState.currentWaypoint
                         ?: 1
+                    
+                    android.util.Log.i("MainPage", "Resolved waypoint: $lastAutoWp")
                     resumeWaypointNumber = lastAutoWp
-                    android.util.Log.i("MainPage", "Resume button clicked! Showing warning dialog. Waypoint: $lastAutoWp")
-                    android.util.Log.i("MainPage", "showResumeWarningDialog BEFORE: $showResumeWarningDialog")
+                    
                     showResumeWarningDialog = true
-                    android.util.Log.i("MainPage", "showResumeWarningDialog AFTER: $showResumeWarningDialog")
-                    Toast.makeText(context, "Opening Resume dialog...", Toast.LENGTH_SHORT).show()
                 },
                 onSplitPlan = {
                     // Show split plan confirmation dialog
@@ -354,7 +356,7 @@ fun MainPage(
 
         // Resume Mission Waypoint Selection Dialog (Step 2)
         if (showResumeWaypointDialog) {
-            var waypointInput by remember { mutableStateOf(resumeWaypointNumber.toString()) }
+            var waypointInput by remember(resumeWaypointNumber) { mutableStateOf(resumeWaypointNumber.toString()) }
 
             AlertDialog(
                 onDismissRequest = { showResumeWaypointDialog = false },
