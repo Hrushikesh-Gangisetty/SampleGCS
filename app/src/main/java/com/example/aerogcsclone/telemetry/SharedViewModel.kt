@@ -1083,65 +1083,201 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    /**
+     * Complete Resume Mission Implementation following Mission Planner protocol
+     * This should be called from UI after user confirms the warning dialog
+     *
+     * @param resumeWaypointNumber The waypoint number to resume from (user can modify)
+     * @param resetHomeCoords Whether to reset home coordinates (for copters)
+     */
+    fun resumeMissionComplete(
+        resumeWaypointNumber: Int,
+        resetHomeCoords: Boolean = false,
+        onProgress: (String) -> Unit = {},
+        onResult: (Boolean, String?) -> Unit = { _, _ -> }
+    ) {
         viewModelScope.launch {
             try {
-                val pausedWaypoint = _telemetryState.value.pausedAtWaypoint
+                Log.i("ResumeMission", "═══════════════════════════════════════")
+                Log.i("ResumeMission", "Starting Resume Mission Protocol")
+                Log.i("ResumeMission", "Resume at waypoint: $resumeWaypointNumber")
+                Log.i("ResumeMission", "Reset home coords: $resetHomeCoords")
+                Log.i("ResumeMission", "═══════════════════════════════════════")
 
-                if (pausedWaypoint == null) {
-                    // No paused waypoint, just switch to AUTO
-                    Log.i("SharedVM", "Resuming mission from current position")
-                    val result = repo?.changeMode(MavMode.AUTO) ?: false
-
-                    if (result) {
-                        _telemetryState.update { it.copy(missionPaused = false) }
-                        addNotification(Notification("Mission resumed", NotificationType.INFO))
-                        ttsManager?.announceMissionResumed()
-                        onResult(true, null)
-                    } else {
-                        onResult(false, "Failed to resume mission")
-                    }
+                // Step 1: Pre-flight Checks
+                onProgress("Step 1/10: Pre-flight checks...")
+                if (!_telemetryState.value.connected) {
+                    onResult(false, "Not connected to flight controller")
                     return@launch
                 }
 
-                // Resume from specific waypoint
-                Log.i("SharedVM", "Resuming mission from waypoint: $pausedWaypoint")
+                // Step 3: Retrieve Current Mission from FC
+                onProgress("Step 3/10: Retrieving mission from FC...")
+                val allWaypoints = repo?.getAllWaypoints()
+                if (allWaypoints == null || allWaypoints.isEmpty()) {
+                    onResult(false, "Failed to retrieve mission from FC")
+                    return@launch
+                }
+                Log.i("ResumeMission", "Retrieved ${allWaypoints.size} waypoints from FC")
 
-                // Set current waypoint in FCU
-                val setWaypointSuccess = repo?.setCurrentWaypoint(pausedWaypoint) ?: false
+                // Step 4: Filter & Rebuild Mission
+                onProgress("Step 4/10: Filtering waypoints...")
+                val filteredWaypoints = repo?.filterWaypointsForResume(allWaypoints, resumeWaypointNumber)
+                if (filteredWaypoints == null || filteredWaypoints.isEmpty()) {
+                    onResult(false, "Failed to filter waypoints")
+                    return@launch
+                }
+                Log.i("ResumeMission", "Filtered to ${filteredWaypoints.size} waypoints")
 
-                if (!setWaypointSuccess) {
-                    Log.w("SharedVM", "Failed to set waypoint, continuing anyway")
+                // Re-sequence waypoints (0, 1, 2, ...)
+                val resequencedWaypoints = repo?.resequenceWaypoints(filteredWaypoints)
+                if (resequencedWaypoints == null) {
+                    onResult(false, "Failed to resequence waypoints")
+                    return@launch
+                }
+                Log.i("ResumeMission", "Resequenced ${resequencedWaypoints.size} waypoints")
+
+                // Get target waypoint data for altitude
+                val targetWaypoint = allWaypoints.find { it.seq.toInt() == resumeWaypointNumber }
+                val targetAltitude = targetWaypoint?.z ?: 10f
+                Log.i("ResumeMission", "Target altitude: $targetAltitude meters")
+
+                // Step 5: Upload Modified Mission to FC
+                onProgress("Step 5/10: Uploading modified mission...")
+                val uploadSuccess = repo?.uploadMissionWithAck(resequencedWaypoints)
+                if (uploadSuccess != true) {
+                    onResult(false, "Failed to upload modified mission")
+                    return@launch
+                }
+                Log.i("ResumeMission", "✅ Mission uploaded successfully")
+
+                delay(500)
+
+                // Step 6: Verify Upload (optional - read back)
+                onProgress("Step 6/10: Verifying upload...")
+                delay(1000)
+
+                // Step 7: Set Current Waypoint to 1 (first waypoint after HOME - the resume point)
+                onProgress("Step 7/10: Setting current waypoint...")
+                Log.i("ResumeMission", "Setting current waypoint to 1 (resume point)")
+                val setWaypointSuccess = repo?.setCurrentWaypoint(1)
+                if (setWaypointSuccess != true) {
+                    Log.w("ResumeMission", "Failed to set current waypoint, continuing anyway")
                 }
 
                 delay(500)
 
-                // Switch to AUTO mode
-                val result = repo?.changeMode(MavMode.AUTO) ?: false
+                // Step 8: Skip copter takeoff sequence for resume
+                Log.i("ResumeMission", "═══ Step 8: Skip Copter Sequence ═══")
+                Log.i("ResumeMission", "Copter takeoff not needed for resume")
+                onProgress("Step 8/10: Preparing to resume...")
+                delay(500)
+                Log.i("ResumeMission", "Step 8 complete, moving to Step 9...")
 
-                if (result) {
-                    _telemetryState.update { 
-                        it.copy(
-                            missionPaused = false,
-                            pausedAtWaypoint = null
-                        ) 
-                    }
-                    addNotification(
-                        Notification(
-                            message = "Mission resumed from waypoint $pausedWaypoint",
-                            type = NotificationType.SUCCESS
-                        )
-                    )
-                    ttsManager?.announceMissionResumed()
-                    onResult(true, null)
+                // Step 9: Switch to AUTO Mode
+                val currentMode = _telemetryState.value.mode
+                val currentArmed = _telemetryState.value.armed
+                val currentAlt = _telemetryState.value.altitudeRelative
+
+                Log.i("ResumeMission", "═══ Step 9: Switch to AUTO Mode ═══")
+                Log.i("ResumeMission", "Current state BEFORE AUTO:")
+                Log.i("ResumeMission", "  - Mode: $currentMode")
+                Log.i("ResumeMission", "  - Armed: $currentArmed")
+                Log.i("ResumeMission", "  - Altitude: $currentAlt m")
+
+                onProgress("Step 9/10: Switching to AUTO mode...")
+
+                // Check if already in AUTO
+                if (currentMode?.contains("Auto", ignoreCase = true) == true) {
+                    Log.i("ResumeMission", "✅ Already in AUTO mode")
                 } else {
-                    onResult(false, "Failed to resume mission")
+                    Log.i("ResumeMission", "Switching from $currentMode to AUTO...")
+
+                    var autoSuccess = false
+                    var retryCount = 0
+                    val maxRetries = 3
+
+                    while (!autoSuccess && retryCount < maxRetries) {
+                        val attempt = retryCount + 1
+                        Log.i("ResumeMission", "Attempt $attempt/$maxRetries: Sending AUTO mode command...")
+
+                        autoSuccess = repo?.changeMode(MavMode.AUTO) ?: false
+
+                        Log.i("ResumeMission", "Attempt $attempt result: ${if (autoSuccess) "SUCCESS" else "FAILED"}")
+
+                        if (!autoSuccess) {
+                            retryCount++
+                            if (retryCount < maxRetries) {
+                                Log.w("ResumeMission", "Waiting 2 seconds before retry...")
+                                delay(2000)
+                            }
+                        }
+                    }
+
+                    if (!autoSuccess) {
+                        val finalMode = _telemetryState.value.mode
+                        Log.e("ResumeMission", "❌ Failed to switch to AUTO after $maxRetries attempts")
+                        Log.e("ResumeMission", "Final mode: $finalMode")
+                        onResult(false, "Failed to switch to AUTO. Stuck in: $finalMode")
+                        return@launch
+                    }
+
+                    Log.i("ResumeMission", "✅ Successfully switched to AUTO mode")
                 }
+
+                val finalMode = _telemetryState.value.mode
+                Log.i("ResumeMission", "Final mode: $finalMode")
+
+                // Step 10: Complete
+                onProgress("Step 10/10: Mission resumed!")
+                _telemetryState.update {
+                    it.copy(
+                        missionPaused = false,
+                        pausedAtWaypoint = null
+                    )
+                }
+
+                addNotification(
+                    Notification(
+                        message = "Mission resumed from waypoint $resumeWaypointNumber",
+                        type = NotificationType.SUCCESS
+                    )
+                )
+                ttsManager?.announceMissionResumed()
+
+                Log.i("ResumeMission", "═══════════════════════════════════════")
+                Log.i("ResumeMission", "✅ Resume Mission Complete!")
+                Log.i("ResumeMission", "═══════════════════════════════════════")
+
+                onResult(true, null)
+
             } catch (e: Exception) {
-                Log.e("SharedVM", "Failed to resume mission", e)
+                Log.e("ResumeMission", "❌ Resume mission failed", e)
+                addNotification(Notification("Resume mission failed: ${e.message}", NotificationType.ERROR))
                 onResult(false, e.message)
             }
         }
+    }
+
+    /**
+     * Simple resume mission (for backward compatibility)
+     * Triggers the dialog flow for comprehensive resume
+     */
+    fun resumeMission(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        // Get the last auto waypoint (current waypoint or paused waypoint)
+        val lastAutoWp = _telemetryState.value.pausedAtWaypoint
+            ?: _telemetryState.value.currentWaypoint
+            ?: 1 // Default to waypoint 1 if unknown
+
+        // For simple resume, use the comprehensive function with default values
+        resumeMissionComplete(
+            resumeWaypointNumber = lastAutoWp,
+            resetHomeCoords = false,
+            onProgress = { progress ->
+                Log.i("SharedVM", progress)
+            },
+            onResult = onResult
+        )
     }
 
     /**

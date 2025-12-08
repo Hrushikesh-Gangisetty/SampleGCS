@@ -4,6 +4,7 @@ package com.example.aerogcsclone.uimain
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 //import com.example.aerogcsclone.Telemetry.SharedViewModel
@@ -82,6 +85,21 @@ fun MainPage(
     // Split plan confirmation dialog
     var showSplitPlanDialog by remember { mutableStateOf(false) }
 
+    // Resume Mission dialog states
+    var showResumeWarningDialog by remember { mutableStateOf(false) }
+    var showResumeWaypointDialog by remember { mutableStateOf(false) }
+    var showResumeProgressDialog by remember { mutableStateOf(false) }
+    var resumeWaypointNumber by remember { mutableStateOf(1) }
+    var resumeProgressMessage by remember { mutableStateOf("Initializing...") }
+
+    // Debug: Monitor dialog state changes
+    LaunchedEffect(showResumeWarningDialog) {
+        android.util.Log.i("MainPage", "showResumeWarningDialog changed to: $showResumeWarningDialog")
+    }
+    LaunchedEffect(showResumeWaypointDialog) {
+        android.util.Log.i("MainPage", "showResumeWaypointDialog changed to: $showResumeWaypointDialog")
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -144,7 +162,19 @@ fun MainPage(
                     telemetryViewModel.pauseMission()
                 },
                 onResumeMission = {
-                    telemetryViewModel.resumeMission()
+                    android.util.Log.i("MainPage", "=== RESUME CALLBACK TRIGGERED ===")
+                    Toast.makeText(context, "Resume callback triggered!", Toast.LENGTH_LONG).show()
+
+                    // Get the last auto waypoint (current or paused waypoint)
+                    val lastAutoWp = telemetryState.pausedAtWaypoint
+                        ?: telemetryState.currentWaypoint
+                        ?: 1
+                    resumeWaypointNumber = lastAutoWp
+                    android.util.Log.i("MainPage", "Resume button clicked! Showing warning dialog. Waypoint: $lastAutoWp")
+                    android.util.Log.i("MainPage", "showResumeWarningDialog BEFORE: $showResumeWarningDialog")
+                    showResumeWarningDialog = true
+                    android.util.Log.i("MainPage", "showResumeWarningDialog AFTER: $showResumeWarningDialog")
+                    Toast.makeText(context, "Opening Resume dialog...", Toast.LENGTH_SHORT).show()
                 },
                 onSplitPlan = {
                     // Show split plan confirmation dialog
@@ -262,6 +292,165 @@ fun MainPage(
                 },
                 text = {
                     Text("Are you sure you want to split the mission plan? This will pause the current mission and create a new split plan.", style = MaterialTheme.typography.bodyLarge)
+                }
+            )
+        }
+
+        // Resume Mission Warning Dialog (Step 1)
+        if (showResumeWarningDialog) {
+            android.util.Log.i("MainPage", "Rendering Resume Warning Dialog")
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = {
+                    android.util.Log.i("MainPage", "Dialog dismissed")
+                    showResumeWarningDialog = false
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showResumeWarningDialog = false
+                            showResumeWaypointDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) {
+                        Text("Continue", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { showResumeWarningDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSecondary)
+                    }
+                },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = Color(0xFFFF9800),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Resume Mission Warning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column {
+                        Text(
+                            "⚠️ Warning: This will reprogram your mission, arm the vehicle, and issue a takeoff command (for copters).",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "The mission will be filtered to skip waypoints before the resume point while preserving DO commands.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            )
+        }
+
+        // Resume Mission Waypoint Selection Dialog (Step 2)
+        if (showResumeWaypointDialog) {
+            var waypointInput by remember { mutableStateOf(resumeWaypointNumber.toString()) }
+
+            AlertDialog(
+                onDismissRequest = { showResumeWaypointDialog = false },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val waypointNum = waypointInput.toIntOrNull() ?: resumeWaypointNumber
+                            resumeWaypointNumber = waypointNum
+                            showResumeWaypointDialog = false
+                            showResumeProgressDialog = true
+
+                            // Start resume mission process
+                            telemetryViewModel.resumeMissionComplete(
+                                resumeWaypointNumber = waypointNum,
+                                resetHomeCoords = false,
+                                onProgress = { progress ->
+                                    resumeProgressMessage = progress
+                                },
+                                onResult = { success, error ->
+                                    showResumeProgressDialog = false
+                                    if (!success) {
+                                        Toast.makeText(
+                                            context,
+                                            "Resume failed: ${error ?: "Unknown error"}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Resume", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { showResumeWaypointDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSecondary)
+                    }
+                },
+                title = {
+                    Text("Resume Mission At", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Enter the waypoint number to resume from:",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = waypointInput,
+                            onValueChange = { waypointInput = it },
+                            label = { Text("Waypoint #") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Default: Waypoint $resumeWaypointNumber (last auto waypoint)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            )
+        }
+
+        // Resume Mission Progress Dialog (Step 3)
+        if (showResumeProgressDialog) {
+            AlertDialog(
+                onDismissRequest = { /* Cannot dismiss during operation */ },
+                confirmButton = { },
+                title = {
+                    Text("Resuming Mission...", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            resumeProgressMessage,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             )
         }
@@ -434,21 +623,14 @@ fun FloatingButtons(
             }
         }
 
-        // Dynamic Pause/Resume Button
+        // Pause Button (only active when mission is running)
         FloatingActionButton(
             onClick = {
                 if (isMissionRunning) {
                     onPauseMission()
-                } else if (missionPaused) {
-                    onResumeMission()
-                } else {
-                    // Do nothing if mission not running and not paused
                 }
             },
-            containerColor = if (missionPaused) 
-                Color(0xFFFFA500).copy(alpha = 0.7f) // Orange for paused
-            else
-                Color.Black.copy(alpha = 0.7f),
+            containerColor = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier.size(width = 70.dp, height = 56.dp)
         ) {
             Column(
@@ -456,14 +638,52 @@ fun FloatingButtons(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    if (missionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                    contentDescription = if (missionPaused) "Resume Mission" else "Pause Mission",
+                    Icons.Default.Pause,
+                    contentDescription = "Pause Mission",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (missionPaused) "Resume" else "Pause",
+                    text = "Pause",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // Resume Button (orange when mission is paused)
+        FloatingActionButton(
+            onClick = {
+                android.util.Log.i("MainPage", "Resume button clicked! missionPaused=$missionPaused")
+                if (missionPaused) {
+                    onResumeMission()
+                } else {
+                    // For testing: allow resume even when not paused
+                    android.util.Log.w("MainPage", "Resume clicked but mission not paused - allowing anyway for testing")
+                    onResumeMission()
+                }
+            },
+            containerColor = if (missionPaused)
+                Color(0xFFFFA500).copy(alpha = 0.7f) // Orange when paused
+            else
+                Color.Black.copy(alpha = 0.7f), // Black when not paused
+            modifier = Modifier.size(width = 70.dp, height = 56.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Resume Mission",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Resume",
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium

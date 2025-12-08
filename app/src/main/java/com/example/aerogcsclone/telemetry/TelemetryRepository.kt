@@ -852,6 +852,7 @@ class MavlinkTelemetryRepository(
         val start = System.currentTimeMillis()
         val expectedMode = when (customMode) {
             3u -> "Auto"
+            4u -> "Guided"  // Added GUIDED mode
             0u -> "Stabilize"
             5u -> "Loiter"
             6u -> "RTL"
@@ -1422,5 +1423,254 @@ class MavlinkTelemetryRepository(
         }
     }
 
+    /**
+     * Get total waypoint count from FCU
+     */
+    suspend fun getMissionCount(): Int? {
+        return try {
+            val countDeferred = CompletableDeferred<Int?>()
+
+            val job = AppScope.launch {
+                connection.mavFrame.collect { frame ->
+                    if (frame.message is MissionCount) {
+                        val count = (frame.message as MissionCount).count.toInt()
+                        Log.i("ResumeMission", "Received MISSION_COUNT=$count")
+                        countDeferred.complete(count)
+                    }
+                }
+            }
+
+            // Request mission list
+            val req = MissionRequestList(targetSystem = fcuSystemId, targetComponent = fcuComponentId)
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
+            Log.i("ResumeMission", "Sent MISSION_REQUEST_LIST")
+
+            val count = withTimeoutOrNull(5000L) { countDeferred.await() }
+            job.cancel()
+            count
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Failed to get mission count", e)
+            null
+        }
+    }
+
+    /**
+     * Get a single waypoint from FCU
+     */
+    suspend fun getWaypoint(seq: Int): MissionItemInt? {
+        return try {
+            val waypointDeferred = CompletableDeferred<MissionItemInt?>()
+
+            val job = AppScope.launch {
+                connection.mavFrame.collect { frame ->
+                    if (frame.message is MissionItemInt) {
+                        val item = frame.message as MissionItemInt
+                        if (item.seq.toInt() == seq) {
+                            Log.i("ResumeMission", "Received waypoint $seq")
+                            waypointDeferred.complete(item)
+                        }
+                    }
+                }
+            }
+
+            // Request specific waypoint
+            val req = MissionRequestInt(
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
+                seq = seq.toUShort()
+            )
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, req)
+            Log.d("ResumeMission", "Requested waypoint $seq")
+
+            val waypoint = withTimeoutOrNull(2000L) { waypointDeferred.await() }
+            job.cancel()
+            waypoint
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Failed to get waypoint $seq", e)
+            null
+        }
+    }
+
+    /**
+     * Get all waypoints from FCU
+     */
+    suspend fun getAllWaypoints(): List<MissionItemInt>? {
+        return try {
+            val count = getMissionCount() ?: return null
+            Log.i("ResumeMission", "Retrieving $count waypoints from FCU")
+
+            val waypoints = mutableListOf<MissionItemInt>()
+            for (seq in 0 until count) {
+                val waypoint = getWaypoint(seq)
+                if (waypoint != null) {
+                    waypoints.add(waypoint)
+                } else {
+                    Log.w("ResumeMission", "Failed to get waypoint $seq")
+                    return null
+                }
+                delay(100) // Small delay between requests
+            }
+
+            Log.i("ResumeMission", "Successfully retrieved ${waypoints.size} waypoints")
+            waypoints
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Failed to get all waypoints", e)
+            null
+        }
+    }
+
+    /**
+     * Filter waypoints for resume mission - YOUR SPECIFIED LOGIC
+     * Based on your example: Home(0) → WP3(now 1) → WP4(now 2) → WP5(now 3)
+     * - Keep HOME (seq 0)
+     * - Skip ALL waypoints before resume point (including TAKEOFF and DO commands)
+     * - Keep all waypoints from resume point onward
+     */
+    fun filterWaypointsForResume(allWaypoints: List<MissionItemInt>, resumeWaypointSeq: Int): List<MissionItemInt> {
+        val filtered = mutableListOf<MissionItemInt>()
+
+        Log.i("ResumeMission", "═══ Filtering Mission for Resume ═══")
+        Log.i("ResumeMission", "Original mission: ${allWaypoints.size} waypoints")
+        Log.i("ResumeMission", "Resume from waypoint: $resumeWaypointSeq")
+        Log.i("ResumeMission", "Logic: HOME + waypoints from resume onward")
+
+        for (waypoint in allWaypoints) {
+            val seq = waypoint.seq.toInt()
+            val cmdId = waypoint.command.value
+
+            when {
+                // Always keep HOME (seq 0)
+                seq == 0 -> {
+                    Log.d("ResumeMission", "✅ Keeping HOME (seq=0)")
+                    filtered.add(waypoint)
+                }
+                // Skip everything before resume point
+                seq < resumeWaypointSeq -> {
+                    Log.d("ResumeMission", "⏭ Skipping waypoint (seq=$seq, cmd=$cmdId)")
+                }
+                // Keep everything from resume point onward
+                else -> {
+                    Log.d("ResumeMission", "✅ Keeping waypoint (seq=$seq, cmd=$cmdId)")
+                    filtered.add(waypoint)
+                }
+            }
+        }
+
+        Log.i("ResumeMission", "Filtered: ${allWaypoints.size} → ${filtered.size} waypoints")
+        Log.i("ResumeMission", "Result: HOME(0) + resume waypoints")
+        Log.i("ResumeMission", "After re-sequence: HOME(0), WP${resumeWaypointSeq}(1), WP${resumeWaypointSeq+1}(2), ...")
+        return filtered
+    }
+
+    /**
+     * Re-sequence filtered waypoints (0, 1, 2, ...)
+     */
+    fun resequenceWaypoints(waypoints: List<MissionItemInt>): List<MissionItemInt> {
+        return waypoints.mapIndexed { index, waypoint ->
+            waypoint.copy(
+                seq = index.toUShort(),
+                current = if (index == 0) 1u else 0u // Mark home as current
+            )
+        }
+    }
+
+    /**
+     * Send TAKEOFF command for copters
+     */
+    suspend fun sendTakeoffCommand(altitude: Float): Boolean {
+        return try {
+            val cmd = CommandLong(
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
+                command = MavCmd.NAV_TAKEOFF.wrap(),
+                confirmation = 0u,
+                param1 = 0f,
+                param2 = 0f,
+                param3 = 0f,
+                param4 = 0f,
+                param5 = 0f,
+                param6 = 0f,
+                param7 = altitude
+            )
+
+            connection.trySendUnsignedV2(gcsSystemId, gcsComponentId, cmd)
+            Log.i("ResumeMission", "Sent TAKEOFF command to altitude $altitude")
+            true
+        } catch (e: Exception) {
+            Log.e("ResumeMission", "Failed to send TAKEOFF command", e)
+            false
+        }
+    }
+
+    /**
+     * Wait for mode change with retry
+     */
+    suspend fun waitForMode(expectedMode: String, timeoutSec: Int = 30): Boolean {
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = timeoutSec * 1000L
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            if (state.value.mode?.contains(expectedMode, ignoreCase = true) == true) {
+                Log.i("ResumeMission", "Mode confirmed: ${state.value.mode}")
+                return true
+            }
+            delay(1000)
+        }
+
+        Log.e("ResumeMission", "Mode change to $expectedMode timed out")
+        return false
+    }
+
+    /**
+     * Wait for armed state with retry
+     */
+    suspend fun waitForArmed(timeoutSec: Int = 30): Boolean {
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = timeoutSec * 1000L
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            if (state.value.armed) {
+                Log.i("ResumeMission", "Vehicle armed")
+                return true
+            }
+            delay(1000)
+        }
+
+        Log.e("ResumeMission", "Arming timed out")
+        return false
+    }
+
+    /**
+     * Wait for altitude with retry
+     */
+    suspend fun waitForAltitude(targetAltitude: Float, timeoutSec: Int = 40): Boolean {
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = timeoutSec * 1000L
+        val threshold = 2f // Within 2 meters
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            val currentAlt = state.value.altitudeRelative ?: 0f
+            if (currentAlt >= (targetAltitude - threshold)) {
+                Log.i("ResumeMission", "Altitude reached: $currentAlt (target: $targetAltitude)")
+                return true
+            }
+            delay(1000)
+        }
+
+        Log.e("ResumeMission", "Altitude timeout")
+        return false
+    }
+
+    /**
+     * Check if vehicle is a copter based on firmware
+     */
+    fun isCopter(): Boolean {
+        // You can check the autopilot type from heartbeat
+        // For now, return true if mode includes copter-specific modes
+        return state.value.mode?.let {
+            it.contains("Guided", ignoreCase = true) ||
+            it.contains("Loiter", ignoreCase = true)
+        } ?: false
+    }
 
 }
