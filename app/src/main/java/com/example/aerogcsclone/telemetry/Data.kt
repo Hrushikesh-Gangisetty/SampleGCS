@@ -1,5 +1,42 @@
 package com.example.aerogcsclone.Telemetry
 
+/**
+ * Spray telemetry data for agricultural drones
+ * Maps to BATTERY_STATUS messages from flow sensor (BATT2) and level sensor (BATT3)
+ */
+data class SprayTelemetry(
+    // Spray system status (RC7 channel)
+    val sprayEnabled: Boolean = false,       // Whether spray system is ON (RC7 > 1500)
+    val rc7Value: Int? = null,               // Raw RC7 PWM value (1000-2000)
+
+    // Flow sensor data (BATT2 - Instance 1)
+    val flowRateLiterPerMin: Float? = null,  // Current flow rate in L/min
+    val consumedLiters: Float? = null,       // Total liquid sprayed in liters
+    val flowCapacityLiters: Float? = null,   // Total tank capacity for flow sensor
+    val flowRemainingPercent: Int? = null,   // Remaining % based on flow sensor
+
+    // Level sensor data (BATT3 - Instance 2)
+    val tankVoltageMv: Int? = null,          // Raw voltage from level sensor
+    val tankLevelPercent: Int? = null,       // Tank level % based on voltage
+    val tankCapacityLiters: Float? = null,   // Total tank capacity for level sensor
+
+    // Formatted values for UI
+    val formattedFlowRate: String? = null,   // e.g., "0.4 L/min"
+    val formattedConsumed: String? = null,   // e.g., "2.5 L"
+
+    // Configuration read from ArduPilot parameters
+    val batt2CapacityMah: Int = 0,           // BATT2_CAPACITY parameter (0 = not configured)
+    val batt3CapacityMah: Int = 0,           // BATT3_CAPACITY parameter (0 = not configured)
+    val batt2MonitorType: Int? = null,       // BATT2_MONITOR (should be 11 for flow sensor)
+    val batt2AmpPerVolt: Float? = null,      // BATT2_AMP_PERVLT (calibration factor)
+    val batt2CurrPin: Int? = null,           // BATT2_CURR_PIN (sensor pin)
+
+    // Configuration status flags
+    val parametersReceived: Boolean = false, // True when all params are received
+    val configurationValid: Boolean = false, // True when configuration is correct
+    val configurationError: String? = null   // Error message if configuration is wrong
+)
+
 data class TelemetryState(
 
     val connected : Boolean = false,
@@ -36,5 +73,8 @@ data class TelemetryState(
     // Waypoint tracking for pause/resume
     val currentWaypoint: Int? = null,
     val missionPaused: Boolean = false,
-    val pausedAtWaypoint: Int? = null
+    val pausedAtWaypoint: Int? = null,
+
+    // Spray telemetry for agricultural drones
+    val sprayTelemetry: SprayTelemetry = SprayTelemetry()
 )
