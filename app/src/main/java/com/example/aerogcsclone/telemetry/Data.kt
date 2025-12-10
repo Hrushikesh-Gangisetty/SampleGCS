@@ -78,6 +78,9 @@ data class TelemetryState(
     val currentWaypoint: Int? = null,
     val missionPaused: Boolean = false,
     val pausedAtWaypoint: Int? = null,
+    // Last waypoint when in AUTO mode (Mission Planner's lastautowp equivalent)
+    // This tracks the waypoint number during mission execution to pre-fill resume dialog
+    val lastAutoWaypoint: Int = -1,
 
     // Spray telemetry for agricultural drones
     val sprayTelemetry: SprayTelemetry = SprayTelemetry()
