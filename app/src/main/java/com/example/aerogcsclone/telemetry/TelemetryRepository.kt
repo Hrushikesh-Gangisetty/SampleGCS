@@ -803,10 +803,20 @@ class MavlinkTelemetryRepository(
                 .filterIsInstance<MissionCurrent>()
                 .collect { missionCurrent ->
                     val currentSeq = missionCurrent.seq.toInt()
+                    
+                    // Capture current mode for consistent checks
+                    val currentMode = state.value.mode
 
                     // Update current waypoint in state
                     _state.update { it.copy(currentWaypoint = currentSeq) }
                     Log.d("MavlinkRepo", "Mission progress: waypoint $currentSeq")
+
+                    // Track last AUTO waypoint (Mission Planner protocol)
+                    // Only update lastAutoWaypoint when in AUTO mode and waypoint is non-zero
+                    if (currentMode?.equals("Auto", ignoreCase = true) == true && currentSeq != 0) {
+                        _state.update { it.copy(lastAutoWaypoint = currentSeq) }
+                        Log.d("MavlinkRepo", "Updated lastAutoWaypoint to: $currentSeq (mode=$currentMode)")
+                    }
 
                     // Update SharedViewModel
                     sharedViewModel.updateCurrentWaypoint(currentSeq)
