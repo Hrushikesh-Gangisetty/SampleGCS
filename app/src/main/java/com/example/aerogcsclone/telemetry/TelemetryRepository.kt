@@ -803,6 +803,8 @@ class MavlinkTelemetryRepository(
                 .filterIsInstance<MissionCurrent>()
                 .collect { missionCurrent ->
                     val currentSeq = missionCurrent.seq.toInt()
+                    
+                    // Capture current mode for consistent checks
                     val currentMode = state.value.mode
 
                     // Update current waypoint in state
