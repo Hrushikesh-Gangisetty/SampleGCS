@@ -39,12 +39,17 @@ fun TopNavBar(
     var menuExpanded by remember { mutableStateOf(false) }
     var kebabMenuExpanded by remember { mutableStateOf(false) }
     var showGeofenceSlider by remember { mutableStateOf(false) } // Added geofence slider state
+    var showSpraySlider by remember { mutableStateOf(false) } // Added spray slider state
 
     val coroutineScope = rememberCoroutineScope()
 
     // Collect geofence state from viewmodel
     val geofenceEnabled by telemetryViewModel.geofenceEnabled.collectAsState()
     val fenceRadius by telemetryViewModel.fenceRadius.collectAsState()
+
+    // Collect spray state from viewmodel
+    val sprayEnabled by telemetryViewModel.sprayEnabled.collectAsState()
+    val sprayRate by telemetryViewModel.sprayRate.collectAsState()
 
     // Remember the mode to prevent flickering due to recomposition
     val displayMode by remember(telemetryState.mode) {
@@ -191,7 +196,9 @@ fun TopNavBar(
                     Icons.Default.Shower,
                     contentDescription = "Spray",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { showSpraySlider = !showSpraySlider } // Make spray icon clickable
                 )
                 DividerBlock()
                 // Clickable geofence icon
@@ -422,6 +429,104 @@ fun TopNavBar(
                                 )
                                 Text(
                                     "Adjust polygon buffer distance around mission plan",
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Spray rate slider popup
+        if (showSpraySlider) {
+            Popup(
+                onDismissRequest = { showSpraySlider = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF23232B).copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .width(300.dp) // Fixed width for better layout
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Spray Settings",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+
+                        Divider(color = Color.White.copy(alpha = 0.3f))
+
+                        // Spray Enable/Disable Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Enable Spray",
+                                color = Color.White,
+                                modifier = Modifier.weight(1f),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Switch(
+                                checked = sprayEnabled,
+                                onCheckedChange = { telemetryViewModel.setSprayEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Color.Green, // Green when ON
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = Color.Red // Red when OFF
+                                )
+                            )
+                        }
+
+                        // Status text based on spray state
+                        if (sprayEnabled) {
+                            Text(
+                                "Spray active",
+                                color = Color.Green,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                "Spray inactive",
+                                color = Color.Red,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        // Spray Rate Slider (only shown when spray is enabled)
+                        if (sprayEnabled) {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Spray Rate", color = Color.White, modifier = Modifier.weight(1f))
+                                    Text("${sprayRate.toInt()} %", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = sprayRate,
+                                    onValueChange = { telemetryViewModel.setSprayRate(it) },
+                                    valueRange = 0f..100f, // 0% to 100%
+                                    steps = 100, // 101 steps for 0-100 range
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.Green,
+                                        activeTrackColor = Color.Green,
+                                        inactiveTrackColor = Color.Gray
+                                    )
+                                )
+                                Text(
+                                    "Adjust spray intensity",
                                     color = Color.Gray,
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(top = 2.dp)

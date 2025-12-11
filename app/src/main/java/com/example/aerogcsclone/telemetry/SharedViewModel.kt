@@ -538,6 +538,13 @@ class SharedViewModel : ViewModel() {
     // Store home position for geofence calculation
     private val _homePosition = MutableStateFlow<LatLng?>(null)
 
+    // Spray control state
+    private val _sprayEnabled = MutableStateFlow(false)
+    val sprayEnabled: StateFlow<Boolean> = _sprayEnabled.asStateFlow()
+
+    private val _sprayRate = MutableStateFlow(100f) // 10% to 100%
+    val sprayRate: StateFlow<Float> = _sprayRate.asStateFlow()
+
     fun setSurveyPolygon(polygon: List<LatLng>) {
         _surveyPolygon.value = polygon
         updateGeofencePolygon()
@@ -1486,8 +1493,14 @@ class SharedViewModel : ViewModel() {
      */
     fun controlSpray(enable: Boolean) {
         viewModelScope.launch {
-            val pwmValue = if (enable) 2000 else 1000
-            Log.i("SprayControl", "Setting spray system to ${if (enable) "ENABLED" else "DISABLED"} (RC7 = $pwmValue PWM)")
+            val pwmValue = if (enable) {
+                // Map spray rate (10-100%) to PWM range (1000-2000)
+                val rate = _sprayRate.value
+                1000 + ((rate / 100f) * 1000f).toInt()
+            } else {
+                1000
+            }
+            Log.i("SprayControl", "Setting spray system to ${if (enable) "ENABLED" else "DISABLED"} (RC7 = $pwmValue PWM, Rate: ${_sprayRate.value}%)")
 
             // Use MAV_CMD_DO_SET_SERVO to control RC7 (servo output 7)
             repo?.sendCommand(
@@ -1498,38 +1511,18 @@ class SharedViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Update flow sensor calibration factor (BATT2_AMP_PERVLT parameter)
-     * This will be sent to the autopilot to update the flow sensor calibration
-     */
-    fun updateFlowSensorCalibration(calibrationFactor: Float) {
-        Log.i("FlowSensorCal", "Updating flow calibration factor: $calibrationFactor")
+    fun setSprayEnabled(enabled: Boolean) {
+        _sprayEnabled.value = enabled
+        controlSpray(enabled)
+        Log.i("SprayControl", "Spray ${if (enabled) "ENABLED" else "DISABLED"} at rate: ${_sprayRate.value}%")
+    }
 
-        // Update local state
-        _telemetryState.update { currentState ->
-            currentState.copy(
-                sprayTelemetry = currentState.sprayTelemetry.copy(
-                    batt2AmpPerVolt = calibrationFactor
-                )
-            )
+    fun setSprayRate(rate: Float) {
+        _sprayRate.value = rate.coerceIn(10f, 100f)
+        Log.i("SprayControl", "Spray rate set to: ${_sprayRate.value}%")
+        if (_sprayEnabled.value) {
+            controlSpray(true)
         }
-
-        // Send parameter to autopilot (BATT2_AMP_PERVLT)
-        viewModelScope.launch {
-            try {
-                // Set BATT2_AMP_PERVLT parameter
-                val result = setParameter("BATT2_AMP_PERVLT", calibrationFactor)
-                if (result != null) {
-                    Log.i("FlowSensorCal", "Calibration factor sent to autopilot successfully: ${result.paramValue}")
-                } else {
-                    Log.w("FlowSensorCal", "No confirmation received from autopilot for calibration factor")
-                }
-            } catch (e: Exception) {
-                Log.e("FlowSensorCal", "Error sending calibration factor to autopilot", e)
-            }
-        }
-
-        Log.i("FlowSensorCal", "Flow sensor calibration updated successfully")
     }
 
     // Expose FCU system and component IDs for mission building
