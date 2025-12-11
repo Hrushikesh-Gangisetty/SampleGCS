@@ -470,8 +470,14 @@ class SharedViewModel : ViewModel() {
             repo = newRepo
             newRepo.start()
             viewModelScope.launch {
-                newRepo.state.collect {
-                    _telemetryState.value = it
+                newRepo.state.collect { repoState ->
+                    // Preserve SharedViewModel-managed fields (pause state) while updating from repository
+                    _telemetryState.update { currentState ->
+                        repoState.copy(
+                            missionPaused = currentState.missionPaused,
+                            pausedAtWaypoint = currentState.pausedAtWaypoint
+                        )
+                    }
                 }
             }
 
@@ -1154,9 +1160,11 @@ class SharedViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Store current waypoint before pausing
-                val currentWaypoint = _telemetryState.value.currentWaypoint
-                Log.i("SharedVM", "Pausing mission at waypoint: $currentWaypoint")
+                // Use lastAutoWaypoint (tracked during AUTO mode) for accurate pause tracking
+                // Falls back to currentWaypoint if lastAutoWaypoint is not set (-1)
+                val lastAutoWp = _telemetryState.value.lastAutoWaypoint
+                val waypointToStore = if (lastAutoWp > 0) lastAutoWp else _telemetryState.value.currentWaypoint
+                Log.i("SharedVM", "Pausing mission - lastAutoWaypoint: $lastAutoWp, currentWaypoint: ${_telemetryState.value.currentWaypoint}, using: $waypointToStore")
 
                 // Switch to LOITER to hold position
                 val result = repo?.changeMode(MavMode.LOITER) ?: false
@@ -1165,18 +1173,18 @@ class SharedViewModel : ViewModel() {
                     _telemetryState.update { 
                         it.copy(
                             missionPaused = true,
-                            pausedAtWaypoint = currentWaypoint
+                            pausedAtWaypoint = waypointToStore
                         ) 
                     }
                     Log.i("SharedVM", "Mission paused successfully. pausedAtWaypoint set to: ${_telemetryState.value.pausedAtWaypoint}")
                     addNotification(
                         Notification(
-                            message = "Mission paused at waypoint ${currentWaypoint ?: "?"} - holding position",
+                            message = "Mission paused at waypoint ${waypointToStore ?: "?"} - holding position",
                             type = NotificationType.INFO
                         )
                     )
                     // Announce via TTS
-                    ttsManager?.announceMissionPaused(currentWaypoint ?: 0)
+                    ttsManager?.announceMissionPaused(waypointToStore ?: 0)
                     onResult(true, null)
                 } else {
                     onResult(false, "Failed to pause mission")
