@@ -1524,6 +1524,40 @@ class SharedViewModel : ViewModel() {
             controlSpray(true)
         }
     }
+    /**
+     * Update flow sensor calibration factor (BATT2_AMP_PERVLT parameter)
+     * This will be sent to the autopilot to update the flow sensor calibration
+     */
+    fun updateFlowSensorCalibration(calibrationFactor: Float) {
+        Log.i("FlowSensorCal", "Updating flow calibration factor: $calibrationFactor")
+
+        // Update local state
+        _telemetryState.update { currentState ->
+            currentState.copy(
+                sprayTelemetry = currentState.sprayTelemetry.copy(
+                    batt2AmpPerVolt = calibrationFactor
+                )
+            )
+        }
+
+        // Send parameter to autopilot (BATT2_AMP_PERVLT)
+        viewModelScope.launch {
+            try {
+                // Set BATT2_AMP_PERVLT parameter
+                val result = setParameter("BATT2_AMP_PERVLT", calibrationFactor)
+                if (result != null) {
+                    Log.i("FlowSensorCal", "Calibration factor sent to autopilot successfully: ${result.paramValue}")
+                } else {
+                    Log.w("FlowSensorCal", "No confirmation received from autopilot for calibration factor")
+                }
+            } catch (e: Exception) {
+                Log.e("FlowSensorCal", "Error sending calibration factor to autopilot", e)
+            }
+        }
+
+        Log.i("FlowSensorCal", "Flow sensor calibration updated successfully")
+    }
+
 
     // Expose FCU system and component IDs for mission building
     fun getFcuSystemId(): UByte = repo?.fcuSystemId ?: 0u
