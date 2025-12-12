@@ -492,6 +492,9 @@ class SharedViewModel : ViewModel() {
                 newRepo.state.collect { repoState ->
                     // Preserve SharedViewModel-managed fields (pause state) while updating from repository
                     _telemetryState.update { currentState ->
+                        // DEBUG LOG: Track state synchronization
+                        Log.i("DEBUG_STATE", "Before sync - repoLastAuto: ${repoState.lastAutoWaypoint}, currentLastAuto: ${currentState.lastAutoWaypoint}, repoCurrent: ${repoState.currentWaypoint}, currentCurrent: ${currentState.currentWaypoint}")
+
                         repoState.copy(
                             missionPaused = currentState.missionPaused,
                             pausedAtWaypoint = currentState.pausedAtWaypoint
@@ -1189,8 +1192,15 @@ class SharedViewModel : ViewModel() {
                 // Use lastAutoWaypoint (tracked during AUTO mode) for accurate pause tracking
                 // Falls back to currentWaypoint if lastAutoWaypoint is not set (-1)
                 val lastAutoWp = _telemetryState.value.lastAutoWaypoint
-                val waypointToStore = if (lastAutoWp > 0) lastAutoWp else _telemetryState.value.currentWaypoint
-                Log.i("SharedVM", "Pausing mission - lastAutoWaypoint: $lastAutoWp, currentWaypoint: ${_telemetryState.value.currentWaypoint}, using: $waypointToStore")
+                val currentWp = _telemetryState.value.currentWaypoint
+                val waypointToStore = if (lastAutoWp > 0) lastAutoWp else currentWp
+
+                // DEBUG LOGS
+                Log.i("SharedVM", "=== PAUSE MISSION ===")
+                Log.i("SharedVM", "lastAutoWaypoint: $lastAutoWp")
+                Log.i("SharedVM", "currentWaypoint: $currentWp")
+                Log.i("SharedVM", "waypointToStore (will be pausedAtWaypoint): $waypointToStore")
+                Log.i("DEBUG_PAUSE", "Pausing - lastAutoWp: $lastAutoWp, currentWp: $currentWp, storing: $waypointToStore")
 
                 // Switch to LOITER to hold position
                 val result = repo?.changeMode(MavMode.LOITER) ?: false

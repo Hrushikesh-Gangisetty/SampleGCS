@@ -25,6 +25,7 @@ import com.divpundir.mavlink.api.MavMessage
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
+
 // MAVLink flight modes (ArduPilot values)
 object MavMode {
     const val STABILIZE: UInt = 0u
@@ -723,7 +724,15 @@ class MavlinkTelemetryRepository(
         var lastMissionSeq = -1
         scope.launch {
             mavFrame
-                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .filter {
+                    val detected = state.value.fcuDetected
+                    val matchesId = it.systemId == fcuSystemId
+                    // DEBUG: Log filter conditions
+                    if (it.message is MissionCurrent) {
+                        Log.i("DEBUG_MISSION", "MISSION_CURRENT received - fcuDetected=$detected, systemId=${it.systemId}, fcuSystemId=$fcuSystemId, matches=$matchesId")
+                    }
+                    detected && matchesId
+                }
                 .map { it.message }
                 .filterIsInstance<MissionCurrent>()
                 .collect { missionCurrent ->
@@ -731,6 +740,9 @@ class MavlinkTelemetryRepository(
                     
                     // Capture current mode for consistent checks
                     val currentMode = state.value.mode
+
+                    // DEBUG LOG: Track mode and waypoint updates
+                    Log.i("DEBUG_MISSION", "MISSION_CURRENT: seq=$currentSeq, mode=$currentMode, modeCheck=${currentMode?.equals("Auto", ignoreCase = true)}")
 
                     // Update current waypoint in state
                     _state.update { it.copy(currentWaypoint = currentSeq) }
@@ -756,6 +768,45 @@ class MavlinkTelemetryRepository(
                             )
                         )
                     }
+                }
+        }
+
+        // MISSION_ITEM_REACHED - Fallback for tracking waypoints (some ArduPilot versions don't send MISSION_CURRENT)
+        scope.launch {
+            mavFrame
+                .filter { state.value.fcuDetected && it.systemId == fcuSystemId }
+                .map { it.message }
+                .filterIsInstance<MissionItemReached>()
+                .collect { missionItemReached ->
+                    val reachedSeq = missionItemReached.seq.toInt()
+
+                    // Capture current mode for consistent checks
+                    val currentMode = state.value.mode
+
+                    // DEBUG LOG: Track waypoint reached
+                    Log.i("DEBUG_MISSION", "MISSION_ITEM_REACHED: seq=$reachedSeq, mode=$currentMode, modeCheck=${currentMode?.equals("Auto", ignoreCase = true)}")
+
+                    // Update current waypoint in state (as fallback if MISSION_CURRENT not available)
+                    _state.update { it.copy(currentWaypoint = reachedSeq) }
+                    Log.d("MavlinkRepo", "Mission item reached: waypoint $reachedSeq")
+
+                    // Track last AUTO waypoint (Mission Planner protocol)
+                    // Only update lastAutoWaypoint when in AUTO mode and waypoint is non-zero
+                    if (currentMode?.equals("Auto", ignoreCase = true) == true && reachedSeq != 0) {
+                        _state.update { it.copy(lastAutoWaypoint = reachedSeq) }
+                        Log.d("MavlinkRepo", "Updated lastAutoWaypoint to: $reachedSeq (mode=$currentMode) [from MISSION_ITEM_REACHED]")
+                    }
+
+                    // Update SharedViewModel
+                    sharedViewModel.updateCurrentWaypoint(reachedSeq)
+                    Log.d("MavlinkRepo", "Updated SharedViewModel currentWaypoint to: $reachedSeq")
+
+                    sharedViewModel.addNotification(
+                        Notification(
+                            "Reached waypoint #${reachedSeq}",
+                            NotificationType.INFO
+                        )
+                    )
                 }
         }
 
