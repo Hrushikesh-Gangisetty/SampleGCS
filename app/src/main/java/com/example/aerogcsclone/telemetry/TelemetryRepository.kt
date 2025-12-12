@@ -104,14 +104,8 @@ class MavlinkTelemetryRepository(
     // Flow rate filter for sensor fault detection and smoothing
     private val flowRateFilter = FlowRateFilter(windowSize = 5)
 
-    // Manual mission tracking (for non-AUTO mode flights)
-    private var manualFlightActive = false
-    private var manualFlightStartTime: Long = 0L
-    private var manualFlightDistance: Float = 0f
-    private val manualPositionHistory = mutableListOf<Pair<Double, Double>>()
-    private var groundLevelAltitude: Float = 0f  // Store the starting ground level altitude
-    private var previousArmedState = false  // Track previous armed state to detect transitions
-    private var hasShownMissionStarted = false  // Prevent duplicate "Mission started" notifications
+    // Manual mission tracking removed - now handled by UnifiedFlightTracker
+    private var previousArmedState = false  // Track previous armed state for TTS announcements
     private var isMissionUploadInProgress = false  // Track if mission upload is actively in progress (not just clearing)
 
     // COMMAND_ACK flow for calibration and other commands
@@ -361,7 +355,6 @@ class MavlinkTelemetryRepository(
                     val relAltM = gp.relativeAlt / 1000f
                     val lat = gp.lat.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
                     val lon = gp.lon.takeIf { it != Int.MIN_VALUE }?.let { it / 10_000_000.0 }
-                    val currentSpeed = state.value.groundspeed ?: 0f
 
                     val currentArmed = state.value.armed
 
@@ -376,99 +369,14 @@ class MavlinkTelemetryRepository(
                         sharedViewModel.announceDroneDisarmed()
                     }
 
-                    // Manual mission tracking logic
-                    // Start conditions: Drone transitions from disarmed to armed AND altitude > 1m
-                    if (currentArmed && !previousArmedState) {
-                        // Drone just armed - capture ground level altitude
-                        groundLevelAltitude = relAltM
-                        Log.i("MavlinkRepo", "[Manual Mission] Drone armed - ground level altitude: ${groundLevelAltitude}m")
-                    }
-
-                    // Check if flight should start (armed AND altitude > ground + 1m threshold)
-                    val takeoffThreshold = groundLevelAltitude + 1f
-                    if (currentArmed && !manualFlightActive && relAltM > takeoffThreshold && !hasShownMissionStarted) {
-                        // Manual flight started
-                        Log.i("MavlinkRepo", "[Manual Mission] ✅ Flight started - Armed and altitude ${relAltM}m > threshold ${takeoffThreshold}m")
-                        manualPositionHistory.clear()
-                        manualFlightDistance = 0f
-                        manualFlightStartTime = System.currentTimeMillis()
-                        manualFlightActive = true
-                        hasShownMissionStarted = true
-
-                        // Show "Mission started" notification
-                        sharedViewModel.addNotification(
-                            Notification(
-                                "Mission started",
-                                NotificationType.SUCCESS
-                            )
-                        )
-                    }
-
-                    // Track distance during active manual flight
-                    if (manualFlightActive && lat != null && lon != null) {
-                        if (manualPositionHistory.isNotEmpty()) {
-                            val (prevLat, prevLon) = manualPositionHistory.last()
-                            val dist = haversine(prevLat, prevLon, lat, lon)
-                            manualFlightDistance += dist
-                        }
-                        manualPositionHistory.add(lat to lon)
-                    }
-
-                    // Stop conditions: altitude near ground level OR speed = 0 OR disarmed
-                    val landingAltitudeThreshold = groundLevelAltitude + 0.5f
-                    val hasLanded = relAltM <= landingAltitudeThreshold
-                    val hasStoppedMoving = currentSpeed < 0.1f
-
-                    if (manualFlightActive && (hasLanded || !currentArmed || hasStoppedMoving)) {
-                        val reason = when {
-                            !currentArmed -> "Disarmed"
-                            hasLanded -> "Landed (altitude: ${relAltM}m ≤ ${landingAltitudeThreshold}m)"
-                            hasStoppedMoving -> "Stopped (speed: ${currentSpeed}m/s)"
-                            else -> "Unknown"
-                        }
-
-                        Log.i("MavlinkRepo", "[Manual Mission] ✅ Flight ended - Reason: $reason")
-                        val flightDuration = (System.currentTimeMillis() - manualFlightStartTime) / 1000L
-                        manualFlightActive = false
-                        hasShownMissionStarted = false
-
-                        // Store final values and mark mission as completed
-                        _state.update {
-                            it.copy(
-                                altitudeMsl = altAMSLm,
-                                altitudeRelative = relAltM,
-                                latitude = lat,
-                                longitude = lon,
-                                totalDistanceMeters = manualFlightDistance,
-                                missionElapsedSec = null,
-                                missionCompleted = true,
-                                lastMissionElapsedSec = flightDuration
-                            )
-                        }
-
-                        // Show completion notification
-                        sharedViewModel.addNotification(
-                            Notification(
-                                "Flight completed! Time: ${formatTime(flightDuration)}, Distance: ${formatDistance(manualFlightDistance)}",
-                                NotificationType.SUCCESS
-                            )
-                        )
-
-                        // Reset tracking variables
-                        manualPositionHistory.clear()
-                        manualFlightDistance = 0f
-                        groundLevelAltitude = 0f
-                    }
-
-                    // Update state with current values
+                    // Update state with position data only
+                    // NOTE: Flight tracking removed - now handled by UnifiedFlightTracker
                     _state.update {
                         it.copy(
                             altitudeMsl = altAMSLm,
                             altitudeRelative = relAltM,
                             latitude = lat,
-                            longitude = lon,
-                            totalDistanceMeters = if (manualFlightActive) manualFlightDistance else null,
-                            missionElapsedSec = if (manualFlightActive) (System.currentTimeMillis() - manualFlightStartTime) / 1000L else null
+                            longitude = lon
                         )
                     }
 

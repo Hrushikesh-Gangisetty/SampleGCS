@@ -1,6 +1,7 @@
 // Kotlin
 package com.example.aerogcsclone.uimain
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -228,12 +229,31 @@ fun MainPage(
         var missionJustCompleted by remember { mutableStateOf(false) }
         var missionWaitingForLanding by remember { mutableStateOf(false) }
 
-        LaunchedEffect(telemetryState.missionCompleted, telemetryState.missionElapsedSec, telemetryState.altitudeRelative) {
+        LaunchedEffect(telemetryState.missionCompleted, telemetryState.missionElapsedSec, telemetryState.altitudeRelative, telemetryState.totalDistanceMeters) {
+            // Capture distance and time IMMEDIATELY when they become available
+            // This happens when the flight tracker updates the state with final values
+            if (telemetryState.totalDistanceMeters != null && telemetryState.missionCompleted) {
+                lastMissionDistance = telemetryState.totalDistanceMeters
+                Log.d("MainPage", "📊 Captured distance: ${telemetryState.totalDistanceMeters}m")
+            }
+
+            if (telemetryState.lastMissionElapsedSec != null) {
+                lastMissionTime = telemetryState.lastMissionElapsedSec
+                Log.d("MainPage", "⏱️ Captured time: ${telemetryState.lastMissionElapsedSec}s")
+            }
+
             // Check if mission just completed (traveling done)
             val completedNow = !prevMissionCompleted && telemetryState.missionCompleted && telemetryState.missionElapsedSec == null && prevMissionElapsedSec != null
             if (completedNow) {
-                lastMissionTime = telemetryState.lastMissionElapsedSec
-                lastMissionDistance = telemetryState.totalDistanceMeters
+                // Capture final values if not already captured
+                if (lastMissionTime == null) {
+                    lastMissionTime = telemetryState.lastMissionElapsedSec
+                }
+                if (lastMissionDistance == null) {
+                    lastMissionDistance = telemetryState.totalDistanceMeters
+                }
+                Log.i("MainPage", "✅ Mission completed - Time: ${lastMissionTime}s, Distance: ${lastMissionDistance}m")
+
                 // Don't show dialog yet, wait for altitude to reach 0
                 missionWaitingForLanding = true
             }
@@ -244,6 +264,7 @@ fun MainPage(
 
             // Show dialog only when mission is waiting for landing AND altitude reaches 0
             if (missionWaitingForLanding && isLanded) {
+                Log.i("MainPage", "🛬 Drone landed - showing completion dialog")
                 missionJustCompleted = true
                 missionWaitingForLanding = false
             }
@@ -815,4 +836,3 @@ fun PauseResumeButtons(
         }
     }
 }
-

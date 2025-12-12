@@ -274,6 +274,25 @@ class SharedViewModel : ViewModel() {
     val paramValue: SharedFlow<com.divpundir.mavlink.definitions.common.ParamValue>
         get() = repo?.paramValue ?: MutableSharedFlow()
 
+    // --- Flight state management (for UnifiedFlightTracker) ---
+    /**
+     * Update flight state from UnifiedFlightTracker
+     * This is the single source of truth for flight timing and distance
+     */
+    fun updateFlightState(
+        isActive: Boolean,
+        elapsedSeconds: Long,
+        distanceMeters: Float,
+        completed: Boolean = false
+    ) {
+        _telemetryState.value = _telemetryState.value.copy(
+            missionElapsedSec = if (isActive) elapsedSeconds else null,
+            totalDistanceMeters = if (isActive || completed) distanceMeters else null,
+            missionCompleted = completed,
+            lastMissionElapsedSec = if (completed) elapsedSeconds else _telemetryState.value.lastMissionElapsedSec
+        )
+    }
+
     // --- Calibration helpers ---
     /**
      * Request MAG_CAL_PROGRESS and MAG_CAL_REPORT messages from the autopilot.
@@ -1619,7 +1638,6 @@ class SharedViewModel : ViewModel() {
             Log.i("SharedVM", "Split plan toggle initiated")
             // The dialog will be shown in the UI (MainPage), we just need to trigger it
             // by setting a mutable state - but that's handled in the composable
-            // For now, we'll call splitPlan directly which will show the dialog
         }
     }
 

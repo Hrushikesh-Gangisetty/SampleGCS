@@ -62,12 +62,13 @@ class FlightLogExporter(private val context: Context) {
 
         FileWriter(file).use { writer ->
             // CSV Header
-            writer.appendLine("timestamp,voltage,current,battery_percent,sat_count,hdop,altitude,speed,latitude,longitude,heading")
+            writer.appendLine("timestamp,formatted_time,voltage,current,battery_percent,sat_count,hdop,altitude,speed,latitude,longitude,heading")
 
-            // CSV Data
+            // CSV Data with formatted timestamps
             telemetryData.forEach { telemetry ->
                 writer.appendLine(
                     "${telemetry.timestamp}," +
+                    "\"${formatDateTime(telemetry.timestamp)}\"," +
                     "${telemetry.voltage ?: ""}," +
                     "${telemetry.current ?: ""}," +
                     "${telemetry.batteryPercent ?: ""}," +

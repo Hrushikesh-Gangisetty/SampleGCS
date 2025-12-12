@@ -12,7 +12,7 @@ class FlightLoggingService(
     private val tlogViewModel: TlogViewModel
 ) {
     private var loggingJob: Job? = null
-    private val loggingInterval = 5000L // 5 seconds
+    private val loggingInterval = 4000L // 4 seconds
 
     fun startLogging(telemetryStateFlow: StateFlow<TelemetryState>) {
         if (loggingJob?.isActive == true) return

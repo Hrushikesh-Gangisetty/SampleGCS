@@ -1,6 +1,7 @@
 package com.example.aerogcsclone.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aerogcsclone.database.MissionTemplateDatabase
@@ -30,6 +31,25 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadFlightStats()
+        // Verify database is accessible
+        viewModelScope.launch {
+            try {
+                val flightCount = repository.getTotalFlightsCount()
+                Log.i("TlogViewModel", "🗄️ Database initialized - Total flights: $flightCount")
+
+                // Check for any active flights on startup
+                val activeFlight = repository.getActiveFlightOrNull()
+                if (activeFlight != null) {
+                    Log.w("TlogViewModel", "⚠️ Found active flight from previous session: ${activeFlight.id}")
+                    Log.w("TlogViewModel", "   Started at: ${activeFlight.startTime}")
+                    Log.w("TlogViewModel", "   Cleaning up incomplete flight...")
+                    // Mark it as completed to prevent issues
+                    repository.completeFlight(activeFlight.id, null, null)
+                }
+            } catch (e: Exception) {
+                Log.e("TlogViewModel", "❌ Database error during initialization", e)
+            }
+        }
     }
 
     fun startFlight() {
@@ -38,6 +58,7 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
                 // Check if there's already an active flight
                 val activeFlight = repository.getActiveFlightOrNull()
                 if (activeFlight != null) {
+                    Log.e("TlogViewModel", "❌ Cannot start flight - active flight already exists: ${activeFlight.id}")
                     _uiState.value = _uiState.value.copy(
                         errorMessage = "There's already an active flight in progress"
                     )
@@ -45,6 +66,8 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 currentFlightId = repository.startFlight()
+                Log.i("TlogViewModel", "✅ Flight started successfully - ID: $currentFlightId")
+
                 _uiState.value = _uiState.value.copy(
                     isFlightActive = true,
                     currentFlightId = currentFlightId,
@@ -59,8 +82,10 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
                         severity = EventSeverity.INFO,
                         message = "Flight started - Armed"
                     )
+                    Log.d("TlogViewModel", "✅ Start event logged for flight $flightId")
                 }
             } catch (e: Exception) {
+                Log.e("TlogViewModel", "❌ Failed to start flight", e)
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to start flight: ${e.message}"
                 )
@@ -71,18 +96,29 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
     fun endFlight(area: Float? = null, consumedLiquid: Float? = null) {
         viewModelScope.launch {
             try {
-                currentFlightId?.let { flightId ->
-                    repository.completeFlight(flightId, area, consumedLiquid)
-
-                    // Log flight end event
-                    repository.logEvent(
-                        flightId = flightId,
-                        eventType = EventType.ARM_DISARM,
-                        severity = EventSeverity.INFO,
-                        message = "Flight completed - Disarmed"
+                val flightId = currentFlightId
+                if (flightId == null) {
+                    Log.e("TlogViewModel", "❌ Cannot end flight - currentFlightId is null")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "No active flight to end"
                     )
+                    return@launch
                 }
 
+                Log.i("TlogViewModel", "Ending flight $flightId with area=$area, consumed=$consumedLiquid")
+                repository.completeFlight(flightId, area, consumedLiquid)
+
+                // Log flight end event
+                repository.logEvent(
+                    flightId = flightId,
+                    eventType = EventType.ARM_DISARM,
+                    severity = EventSeverity.INFO,
+                    message = "Flight completed - Disarmed"
+                )
+
+                Log.i("TlogViewModel", "✅ Flight $flightId ended successfully")
+
+                currentFlightId = null
                 _uiState.value = _uiState.value.copy(
                     isFlightActive = false,
                     currentFlightId = null,
@@ -90,6 +126,7 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 loadFlightStats()
             } catch (e: Exception) {
+                Log.e("TlogViewModel", "❌ Failed to end flight", e)
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to end flight: ${e.message}"
                 )
@@ -110,20 +147,28 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
         heading: Float? = null
     ) {
         viewModelScope.launch {
-            currentFlightId?.let { flightId ->
-                repository.logTelemetry(
-                    flightId = flightId,
-                    voltage = voltage,
-                    current = current,
-                    batteryPercent = batteryPercent,
-                    satCount = satCount,
-                    hdop = hdop,
-                    altitude = altitude,
-                    speed = speed,
-                    latitude = latitude,
-                    longitude = longitude,
-                    heading = heading
-                )
+            val flightId = currentFlightId
+            if (flightId == null) {
+                Log.w("TlogViewModel", "⚠️ Cannot log telemetry - currentFlightId is null")
+                return@launch
+            }
+
+            repository.logTelemetry(
+                flightId = flightId,
+                voltage = voltage,
+                current = current,
+                batteryPercent = batteryPercent,
+                satCount = satCount,
+                hdop = hdop,
+                altitude = altitude,
+                speed = speed,
+                latitude = latitude,
+                longitude = longitude,
+                heading = heading
+            )
+            // Log every 30 seconds to avoid spam
+            if (System.currentTimeMillis() % 30000 < 5000) {
+                Log.d("TlogViewModel", "📊 Telemetry logged for flight $flightId")
             }
         }
     }
@@ -136,29 +181,38 @@ class TlogViewModel(application: Application) : AndroidViewModel(application) {
         speed: Float? = null
     ) {
         viewModelScope.launch {
-            currentFlightId?.let { flightId ->
-                repository.logMapData(
-                    flightId = flightId,
-                    latitude = latitude,
-                    longitude = longitude,
-                    altitude = altitude,
-                    heading = heading,
-                    speed = speed
-                )
+            val flightId = currentFlightId
+            if (flightId == null) {
+                Log.w("TlogViewModel", "⚠️ Cannot log map position - currentFlightId is null")
+                return@launch
             }
+
+            repository.logMapData(
+                flightId = flightId,
+                latitude = latitude,
+                longitude = longitude,
+                altitude = altitude,
+                heading = heading,
+                speed = speed
+            )
         }
     }
 
     fun logEvent(eventType: EventType, severity: EventSeverity, message: String) {
         viewModelScope.launch {
-            currentFlightId?.let { flightId ->
-                repository.logEvent(
-                    flightId = flightId,
-                    eventType = eventType,
-                    severity = severity,
-                    message = message
-                )
+            val flightId = currentFlightId
+            if (flightId == null) {
+                Log.w("TlogViewModel", "⚠️ Cannot log event - currentFlightId is null: $message")
+                return@launch
             }
+
+            repository.logEvent(
+                flightId = flightId,
+                eventType = eventType,
+                severity = severity,
+                message = message
+            )
+            Log.d("TlogViewModel", "📝 Event logged for flight $flightId: $message")
         }
     }
 
