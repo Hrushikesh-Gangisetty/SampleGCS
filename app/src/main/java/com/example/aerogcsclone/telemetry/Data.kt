@@ -24,6 +24,9 @@ data class SprayTelemetry(
     val levelSensorEmptyMv: Int = 10000,     // Voltage when tank is EMPTY (calibrated)
     val levelSensorFullMv: Int = 45000,      // Voltage when tank is FULL (calibrated)
 
+    // Piecewise calibration points for non-linear tanks (optional, overrides simple calibration)
+    val levelCalibrationPoints: List<CalibrationPoint>? = null,
+
     // Formatted values for UI
     val formattedFlowRate: String? = null,   // e.g., "0.4 L/min"
     val formattedConsumed: String? = null,   // e.g., "2.5 L"
@@ -84,4 +87,9 @@ data class TelemetryState(
 
     // Spray telemetry for agricultural drones
     val sprayTelemetry: SprayTelemetry = SprayTelemetry()
+)
+
+data class CalibrationPoint(
+    val voltageMv: Int,          // Voltage at this calibration point
+    val levelPercent: Int        // Corresponding tank level % at this voltage
 )

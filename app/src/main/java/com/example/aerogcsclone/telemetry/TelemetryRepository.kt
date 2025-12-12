@@ -101,6 +101,9 @@ class MavlinkTelemetryRepository(
     private var flightStartTime: Long = 0L  // Track when flight actually started
     private var isFlightActive = false  // Track if flight is in progress
 
+    // Flow rate filter for sensor fault detection and smoothing
+    private val flowRateFilter = FlowRateFilter(windowSize = 5)
+
     // Manual mission tracking (for non-AUTO mode flights)
     private var manualFlightActive = false
     private var manualFlightStartTime: Long = 0L
@@ -524,20 +527,34 @@ class MavlinkTelemetryRepository(
                             Log.e("Spray Telemetry", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                         }
 
-                        // Parse flow rate (current_battery in centi-Amps)
-                        val flowRateLiterPerHour = if (b.currentBattery.toInt() == -1) {
-                            Log.w("Spray Telemetry", "⚠️ Flow rate is -1 (invalid)")
-                            null
-                        } else if (b.currentBattery == 0.toShort()) {
-                            // 0 is valid but might indicate no flow or configuration issue
-                            Log.w("Spray Telemetry", "⚠️ Flow rate is 0 (no flow detected)")
-                            0f
+                        // ═══ IMPROVED: Input validation and conversion ═══
+                        val flowRateLiterPerHour = FlowRateValidator.validateAndConvert(b.currentBattery)
+
+                        // Apply filtering and spike detection for non-zero values
+                        val filteredFlowRate = if (flowRateLiterPerHour != null && flowRateLiterPerHour > 0f) {
+                            // Check for sensor spikes before adding to filter
+                            if (flowRateFilter.detectSpike(flowRateLiterPerHour, threshold = 2.0f)) {
+                                Log.w("Spray Telemetry", "⚠️ SENSOR SPIKE DETECTED: ${flowRateLiterPerHour} L/h (${flowRateLiterPerHour/60f} L/min)")
+                                Log.w("Spray Telemetry", "   Average was: ${flowRateFilter.getAverage()} L/h")
+                                Log.w("Spray Telemetry", "   Possible sensor fault or erratic reading - using filtered average")
+
+                                // Use current average instead of spike value
+                                flowRateFilter.getAverage()
+                            } else {
+                                // Normal value - add to filter and get smoothed result
+                                val smoothed = flowRateFilter.addValue(flowRateLiterPerHour)
+                                Log.d("Spray Telemetry", "✓ Flow rate: raw=${flowRateLiterPerHour} L/h, filtered=${smoothed} L/h")
+                                smoothed
+                            }
                         } else {
-                            val rate = b.currentBattery / 100f  // Convert cA to Amps (= L/h)
-                            Log.d("Spray Telemetry", "✓ Flow rate calculated: $rate L/h")
-                            rate
+                            // Reset filter when flow stops
+                            if (flowRateLiterPerHour == 0f) {
+                                flowRateFilter.reset()
+                            }
+                            flowRateLiterPerHour
                         }
-                        val flowRateLiterPerMin = flowRateLiterPerHour?.let {
+
+                        val flowRateLiterPerMin = filteredFlowRate?.let {
                             val ratePerMin = it / 60f
                             Log.d("Spray Telemetry", "✓ Flow rate per minute: $ratePerMin L/min")
                             ratePerMin
@@ -2312,3 +2329,4 @@ class MavlinkTelemetryRepository(
         return resequenced
     }
 }
+
